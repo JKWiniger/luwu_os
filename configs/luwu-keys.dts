@@ -1,0 +1,42 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2835";
+
+    fragment@0 {
+        target-path = "/";
+        __overlay__ {
+            luwu_keys: luwu-keys {
+                compatible = "gpio-keys";
+                status = "okay";
+                autorepeat;
+
+                key_up: up {
+                    label = "KEY_UP";
+                    linux,code = <103>;
+                    gpios = <&gpio 17 1>;
+                    debounce-interval = <20>;
+                };
+                key_down: down {
+                    label = "KEY_DOWN";
+                    linux,code = <108>;
+                    gpios = <&gpio 22 1>;
+                    debounce-interval = <20>;
+                };
+                key_left: left {
+                    label = "KEY_LEFT";
+                    linux,code = <105>;
+                    gpios = <&gpio 23 1>;
+                    debounce-interval = <20>;
+                };
+                key_right: right {
+                    label = "KEY_RIGHT";
+                    linux,code = <106>;
+                    gpios = <&gpio 24 1>;
+                    debounce-interval = <20>;
+                };
+            };
+        };
+    };
+};

@@ -1,0 +1,17 @@
+[Unit]
+Description=Luwu OS Desktop Launcher
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=simple
+User=pi
+SupplementaryGroups=tty input
+Environment="QT_QPA_PLATFORM=linuxfb:fb=/dev/fb-spi"
+Environment="QT_QPA_FONTDIR=/usr/share/fonts"
+ExecStart=/home/pi/luwu-os/launcher/build/luwu_launcher
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,1 @@
+SUBSYSTEM=="graphics", ATTR{name}=="fb_st7789v", SYMLINK+="fb-spi"

@@ -1,0 +1,18 @@
+# 编译产物
+launcher/build/
+!launcher/build/luwu_launcher
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 系统垃圾
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Qt 杂项
+*.pro.user
+CMakeUserPresets.json

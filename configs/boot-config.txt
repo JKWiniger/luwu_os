@@ -1,0 +1,64 @@
+# For more options and information see
+# http://rptl.io/configtxt
+# XGO-Rider 优化版 (WM8960 + OV5647(cam0) + SPI LCD + UART0 + 蓝牙手柄)
+
+# ====== 硬件接口 ======
+dtparam=i2c_arm=on              # I2C: WM8960 寄存器控制
+# dtparam=spi=on                 # SPI: 改由 fbtft overlay 管理
+dtoverlay=fbtft,spi0-0,st7789v,reset_pin=27,dc_pin=25,rotate=270,speed=40000000
+# dtparam=i2s=on                # WM8960 overlay 内部已启用 I2S, 无需重复
+
+# ====== 板载音频 (关闭, 避免与 WM8960 冲突) ======
+# dtparam=audio=on
+
+# ====== WM8960 外置声卡 ======
+dtoverlay=wm8960-soundcard
+
+# ====== CSI OV5647 摄像头 (显式声明更稳) ======
+camera_auto_detect=0
+dtoverlay=ov5647,cam0
+
+# ====== 4 按键 → gpio-keys 内核驱动 ======
+dtoverlay=luwu-keys
+
+# ====== DSI 显示 / KMS 图形 (项目用 SPI LCD + PIL, 无需 KMS) ======
+# display_auto_detect=1
+# dtoverlay=vc4-kms-v3d
+# max_framebuffers=2
+# disable_fw_kms_setup=1
+
+# ====== UART 机器人 (ttyAMA0 给 xgolib) ======
+enable_uart=1
+dtoverlay=uart0
+
+# ====== 蓝牙 (手柄需要, 切到 mini-uart, 把 PL011 留给机器人) ======
+# dtoverlay=disable-bt          # 不要禁用, 项目依赖蓝牙手柄自动配对
+dtoverlay=miniuart-bt
+core_freq=250                   # 锁频, 保证 mini-uart 蓝牙波特率稳定
+
+# ====== 系统 ======
+auto_initramfs=1
+arm_64bit=1
+arm_boost=1
+disable_overscan=1
+
+# ====== 启动加速 ======
+boot_delay=0
+disable_splash=1
+gpu_mem=128                     # SPI fb1 + Qt, 128MB 稳妥
+
+[cm4]
+# 启用 CM4 内置 XHCI USB host 模式 (USB 摄像头/蓝牙适配器等)
+otg_mode=1
+
+[cm5]
+dtoverlay=dwc2,dr_mode=host
+
+[all]
+
+# ====== 风扇温控 (CM5 pwm-fan) ======
+# 参考 fan-control-config 经验配 置, 温度毫摄氏度
+dtparam=fan_temp0=36000,fan_temp0_hyst=2000,fan_temp0_speed=80
+dtparam=fan_temp1=40000,fan_temp1_hyst=3000,fan_temp1_speed=80
+dtparam=fan_temp2=52000,fan_temp2_hyst=4000,fan_temp2_speed=80
+dtparam=fan_temp3=58000,fan_temp3_hyst=5000,fan_temp3_speed=80
