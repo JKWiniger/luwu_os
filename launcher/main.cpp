@@ -8,14 +8,29 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QKeyEvent>
+#include <QResizeEvent>
 #include "keyfilter.h"
 
 static constexpr const char *PYQT_SCRIPT = "/home/pi/luwu-os/apps/demo_page/main.py";
 
+// Small helper window that positions a corner label on resize
+class MainWindow : public QWidget {
+public:
+    QLabel *cornerTL = nullptr;
+protected:
+    void resizeEvent(QResizeEvent *ev) override {
+        QWidget::resizeEvent(ev);
+        if (cornerTL) {
+            cornerTL->adjustSize();
+            cornerTL->move(16, 16);
+        }
+    }
+};
+
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
 
-    QWidget window;
+    MainWindow window;
     window.setWindowTitle("Luwu OS");
     window.setStyleSheet("background-color: #0a0a1a; color: white;");
 
@@ -47,6 +62,12 @@ int main(int argc, char *argv[]) {
     layout->addWidget(keyLabel);
     layout->addWidget(hintLabel);
     layout->addWidget(statusLabel);
+
+    // ---- 左上角 Demo 引导文案 ----
+    QLabel *demoHint = new QLabel("Demo", &window);
+    demoHint->setStyleSheet("color: #18df6b; font-size: 13px; font-weight: bold; background: transparent;");
+    window.cornerTL = demoHint;
+    demoHint->show();
 
     auto updateTime = [timeLabel]() {
         timeLabel->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"));

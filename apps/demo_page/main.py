@@ -99,6 +99,19 @@ class PyQtPage(QWidget):
         self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.camera_label.hide()
 
+        # ---- 四角按键说明 ----
+        corner_style = "color: #8892c9; font-size: 12px; background: transparent;"
+        self.corner_tl = QLabel("Record", self)   # A 键: KEY_UP → 录音
+        self.corner_tl.setStyleSheet(corner_style)
+        self.corner_tr = QLabel("Camera", self)   # B 键: KEY_DOWN → 拍照
+        self.corner_tr.setStyleSheet(corner_style)
+        self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.corner_bl = QLabel("Exit", self)   # C 键: KEY_LEFT → 退出
+        self.corner_bl.setStyleSheet(corner_style)
+        self.corner_br = QLabel("Beep", self)   # D 键: KEY_RIGHT → 声音
+        self.corner_br.setStyleSheet(corner_style)
+        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.title)
@@ -134,6 +147,19 @@ class PyQtPage(QWidget):
                 self._start_camera()
             else:
                 self._stop_camera()
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        w, h = self.width(), self.height()
+        pad = 16
+        # 左侧靠左
+        self.corner_tl.move(pad, pad)
+        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        # 右侧贴边：用 adjustSize 缩到文本宽度，再贴右边缘
+        self.corner_tr.adjustSize()
+        self.corner_br.adjustSize()
+        self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
+        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
