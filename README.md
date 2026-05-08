@@ -4,8 +4,8 @@
 
 ## 架构
 
-- **launcher/** — Qt C++ 主启动器，通过 QProcess 管理 PyQt6 子进程
-- **apps/** — PyQt6 功能应用（demo_page 等）
+- **launcher/** — Qt C++ 主启动器，通过 QProcess 管理 PySide6 子进程
+- **apps/** — PySide6 功能应用（demo_page 等）
 - **configs/** — 系统配置文件（udev 规则、ALSA 配置、systemd 服务、内核 DTS 等）
 
 ## 硬件

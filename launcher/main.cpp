@@ -9,9 +9,19 @@
 #include <QElapsedTimer>
 #include <QKeyEvent>
 #include <QResizeEvent>
+#include <QFile>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "keyfilter.h"
 
-static constexpr const char *PYQT_SCRIPT = "/home/pi/luwu-os/apps/demo_page/main.py";
+static constexpr const char *PRELOAD_SCRIPT = "/home/pi/luwu-os/apps/demo_page/preload_app.py";
+static constexpr const char *FIFO_PATH = "/tmp/luwu_preload.fifo";
+
+// App registry: key → relative path (from /home/pi/luwu-os/)
+static constexpr const char *APP_DEMO  = "apps/demo_page/main.py";
+// Future apps:
+// static constexpr const char *APP_SETTINGS = "apps/settings/main.py";
+// static constexpr const char *APP_MUSIC    = "apps/music/main.py";
 
 // Small helper window that positions a corner label on resize
 class MainWindow : public QWidget {
@@ -49,7 +59,7 @@ int main(int argc, char *argv[]) {
     keyLabel->setStyleSheet("font-size: 12px; color: #5c6a9c;");
     keyLabel->setAlignment(Qt::AlignCenter);
 
-    QLabel *hintLabel = new QLabel("KEY_UP -> PyQt");
+    QLabel *hintLabel = new QLabel("UP=Demo");
     hintLabel->setStyleSheet("font-size: 13px; color: #8892c9;");
     hintLabel->setAlignment(Qt::AlignCenter);
 
@@ -77,64 +87,92 @@ int main(int argc, char *argv[]) {
     QObject::connect(timer, &QTimer::timeout, updateTime);
     timer->start(1000);
 
-    // --- PyQt child process management ---
-    auto *pyProc = new QProcess(&window);
-    pyProc->setProcessChannelMode(QProcess::ForwardedChannels);
+    // --- Preload child process management (FIFO-based) ---
+    // Launcher spawns a python process that imports PySide6 early, then blocks on a FIFO.
+    // User keypress writes to the FIFO → app starts instantly (no cold import).
+    auto *preloadProc = new QProcess(&window);
+    preloadProc->setProcessChannelMode(QProcess::ForwardedChannels);
 
     QElapsedTimer launchTimer;
-    auto launchPyQt = [&, pyProc, statusLabel]() {
-        if (pyProc->state() != QProcess::NotRunning) {
-            qDebug() << "[luwu-launcher] PyQt already running, ignore";
-            return;
-        }
-        qint64 t_req = QDateTime::currentMSecsSinceEpoch();
-        qDebug().noquote() << QString("[luwu-launcher][%1] request -> launch PyQt").arg(t_req);
 
-        // Stop our own UI updates to avoid drawing over the PyQt child on the shared fb
-        timer->stop();
-        statusLabel->setText("launching PyQt...");
-        window.repaint();       // flush the "launching" hint
-        window.hide();          // release the fb from our side
-        qint64 t_hide = QDateTime::currentMSecsSinceEpoch();
-        qDebug().noquote() << QString("[luwu-launcher][%1] ui paused +%2ms").arg(t_hide).arg(t_hide - t_req);
+    auto startPreload = [&]() {
+        // Recreate FIFO for the new cycle
+        unlink(FIFO_PATH);
+        if (mkfifo(FIFO_PATH, 0666) != 0) {
+            qWarning() << "[luwu-launcher] mkfifo failed";
+        }
 
         QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
         env.insert("QT_QPA_PLATFORM", "linuxfb:fb=/dev/fb-spi");
         env.insert("QT_QPA_FONTDIR", "/usr/share/fonts");
         env.insert("PYTHONUNBUFFERED", "1");
-        pyProc->setProcessEnvironment(env);
-        pyProc->setProgram("python3");
-        pyProc->setArguments({PYQT_SCRIPT});
-        launchTimer.restart();
-        pyProc->start();
-        qint64 t_start = QDateTime::currentMSecsSinceEpoch();
-        qDebug().noquote() << QString("[luwu-launcher][%1] QProcess::start() returned +%2ms since request").arg(t_start).arg(t_start - t_req);
+        preloadProc->setProcessEnvironment(env);
+        preloadProc->setProgram("python3");
+        preloadProc->setArguments({PRELOAD_SCRIPT});
+        preloadProc->start();
+
+        qint64 t = QDateTime::currentMSecsSinceEpoch();
+        qDebug().noquote() << QString("[luwu-launcher][%1] preload process started").arg(t);
+        statusLabel->setText("preloading...");
     };
 
-    QObject::connect(pyProc, &QProcess::started, [statusLabel, &launchTimer]() {
-        qint64 ms = launchTimer.elapsed();
-        qDebug().noquote() << QString("[luwu-launcher][%1] PyQt QProcess 'started' signal after %2ms (fork+exec)")
-                                  .arg(QDateTime::currentMSecsSinceEpoch()).arg(ms);
-        statusLabel->setText(QString("PyQt fork+exec in %1 ms").arg(ms));
-    });
-    QObject::connect(pyProc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-        [&, statusLabel](int code, QProcess::ExitStatus st) {
+    // When the preload/app process finishes, restore launcher UI and respawn preload
+    QObject::connect(preloadProc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+        [&](int code, QProcess::ExitStatus st) {
             qint64 total = launchTimer.elapsed();
-            qDebug().noquote() << QString("[luwu-launcher][%1] PyQt finished code=%2 status=%3 total=%4ms")
+            qDebug().noquote() << QString("[luwu-launcher][%1] PySide finished code=%2 status=%3 total=%4ms")
                                       .arg(QDateTime::currentMSecsSinceEpoch()).arg(code).arg(int(st)).arg(total);
-            // Resume our own UI
+            // Resume launcher UI
             window.showFullScreen();
             timer->start(1000);
-            statusLabel->setText(QString("PyQt exited code=%1 (ran %2ms)").arg(code).arg(total));
+            statusLabel->setText(QString("PySide exited code=%1 (ran %2ms)").arg(code).arg(total));
             window.repaint();
+            // Start next preload after a short delay (let fb settle)
+            QTimer::singleShot(300, &window, startPreload);
         });
+
+    // Trigger the waiting preload process via FIFO
+    auto launchApp = [&](const QString &script) {
+        if (preloadProc->state() == QProcess::NotRunning) {
+            qDebug() << "[luwu-launcher] preload not running, starting now...";
+            startPreload();
+            return;
+        }
+        qint64 t_req = QDateTime::currentMSecsSinceEpoch();
+        qDebug().noquote() << QString("[luwu-launcher][%1] request -> trigger preload (%2)").arg(t_req).arg(script);
+
+        // Stop launcher UI timer (keep content on screen so no black flash)
+        timer->stop();
+        statusLabel->setText("launching " + script.section('/', -1));
+        window.repaint();
+        qint64 t_ready = QDateTime::currentMSecsSinceEpoch();
+        qDebug().noquote() << QString("[luwu-launcher][%1] ui frozen +%2ms").arg(t_ready).arg(t_ready - t_req);
+
+        // Write target script path to FIFO to unblock the python process
+        launchTimer.restart();
+        QFile fifo(FIFO_PATH);
+        if (fifo.open(QIODevice::WriteOnly)) {
+            QByteArray line = script.toUtf8() + '\n';
+            fifo.write(line);
+            fifo.close();
+            qint64 t_done = QDateTime::currentMSecsSinceEpoch();
+            qDebug().noquote() << QString("[luwu-launcher][%1] FIFO written +%2ms").arg(t_done).arg(t_done - t_req);
+        } else {
+            qWarning() << "[luwu-launcher] failed to open FIFO for writing";
+            window.showFullScreen();
+            timer->start(1000);
+        }
+    };
+
+    // Start the first preload immediately (imports happen while user sees launcher)
+    startPreload();
 
     // --- Keyboard event handler (gpio-keys kernel driver → QKeyEvent) ---
     auto *keyFilter = new KeyFilter(&window);
-    keyFilter->onKey = [&, keyLabel, statusLabel, launchPyQt](QKeyEvent *ke) {
+    keyFilter->onKey = [&, keyLabel, statusLabel, launchApp](QKeyEvent *ke) {
         const char *name = "?";
         switch (ke->key()) {
-            case Qt::Key_Up:    name = "KEY_UP";    launchPyQt(); break;
+            case Qt::Key_Up:    name = "KEY_UP";    launchApp(APP_DEMO); break;
             case Qt::Key_Down:  name = "KEY_DOWN";   break;
             case Qt::Key_Left:  name = "KEY_LEFT";   break;
             case Qt::Key_Right: name = "KEY_RIGHT";  break;
@@ -148,9 +186,10 @@ int main(int argc, char *argv[]) {
     
     window.showFullScreen();
     int rc = app.exec();
-    if (pyProc->state() != QProcess::NotRunning) {
-        pyProc->terminate();
-        pyProc->waitForFinished(1000);
+    if (preloadProc->state() != QProcess::NotRunning) {
+        preloadProc->terminate();
+        preloadProc->waitForFinished(1000);
     }
+    unlink(FIFO_PATH);
     return rc;
 }

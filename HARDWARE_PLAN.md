@@ -71,23 +71,23 @@ App Python → Picamera2 独占摄像头
 
 ### 目标
 ```
-PyQt App → Picamera2.start() → 采帧 → Picamera2.stop() → 释放
+PySide6 App → Picamera2.start() → 采帧 → Picamera2.stop() → 释放
 ```
 
 ### 决策依据
-- 系统采用**单 App 全屏独占**模式（启动器同一时间只跑一个 PyQt App），不存在多 App 并发抢摄像头
+- 系统采用**单 App 全屏独占**模式（启动器同一时间只跑一个 PySide6 App），不存在多 App 并发抢摄像头
 - camera_daemon + 共享内存方案在当前约束下属于过度设计
 - OV5647 激活功耗约 200~300mW，电池供电场景下用完即关最省电
 
 ### 做法
-- 每个 PyQt App 自行 `Picamera2().start()` / `.stop()`，生命周期跟 App 一致
+- 每个 PySide6 App 自行 `Picamera2().start()` / `.stop()`，生命周期跟 App 一致
 - 不再依赖 `edulib.py`（老硬件库），直接使用 Picamera2 API
 - App 退出时必须 `close()`，防止 `/dev/video0` 残留锁定
 - 后续可从 `edulib.py` 中抽离 AI 功能（人脸/手势/颜色识别）到 `apps/` 下的独立工具模块
 
 ### 启动延迟
 - `Picamera2.start()` + sensor 初始化约 1 秒，每个 App 冷启动均需等待
-- 可接受，PyQt App 自身的 import + widget 构建也需数百毫秒，总延迟在体感范围内
+- 可接受，PySide6 App 自身的 import + widget 构建也需数百毫秒，总延迟在体感范围内
 
 ---
 

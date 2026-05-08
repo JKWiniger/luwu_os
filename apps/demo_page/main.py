@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PyQt6 demo page launched by Luwu OS launcher.
+PySide6 demo page launched by Luwu OS launcher.
 Receives key events from gpio-keys kernel driver.
 """
 import os
@@ -23,7 +23,7 @@ _stages = []  # list[(name, abs_ms_since_T0)]
 def mark(name: str):
     ms = (time.monotonic() - T0) * 1000.0
     _stages.append((name, ms))
-    print(f"[pyqt_page][+{ms:7.1f}ms] {name}", flush=True)
+    print(f"[pyside_page][+{ms:7.1f}ms] {name}", flush=True)
 
 
 def _play_beep(freq: int = 880, duration: float = 0.15, volume: float = 0.4):
@@ -52,10 +52,10 @@ def _play_beep(freq: int = 880, duration: float = 0.15, volume: float = 0.4):
 mark("python entry")
 
 # ---- Stage 1: heavy import ----
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont, QKeyEvent, QImage, QPixmap
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
-mark("PyQt6 import done")
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QKeyEvent, QImage, QPixmap
+from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
+mark("PySide6 import done")
 
 
 AUTO_EXIT_SEC = 30
@@ -67,13 +67,13 @@ AUTO_EXIT_SEC = 30
 #   D (bottom-right) GPIO 24 → KEY_RIGHT
 
 
-class PyQtPage(QWidget):
+class PySide6Page(QWidget):
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background-color: #0f1530; color: white;")
         self._first_paint_logged = False
 
-        self.title = QLabel("Hello from PyQt6")
+        self.title = QLabel("Hello from PySide6")
         f1 = QFont(); f1.setPointSize(16); f1.setBold(True)
         self.title.setFont(f1)
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -135,10 +135,10 @@ class PyQtPage(QWidget):
 
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Left:
-            print("[pyqt_page] KEY_LEFT pressed -> exit", flush=True)
+            print("[pyside_page] KEY_LEFT pressed -> exit", flush=True)
             self.close()
         elif ev.key() == Qt.Key.Key_Right:
-            print("[pyqt_page] KEY_RIGHT pressed -> beep", flush=True)
+            print("[pyside_page] KEY_RIGHT pressed -> beep", flush=True)
             _play_beep(freq=880)
         elif ev.key() == Qt.Key.Key_Up:
             self._record_and_play()
@@ -169,7 +169,7 @@ class PyQtPage(QWidget):
             # Build a summary string and show it on screen
             summary = self._stage_summary()
             self.info.setText(summary)
-            print("[pyqt_page] boot breakdown:\n" + summary, flush=True)
+            print("[pyside_page] boot breakdown:\n" + summary, flush=True)
 
     def _stage_summary(self) -> str:
         lines = []
@@ -186,7 +186,7 @@ class PyQtPage(QWidget):
 
     def closeEvent(self, ev):
         self._stop_camera()
-        print("[pyqt_page] closing", flush=True)
+        print("[pyside_page] closing", flush=True)
         super().closeEvent(ev)
 
     def _record_and_play(self):
@@ -206,7 +206,7 @@ class PyQtPage(QWidget):
             self.hint.setText("LEFT=exit | UP=record | RIGHT=beep | stop=cam")
         else:
             self.hint.setText("LEFT=exit | UP=record | RIGHT=beep | DOWN=cam")
-        print("[pyqt_page] record+play done", flush=True)
+        print("[pyside_page] record+play done", flush=True)
 
     def _start_camera(self):
         try:
@@ -221,10 +221,10 @@ class PyQtPage(QWidget):
             self.camera_active = True
             self.camera_timer.start(66)  # ~15fps
             self.hint.setText("LEFT=exit | UP=record | RIGHT=beep | stop=cam")
-            print("[pyqt_page] camera started", flush=True)
+            print("[pyside_page] camera started", flush=True)
         except Exception as e:
             self.camera_label.setText(f"cam err: {e}")
-            print(f"[pyqt_page] camera error: {e}", flush=True)
+            print(f"[pyside_page] camera error: {e}", flush=True)
             self._stop_camera()
 
     def _stop_camera(self):
@@ -239,7 +239,7 @@ class PyQtPage(QWidget):
         self.camera_active = False
         self.camera_label.hide()
         self.hint.setText("LEFT=exit | UP=record | RIGHT=beep | DOWN=cam")
-        print("[pyqt_page] camera stopped", flush=True)
+        print("[pyside_page] camera stopped", flush=True)
 
     def _capture_frame(self):
         if not self.camera_active or self.picam2 is None:
@@ -254,7 +254,7 @@ class PyQtPage(QWidget):
             )
             self.camera_label.setPixmap(pixmap)
         except Exception as e:
-            print(f"[pyqt_page] capture error: {e}", flush=True)
+            print(f"[pyside_page] capture error: {e}", flush=True)
 
 
 def main():
@@ -264,14 +264,14 @@ def main():
     app = QApplication(sys.argv)
     mark("QApplication created")
 
-    w = PyQtPage()
+    w = PySide6Page()
     mark("widget constructed")
 
     w.showFullScreen()
     mark("showFullScreen returned")
 
     rc = app.exec()
-    print(f"[pyqt_page] exit rc={rc}", flush=True)
+    print(f"[pyside_page] exit rc={rc}", flush=True)
     sys.exit(rc)
 
 
