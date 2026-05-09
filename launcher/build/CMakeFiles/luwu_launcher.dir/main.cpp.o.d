@@ -385,8 +385,8 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qlocale.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qvariant.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qguiapplication_platform.h \
- /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QLabel \
- /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qlabel.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QStackedWidget \
+ /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qstackedwidget.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qframe.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qwidget.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qaction.h \
@@ -399,6 +399,8 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qfontmetrics.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qfontinfo.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qsizepolicy.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QLabel \
+ /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qlabel.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qpicture.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qiodevice.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qtextdocument.h \
@@ -436,7 +438,6 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QTransform \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qtransform.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qscreen_platform.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/QResizeEvent \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QFile \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfile.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfiledevice.h \
@@ -481,4 +482,11 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: \
  /usr/include/aarch64-linux-gnu/bits/getopt_core.h \
  /usr/include/aarch64-linux-gnu/bits/unistd_ext.h \
  /usr/include/linux/close_range.h /home/pi/luwu-os/launcher/keyfilter.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QObject
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QObject \
+ /home/pi/luwu-os/launcher/galleryview.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QWidget \
+ /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qwidget.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QVector \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qvector.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QRect \
+ /home/pi/luwu-os/launcher/demogridview.h

@@ -129,6 +129,104 @@ luwu_launcher/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/build
 .PHONY : luwu_launcher/fast
 
+#=============================================================================
+# Target rules for targets named luwu_launcher_autogen_timestamp_deps
+
+# Build rule for target.
+luwu_launcher_autogen_timestamp_deps: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 luwu_launcher_autogen_timestamp_deps
+.PHONY : luwu_launcher_autogen_timestamp_deps
+
+# fast build rule for target.
+luwu_launcher_autogen_timestamp_deps/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir/build.make CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir/build
+.PHONY : luwu_launcher_autogen_timestamp_deps/fast
+
+#=============================================================================
+# Target rules for targets named luwu_launcher_autogen
+
+# Build rule for target.
+luwu_launcher_autogen: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 luwu_launcher_autogen
+.PHONY : luwu_launcher_autogen
+
+# fast build rule for target.
+luwu_launcher_autogen/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher_autogen.dir/build.make CMakeFiles/luwu_launcher_autogen.dir/build
+.PHONY : luwu_launcher_autogen/fast
+
+demogridview.o: demogridview.cpp.o
+.PHONY : demogridview.o
+
+# target to build an object file
+demogridview.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/demogridview.cpp.o
+.PHONY : demogridview.cpp.o
+
+demogridview.i: demogridview.cpp.i
+.PHONY : demogridview.i
+
+# target to preprocess a source file
+demogridview.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/demogridview.cpp.i
+.PHONY : demogridview.cpp.i
+
+demogridview.s: demogridview.cpp.s
+.PHONY : demogridview.s
+
+# target to generate assembly for a file
+demogridview.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/demogridview.cpp.s
+.PHONY : demogridview.cpp.s
+
+galleryview.o: galleryview.cpp.o
+.PHONY : galleryview.o
+
+# target to build an object file
+galleryview.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/galleryview.cpp.o
+.PHONY : galleryview.cpp.o
+
+galleryview.i: galleryview.cpp.i
+.PHONY : galleryview.i
+
+# target to preprocess a source file
+galleryview.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/galleryview.cpp.i
+.PHONY : galleryview.cpp.i
+
+galleryview.s: galleryview.cpp.s
+.PHONY : galleryview.s
+
+# target to generate assembly for a file
+galleryview.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/galleryview.cpp.s
+.PHONY : galleryview.cpp.s
+
+luwu_launcher_autogen/mocs_compilation.o: luwu_launcher_autogen/mocs_compilation.cpp.o
+.PHONY : luwu_launcher_autogen/mocs_compilation.o
+
+# target to build an object file
+luwu_launcher_autogen/mocs_compilation.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o
+.PHONY : luwu_launcher_autogen/mocs_compilation.cpp.o
+
+luwu_launcher_autogen/mocs_compilation.i: luwu_launcher_autogen/mocs_compilation.cpp.i
+.PHONY : luwu_launcher_autogen/mocs_compilation.i
+
+# target to preprocess a source file
+luwu_launcher_autogen/mocs_compilation.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.i
+.PHONY : luwu_launcher_autogen/mocs_compilation.cpp.i
+
+luwu_launcher_autogen/mocs_compilation.s: luwu_launcher_autogen/mocs_compilation.cpp.s
+.PHONY : luwu_launcher_autogen/mocs_compilation.s
+
+# target to generate assembly for a file
+luwu_launcher_autogen/mocs_compilation.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.s
+.PHONY : luwu_launcher_autogen/mocs_compilation.cpp.s
+
 main.o: main.cpp.o
 .PHONY : main.o
 
@@ -161,7 +259,18 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... luwu_launcher_autogen"
+	@echo "... luwu_launcher_autogen_timestamp_deps"
 	@echo "... luwu_launcher"
+	@echo "... demogridview.o"
+	@echo "... demogridview.i"
+	@echo "... demogridview.s"
+	@echo "... galleryview.o"
+	@echo "... galleryview.i"
+	@echo "... galleryview.s"
+	@echo "... luwu_launcher_autogen/mocs_compilation.o"
+	@echo "... luwu_launcher_autogen/mocs_compilation.i"
+	@echo "... luwu_launcher_autogen/mocs_compilation.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"

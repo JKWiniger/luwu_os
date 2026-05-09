@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_WIDGETS_LIB
 
-CXX_INCLUDES = -isystem /usr/include/aarch64-linux-gnu/qt6/QtCore -isystem /usr/include/aarch64-linux-gnu/qt6 -isystem /usr/lib/aarch64-linux-gnu/qt6/mkspecs/linux-g++ -isystem /usr/include/aarch64-linux-gnu/qt6/QtWidgets -isystem /usr/include/aarch64-linux-gnu/qt6/QtGui
+CXX_INCLUDES = -I/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/include -isystem /usr/include/aarch64-linux-gnu/qt6/QtCore -isystem /usr/include/aarch64-linux-gnu/qt6 -isystem /usr/lib/aarch64-linux-gnu/qt6/mkspecs/linux-g++ -isystem /usr/include/aarch64-linux-gnu/qt6/QtWidgets -isystem /usr/include/aarch64-linux-gnu/qt6/QtGui
 
 CXX_FLAGS = 
 

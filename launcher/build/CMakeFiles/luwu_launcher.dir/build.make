@@ -69,13 +69,33 @@ include CMakeFiles/luwu_launcher.dir/progress.make
 # Include the compile flags for this target's objects.
 include CMakeFiles/luwu_launcher.dir/flags.make
 
+luwu_launcher_autogen/timestamp: /usr/lib/qt6/libexec/moc
+luwu_launcher_autogen/timestamp: CMakeFiles/luwu_launcher.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic MOC for target luwu_launcher"
+	/usr/bin/cmake -E cmake_autogen /home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/AutogenInfo.json ""
+	/usr/bin/cmake -E touch /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/timestamp
+
 CMakeFiles/luwu_launcher.dir/codegen:
 .PHONY : CMakeFiles/luwu_launcher.dir/codegen
+
+CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o: CMakeFiles/luwu_launcher.dir/flags.make
+CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o: luwu_launcher_autogen/mocs_compilation.cpp
+CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o: CMakeFiles/luwu_launcher.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o -MF CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o -c /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/mocs_compilation.cpp
+
+CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/mocs_compilation.cpp > CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.i
+
+CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/mocs_compilation.cpp -o CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.s
 
 CMakeFiles/luwu_launcher.dir/main.cpp.o: CMakeFiles/luwu_launcher.dir/flags.make
 CMakeFiles/luwu_launcher.dir/main.cpp.o: /home/pi/luwu-os/launcher/main.cpp
 CMakeFiles/luwu_launcher.dir/main.cpp.o: CMakeFiles/luwu_launcher.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/luwu_launcher.dir/main.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/luwu_launcher.dir/main.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/luwu_launcher.dir/main.cpp.o -MF CMakeFiles/luwu_launcher.dir/main.cpp.o.d -o CMakeFiles/luwu_launcher.dir/main.cpp.o -c /home/pi/luwu-os/launcher/main.cpp
 
 CMakeFiles/luwu_launcher.dir/main.cpp.i: cmake_force
@@ -86,14 +106,48 @@ CMakeFiles/luwu_launcher.dir/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/luwu_launcher.dir/main.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/pi/luwu-os/launcher/main.cpp -o CMakeFiles/luwu_launcher.dir/main.cpp.s
 
+CMakeFiles/luwu_launcher.dir/galleryview.cpp.o: CMakeFiles/luwu_launcher.dir/flags.make
+CMakeFiles/luwu_launcher.dir/galleryview.cpp.o: /home/pi/luwu-os/launcher/galleryview.cpp
+CMakeFiles/luwu_launcher.dir/galleryview.cpp.o: CMakeFiles/luwu_launcher.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/luwu_launcher.dir/galleryview.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/luwu_launcher.dir/galleryview.cpp.o -MF CMakeFiles/luwu_launcher.dir/galleryview.cpp.o.d -o CMakeFiles/luwu_launcher.dir/galleryview.cpp.o -c /home/pi/luwu-os/launcher/galleryview.cpp
+
+CMakeFiles/luwu_launcher.dir/galleryview.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/luwu_launcher.dir/galleryview.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/pi/luwu-os/launcher/galleryview.cpp > CMakeFiles/luwu_launcher.dir/galleryview.cpp.i
+
+CMakeFiles/luwu_launcher.dir/galleryview.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/luwu_launcher.dir/galleryview.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/pi/luwu-os/launcher/galleryview.cpp -o CMakeFiles/luwu_launcher.dir/galleryview.cpp.s
+
+CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: CMakeFiles/luwu_launcher.dir/flags.make
+CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: /home/pi/luwu-os/launcher/demogridview.cpp
+CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: CMakeFiles/luwu_launcher.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/luwu_launcher.dir/demogridview.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/luwu_launcher.dir/demogridview.cpp.o -MF CMakeFiles/luwu_launcher.dir/demogridview.cpp.o.d -o CMakeFiles/luwu_launcher.dir/demogridview.cpp.o -c /home/pi/luwu-os/launcher/demogridview.cpp
+
+CMakeFiles/luwu_launcher.dir/demogridview.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/luwu_launcher.dir/demogridview.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/pi/luwu-os/launcher/demogridview.cpp > CMakeFiles/luwu_launcher.dir/demogridview.cpp.i
+
+CMakeFiles/luwu_launcher.dir/demogridview.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/luwu_launcher.dir/demogridview.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/pi/luwu-os/launcher/demogridview.cpp -o CMakeFiles/luwu_launcher.dir/demogridview.cpp.s
+
 # Object files for target luwu_launcher
 luwu_launcher_OBJECTS = \
-"CMakeFiles/luwu_launcher.dir/main.cpp.o"
+"CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o" \
+"CMakeFiles/luwu_launcher.dir/main.cpp.o" \
+"CMakeFiles/luwu_launcher.dir/galleryview.cpp.o" \
+"CMakeFiles/luwu_launcher.dir/demogridview.cpp.o"
 
 # External object files for target luwu_launcher
 luwu_launcher_EXTERNAL_OBJECTS =
 
+luwu_launcher: CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o
 luwu_launcher: CMakeFiles/luwu_launcher.dir/main.cpp.o
+luwu_launcher: CMakeFiles/luwu_launcher.dir/galleryview.cpp.o
+luwu_launcher: CMakeFiles/luwu_launcher.dir/demogridview.cpp.o
 luwu_launcher: CMakeFiles/luwu_launcher.dir/build.make
 luwu_launcher: CMakeFiles/luwu_launcher.dir/compiler_depend.ts
 luwu_launcher: /usr/lib/aarch64-linux-gnu/libQt6Widgets.so.6.8.2
@@ -102,7 +156,7 @@ luwu_launcher: /usr/lib/aarch64-linux-gnu/libGLX.so
 luwu_launcher: /usr/lib/aarch64-linux-gnu/libOpenGL.so
 luwu_launcher: /usr/lib/aarch64-linux-gnu/libQt6Core.so.6.8.2
 luwu_launcher: CMakeFiles/luwu_launcher.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable luwu_launcher"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Linking CXX executable luwu_launcher"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/luwu_launcher.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -113,7 +167,7 @@ CMakeFiles/luwu_launcher.dir/clean:
 	$(CMAKE_COMMAND) -P CMakeFiles/luwu_launcher.dir/cmake_clean.cmake
 .PHONY : CMakeFiles/luwu_launcher.dir/clean
 
-CMakeFiles/luwu_launcher.dir/depend:
+CMakeFiles/luwu_launcher.dir/depend: luwu_launcher_autogen/timestamp
 	cd /home/pi/luwu-os/launcher/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/pi/luwu-os/launcher /home/pi/luwu-os/launcher /home/pi/luwu-os/launcher/build /home/pi/luwu-os/launcher/build /home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher.dir/DependInfo.cmake "--color=$(COLOR)"
 .PHONY : CMakeFiles/luwu_launcher.dir/depend
 

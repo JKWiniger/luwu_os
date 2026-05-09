@@ -8,6 +8,10 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "" "luwu_launcher_autogen/timestamp" "custom" "luwu_launcher_autogen/deps"
+  "/home/pi/luwu-os/launcher/demogridview.cpp" "CMakeFiles/luwu_launcher.dir/demogridview.cpp.o" "gcc" "CMakeFiles/luwu_launcher.dir/demogridview.cpp.o.d"
+  "/home/pi/luwu-os/launcher/galleryview.cpp" "CMakeFiles/luwu_launcher.dir/galleryview.cpp.o" "gcc" "CMakeFiles/luwu_launcher.dir/galleryview.cpp.o.d"
+  "/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/mocs_compilation.cpp" "CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o" "gcc" "CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o.d"
   "/home/pi/luwu-os/launcher/main.cpp" "CMakeFiles/luwu_launcher.dir/main.cpp.o" "gcc" "CMakeFiles/luwu_launcher.dir/main.cpp.o.d"
   "" "luwu_launcher" "gcc" "CMakeFiles/luwu_launcher.dir/link.d"
   )

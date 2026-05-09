@@ -167,6 +167,7 @@ set(CMAKE_MAKEFILE_OUTPUTS
 
 # Byproducts of CMake generate step:
 set(CMAKE_MAKEFILE_PRODUCTS
+  "CMakeFiles/luwu_launcher_autogen.dir/AutogenInfo.json"
   ".qt/QtDeploySupport.cmake"
   ".qt/QtDeployTargets.cmake"
   "CMakeFiles/CMakeDirectoryInformation.cmake"
@@ -175,4 +176,6 @@ set(CMAKE_MAKEFILE_PRODUCTS
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/luwu_launcher.dir/DependInfo.cmake"
+  "CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir/DependInfo.cmake"
+  "CMakeFiles/luwu_launcher_autogen.dir/DependInfo.cmake"
   )

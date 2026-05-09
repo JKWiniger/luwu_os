@@ -2,7 +2,10 @@ luwu_launcher: \
   /usr/lib/gcc/aarch64-linux-gnu/14/../../../aarch64-linux-gnu/Scrt1.o \
   /usr/lib/gcc/aarch64-linux-gnu/14/../../../aarch64-linux-gnu/crti.o \
   /usr/lib/gcc/aarch64-linux-gnu/14/crtbeginS.o \
+  CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o \
   CMakeFiles/luwu_launcher.dir/main.cpp.o \
+  CMakeFiles/luwu_launcher.dir/galleryview.cpp.o \
+  CMakeFiles/luwu_launcher.dir/demogridview.cpp.o \
   /usr/lib/aarch64-linux-gnu/libQt6Widgets.so.6.8.2 \
   /usr/lib/aarch64-linux-gnu/libQt6Gui.so.6.8.2 \
   /usr/lib/aarch64-linux-gnu/libGLX.so \
@@ -77,7 +80,13 @@ luwu_launcher: \
 
 /usr/lib/gcc/aarch64-linux-gnu/14/crtbeginS.o:
 
+CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o:
+
 CMakeFiles/luwu_launcher.dir/main.cpp.o:
+
+CMakeFiles/luwu_launcher.dir/galleryview.cpp.o:
+
+CMakeFiles/luwu_launcher.dir/demogridview.cpp.o:
 
 /usr/lib/aarch64-linux-gnu/libQt6Widgets.so.6.8.2:
 
