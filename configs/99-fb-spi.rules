@@ -1,1 +1,1 @@
-SUBSYSTEM=="graphics", ATTR{name}=="fb_st7789v", SYMLINK+="fb-spi"
+SUBSYSTEM=="graphics", ATTR{name}=="fb_st7789v", SYMLINK+="fb-spi", TAG+="systemd", ENV{SYSTEMD_WANTS}="luwu-splash.service"

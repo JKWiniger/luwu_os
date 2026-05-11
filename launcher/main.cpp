@@ -189,6 +189,7 @@ int main(int argc, char *argv[]) {
 
     stack.showFullScreen();
     gallery->setFocus();
+
     int rc = app.exec();
 
     if (preloadProc->state() != QProcess::NotRunning) {

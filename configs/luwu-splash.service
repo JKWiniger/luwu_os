@@ -1,0 +1,23 @@
+[Unit]
+Description=Luwu OS Boot Splash Screen
+# 不要默认依赖（避免等待 multi-user.target）
+DefaultDependencies=no
+# 确保根文件系统已挂载（mplayer 和脚本可访问）
+After=local-fs.target
+
+[Service]
+Type=simple
+# 用 pi 运行（pi 在 video 组可访问 /dev/fb0，且 launcher 的 kill-splash.sh 以 pi 运行可以杀掉它）
+User=pi
+# 防止 mplayer 尝试读取 TTY
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+ExecStart=/home/pi/luwu-os/configs/luwu-splash.sh
+Restart=no
+KillMode=process
+TimeoutStopSec=3
+
+# WantedBy=basic.target 作为兜底（udev 触发是主要路径）
+[Install]
+WantedBy=basic.target
