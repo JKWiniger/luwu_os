@@ -254,8 +254,94 @@ SPI LCD      → fbtft 内核驱动     → /dev/fb-spi（udev）→ mmap 写
 | `/home/pi/luwu-os/configs/luwu-keys.dts` | gpio-keys 设备树源文件 |
 | `/home/pi/luwu-os/configs/luwu-launcher.service` | Luwu OS 桌面启动器 systemd 服务 |
 | `/home/pi/luwu-os/configs/99-fb-spi.rules` | udev 规则（/dev/fb-spi 软链接）|
-| `/home/pi/lib/edulib.py` | 老硬件库，已弃用（摄像头改用 Picamera2 直调）|
-| `/home/pi/lib/xgolib_dog.py` | 机器狗运动库，保留 |
-| `/home/pi/lib/xgoscreen/` | 老 LCD 驱动，已被 fbtft 替代 |
+| `/home/pi/xgoedu/xgoedu/edulib.py` | 老镜像教育库（`pip install xgoedu`），依赖 xgoscreen/PIL，仅老镜像使用 |
+| `/home/pi/xgoedu-luwuos/xgoedu/edulib.py` | 新镜像教育库（`pip install xgoedu-luwuos`），用 PySide6 QPainter 替代 PIL 绘图 |
+| `/home/pi/lib/xgolib_dog.py` | 机器狗运动库，保留不变 |
+| `/home/pi/lib/xgoscreen/` | 老 LCD spidev 驱动，已废弃，被 fbtft + PySide6 替代 |
 | `/etc/asound.conf` | ALSA dmix/dsnoop 配置，多 App 音频共享 |
 | `/var/lib/alsa/asound.state` | 混音器持久化状态（啸叫修复 + 默认音量）|
+
+---
+
+## 改造 7：Python 库重组
+
+### 背景
+老镜像有三个库，均与硬件强耦合，无法在新架构（fbtft + PySide6 + gpio-keys + ALSA dmix）下直接使用：
+
+| 库 | 问题 |
+|----|------|
+| `xgoscreen/` | 直接操 spidev + RPi.GPIO，与 fbtft 内核驱动冲突，独占 /dev/spidev0.0 |
+| `edulib.py` | 2400+ 行单体库，混杂了 LCD 显示、GPIO 按键、摄像头、AI 识别等异质功能 |
+| `xgolib_dog.py` | 串口路径写死 `/dev/ttyAMA0`，与蓝牙抢占 PL011 |
+
+### 方案
+
+```
+老方案：                      新方案：
+xgoscreen/     ──废弃──→     （fbtft 内核驱动 + PySide6 接管显示）
+edulib.py      ──拆分──→     xgoedu（老镜像 pip 包，保持不变）
+                             xgoedu-luwuos（新镜像 pip 包，PySide6 QPainter + QPixmap）
+xgolib_dog.py  ─改一行→       xgolib_dog.py（port 参数化，不再写死）
+```
+
+### xgoscreen → 废弃
+- 不再维护，不迁移
+- 显示由 fbtft 内核驱动统一管理，App 通过 PySide6 / LinuxFB 渲染
+- 原 `LCD_2inch.ShowImage()` 的角色由 `QLabel.setPixmap()` 承担
+
+### edulib → 拆分为新版 xgoedu-luwuos（新镜像专用 pip 包）
+
+**设计决策：** 不破坏老镜像的 `xgoedu` 包，新开 pip 包 `xgoedu-luwuos`（import 名仍为 `from xgoedu import XGOEDU`）。
+新包底层用 PySide6 QPainter + QPixmap 替代 PIL ImageDraw + spidev，API 签名完全兼容。
+
+**新版 edulib.py（xgoedu-luwuos 包内）：**
+- 手势识别（MediaPipe Hands）
+- 人脸检测（MediaPipe Face Detection）
+- 骨骼姿态识别（MediaPipe Pose）
+- YOLO 目标检测（onnxruntime）
+- 颜色/色块/巡线/球体识别（OpenCV）
+- 二维码 / AprilTag 识别
+- 辅助函数：`hand_pos`、`color`、`getFaceBox` 等
+
+**废弃（由 App / 系统层接管）：**
+| 功能 | 新方案 |
+|------|--------|
+| LCD 绘图（lcd_text / lcd_line 等） | PySide6 QPainter + QPixmap Canvas |
+| GPIO 按键读取 | /dev/input/eventX（gpio-keys 驱动）→ Qt QKeyEvent |
+| 音频播放 / 录音 | aplay / arecord 或 subprocess（ALSA dmix/dsnoop）|
+| 摄像头开关 | 各 App 自行 Picamera2.start() / .stop() |
+
+### lcd_* 绘图 API 迁移说明
+
+老代码的绘图模型（PIL + spidev）与 Qt 的绘图模型完全对称，可无损迁移：
+
+| 老 API | 新实现（QPainter） |
+|--------|--------------------|
+| `lcd_clear()` | `pixmap.fill(Qt.black)` |
+| `lcd_text(x, y, text)` | `painter.drawText(x, y, text)` |
+| `lcd_line(x1,y1,x2,y2)` | `painter.drawLine(x1,y1,x2,y2)` |
+| `lcd_circle(x1,y1,x2,y2,a0,a1)` | `painter.drawArc(rect, a0*16, span*16)` |
+| `lcd_rectangle(x1,y1,x2,y2)` | `painter.drawRect(x1,y1,w,h)` |
+| `lcd_picture(filename, x, y)` | `painter.drawPixmap(x, y, QPixmap(path))` |
+| `display_text_on_screen(text)` | `painter.drawText(rect, Qt.TextWordWrap, text)` |
+
+每次绘图后调用 `label.setPixmap(pixmap)` 刷新显示，行为与老代码 `ShowImage()` 完全一致。  
+用户图形化程序的方法签名保持不变，底层透明切换。
+
+### xgolib_dog → 保留，仅改一行
+
+```python
+# 改前（写死串口）：
+self.ser = serial.Serial("/dev/ttyAMA0", baud, timeout=0.5)
+
+# 改后（参数化）：
+def __init__(self, port="/dev/ttyAMA0", baud=115200, ...):
+    self.ser = serial.Serial(port, baud, timeout=0.5)
+```
+
+### 效果
+- `xgoedu-luwuos`（新镜像）：PySide6 QPainter 绘图 + 全部 AI 算法，零 xgoscreen 依赖
+- `xgoedu`（老镜像）：保持不变，不受新包影响
+- 老镜像 `pip install xgoedu`，新镜像 `pip install xgoedu-luwuos`，`from xgoedu import XGOEDU` 写法一致
+- 显示层：PySide6 统一管理，多 App 不再抢 spidev
+- 图形化用户代码：API 签名不变，底层已切换至 Qt 渲染
