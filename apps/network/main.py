@@ -91,6 +91,11 @@ _TEXTS = {
         "corner_tr_country":  "B:下",
         "corner_bl_country":  "C:返回",
         "corner_br_country":  "D:确认",
+        # 确认重启
+        "country_confirm_title":  "将重启机器",
+        "country_confirm_desc":   "确定要设置为 {} 吗？\n重启后生效",
+        "country_confirm_c":      "C:取消",
+        "country_confirm_d":      "D:确认重启",
     },
     "en": {
         "scanning":    "Point WiFi QR code at camera",
@@ -134,6 +139,11 @@ _TEXTS = {
         "corner_tr_country":  "B:Down",
         "corner_bl_country":  "C:Back",
         "corner_br_country":  "D:OK",
+        # Confirm reboot
+        "country_confirm_title":  "Will reboot device",
+        "country_confirm_desc":   "Set to {}?\nTakes effect after reboot",
+        "country_confirm_c":      "C:Cancel",
+        "country_confirm_d":      "D:Reboot Now",
     },
 }
 
@@ -210,7 +220,9 @@ class WifiSetupPage(QWidget):
         self._frame_count = 0
 
         # --- Country selection state ---
-        self._country_step = None         # None | "country_list"
+        self._country_step = None         # None | "country_list" | "reboot"
+        self._country_changed = False     # True if user just set a new country
+        self._reboot_countdown = 0         # >0 when showing reboot countdown
         self._country_list = [
             ("CN","中国"),("US","美国"),("JP","日本"),
             ("KR","韩国"),("DE","德国"),("GB","英国"),
@@ -547,8 +559,8 @@ class WifiSetupPage(QWidget):
         # (iw reg get returns internal kernel enum numbers, not alpha-2)
         try:
             r = subprocess.run(
-                ["sudo", "-n", "raspi-config", "nonint", "get_wifi_country"],
-                capture_output=True, text=True, timeout=5
+                ["sudo", "-S", "raspi-config", "nonint", "get_wifi_country"],
+                input="pi\n", capture_output=True, text=True, timeout=5
             )
             self._country_current_code = r.stdout.strip() if r.returncode == 0 else ""
         except Exception:
@@ -581,6 +593,18 @@ class WifiSetupPage(QWidget):
         self._frame_count = 0
 
     def _country_key_handler(self, key):
+        # Ignore all keys during reboot countdown
+        if self._reboot_countdown > 0:
+            return
+
+        if self._country_step == "country_confirm":
+            if key == Qt.Key.Key_Back:  # C → cancel, back to list
+                self._country_step = "country_list"
+            elif key == Qt.Key.Key_Enter or key == Qt.Key.Key_Return:  # D → confirm reboot
+                self._reboot_countdown = 3
+                QTimer.singleShot(1000, self._tick_reboot)
+            return
+
         n = len(self._country_list)
         if key == Qt.Key.Key_Back:
             self._exit_country_mode()
@@ -598,16 +622,33 @@ class WifiSetupPage(QWidget):
     def _apply_country(self, code):
         try:
             r = subprocess.run(
-                ["sudo", "-n", "raspi-config", "nonint", "do_wifi_country", code],
-                capture_output=True, text=True, timeout=15
+                ["sudo", "-S", "raspi-config", "nonint", "do_wifi_country", code],
+                input="pi\n", capture_output=True, text=True, timeout=15
             )
             if r.returncode == 0:
                 print(f"[wifi_setup] Country set to {code}", flush=True)
+                self._country_changed = True
+                self._reboot_code = code
+                # Show confirmation dialog before reboot
+                self._country_step = "country_confirm"
+                return  # stay on country UI to show confirm dialog
             else:
                 print(f"[wifi_setup] Country set failed: {r.stderr}", flush=True)
         except Exception as e:
             print(f"[wifi_setup] Country set error: {e}", flush=True)
         self._exit_country_mode()
+
+    def _tick_reboot(self):
+        self._reboot_countdown -= 1
+        if self._reboot_countdown >= 1:
+            if self._reboot_countdown == 1:
+                self._do_reboot()  # reboot at 1, keep countdown screen visible
+            else:
+                QTimer.singleShot(1000, self._tick_reboot)
+
+    def _do_reboot(self):
+        print("[wifi_setup] Rebooting...", flush=True)
+        subprocess.run(["sudo", "-S", "reboot"], input="pi\n", capture_output=True, text=True)
 
     def _draw_country_ui(self):
         bg = Image.new('RGB', (320, 240), (10, 10, 26))
@@ -615,10 +656,50 @@ class WifiSetupPage(QWidget):
         try:
             font14 = ImageFont.truetype(FONT_PATH, 14)
             font12 = ImageFont.truetype(FONT_PATH, 12)
+            font18 = ImageFont.truetype(FONT_PATH, 18)
         except Exception:
             font14 = ImageFont.load_default()
             font12 = ImageFont.load_default()
-        self._draw_country_list(draw, font14, font12)
+            font18 = ImageFont.load_default()
+
+        if self._reboot_countdown > 0:
+            # Reboot countdown overlay
+            lines = [
+                t("country_set_ok", self._reboot_code),
+                f"{self._reboot_countdown}s " + ("后自动重启..." if LA == "cn" else "until reboot..."),
+            ]
+            y = 70
+            for line in lines:
+                tw = draw.textbbox((0, 0), line, font=font18)[2]
+                draw.text(((320 - tw) // 2, y), line, font=font18, fill=(120, 255, 120))
+                y += 36
+        elif self._country_step == "country_confirm":
+            # Confirm reboot dialog (solid overlay on country list)
+            self._draw_country_list(draw, font14, font12)
+            # Dim background — cover entire image with semi-dark fill
+            dim = Image.new('RGBA', (320, 240), (0, 0, 0, 160))
+            bg_rgba = bg.convert('RGBA')
+            bg_rgba.paste(dim, (0, 0), dim)
+            bg = bg_rgba.convert('RGB')
+            draw = ImageDraw.Draw(bg)
+            # Dialog box
+            draw.rectangle([(25, 45), (295, 195)], fill=(20, 20, 40), outline=(120, 255, 120))
+            # Confirm text
+            title = t("country_confirm_title")
+            tw = draw.textbbox((0, 0), title, font=font18)[2]
+            draw.text(((320 - tw) // 2, 62), title, font=font18, fill=(255, 200, 80))
+            desc = t("country_confirm_desc", self._reboot_code)
+            for i, subline in enumerate(desc.split('\n')):
+                tw2 = draw.textbbox((0, 0), subline, font=font14)[2]
+                draw.text(((320 - tw2) // 2, 102 + i * 24), subline, font=font14, fill=(200, 200, 200))
+            # Bottom hints
+            hint_c = t("country_confirm_c")
+            hint_d = t("country_confirm_d")
+            draw.text((50, 170), hint_c, font=font12, fill=(180, 180, 180))
+            dw = draw.textbbox((0, 0), hint_d, font=font12)[2]
+            draw.text((320 - dw - 50, 170), hint_d, font=font12, fill=(120, 255, 120))
+        else:
+            self._draw_country_list(draw, font14, font12)
         result = np.array(bg)
         h, w, c = result.shape
         qimg = QImage(result.data.tobytes(), w, h, w * c, QImage.Format.Format_RGB888)
@@ -672,17 +753,25 @@ class WifiSetupPage(QWidget):
         # NOTE: keep camera running — _process_frame() checks
         # _manual_step first and draws manual UI, skipping camera.
 
+        country_changed = self._country_changed
+        self._country_changed = False
+
         class _WifiScanWorker(QThread):
             result = Signal(list)
             def run(self):
                 try:
                     import subprocess as sp
-                    # Rescan first to get fresh results (nmcli does NOT need sudo)
+                    import time as _t
+                    # If country was just changed, wait longer for the
+                    # regulatory domain to fully take effect before scanning
+                    if country_changed:
+                        _t.sleep(4)
+                    # rescan needs sudo to actually trigger hardware scan
                     sp.run(
-                        ["nmcli", "device", "wifi", "rescan"],
-                        capture_output=True, text=True, timeout=15
+                        ["sudo", "-S", "nmcli", "device", "wifi", "rescan"],
+                        input="pi\n", capture_output=True, text=True, timeout=15
                     )
-                    import time as _t; _t.sleep(3)
+                    _t.sleep(3)
                     r = sp.run(
                         ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"],
                         capture_output=True, text=True, timeout=10
