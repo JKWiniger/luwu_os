@@ -1,0 +1,76 @@
+Metadata-Version: 2.4
+Name: xgolib
+Version: 1.1.1
+Summary: XGO 机器人控制库
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: pyserial
+
+# xgolib — XGO 机器人控制库
+xgolib 提供了针对 XGO 系列设备的 Python 控制接口。通过统一入口 `XGO(...)` 可自动识别设备类型并返回对应的控制对象，亦可手动指定型号。
+
+- 已支持设备：`XGO-MINI`、`XGO-LITE`、`XGO-mini2SW`、`XGO-RIDER`
+
+## 安装
+
+- Python 版本：建议 `3.8+`
+- 依赖：`pyserial`
+
+```bash
+pip install xgolib
+```
+
+## 快速开始
+
+```python
+from xgolib import XGO
+
+# 自动检测设备型号
+dog = XGO()
+
+# 或手动指定型号
+dog = XGO("xgolite")
+```
+
+## API
+
+### 运动控制
+
+```python
+dog.move("x", 18)      # 前进 18mm
+dog.move("y", -5)      # 右移 5mm
+dog.move("Y", 30)      # 左移 30mm
+dog.turn(60)            # 以 60°/s 左转
+dog.stop()              # 停止移动
+```
+
+### 变速
+
+```python
+dog.pace("high")       # 高速步频
+dog.mark_time(25)       # 抬腿 25mm 原地踏步
+dog.mark_time(0)        # 停止原地踏步
+```
+
+### 设备信息
+
+```python
+dog = XGO("xgolite")
+version = dog.read_firmware()
+print(version)  # e.g. M-4.3.3
+
+if version[0] == "M":
+    print("XGO-MINI")
+else:
+    print("XGO-LITE")
+```
+
+## 自动扫描
+
+`XGO()` 未指定端口时自动扫描设备，默认顺序：`/dev/ttyAMA5` → `/dev/ttyAMA0`。
+也可手动指定：
+
+```python
+dog = XGO("xgomini", port="/dev/ttyAMA2")
+```
+

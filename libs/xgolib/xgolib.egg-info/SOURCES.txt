@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+setup.cfg
+xgolib/__init__.py
+xgolib/xgolib_dog.py
+xgolib/xgolib_rider.py
+xgolib.egg-info/PKG-INFO
+xgolib.egg-info/SOURCES.txt
+xgolib.egg-info/dependency_links.txt
+xgolib.egg-info/requires.txt
+xgolib.egg-info/top_level.txt

@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: xgolib
+Version: 1.0.5
+Summary: XGO 机器人控制库
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: pyserial
+
+# xgolib — XGO 机器人控制库
+xgolib 提供了针对 XGO 系列设备的 Python 控制接口。通过统一入口 `XGO(...)` 可自动识别设备类型并返回对应的控制对象，亦可手动指定型号。
+
+- 已支持设备：`XGO-MINI`、`XGO-LITE`、`XGO-MINI3W`、`XGO-RIDER`
+
+## 安装
+
+- Python 版本：建议 `3.8+`
+- 依赖：`pyserial`
+
+```bash
+pip install pyserial
+pip install xgolib
+```
+

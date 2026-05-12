@@ -1,0 +1,253 @@
+# xgoedu-luwuos
+
+[![Python](https://img.shields.io/badge/Python-3.7+-blue)](https://www.python.org/)
+[![PySide6](https://img.shields.io/badge/Qt-PySide6-green)](https://pypi.org/project/PySide6/)
+[![Platform](https://img.shields.io/badge/Platform-LuwU%20OS-orange)](#)
+
+XGO 机器人图形化 Python 教育库 — LuwU OS 新镜像专用版。
+
+用 **PySide6 QPainter + QPixmap** 替代传统 PIL ImageDraw + spidev 绘图管线，底层通过 fbtft 内核驱动渲染至 SPI LCD，零 xgoscreen 依赖。
+
+> 🔗 老镜像用户请使用 [`xgoedu`](https://pypi.org/project/xgoedu/) 包。
+> 两个包均通过 `from xgoedu import XGOEDU` 导入，API 签名完全兼容。
+
+---
+
+## 功能概览
+
+| 类别 | 功能 |
+|------|------|
+| 🎨 LCD 绘图 | 直线、矩形、圆形、圆弧、文字、图片显示、流式排版 |
+| ✋ 手势识别 | 基于 MediaPipe Hands，支持 5/4/3/2/1/石头/OK 等手势 |
+| 😷 人脸检测 | MediaPipe Face Detection，返回五官坐标 |
+| 🦴 骨骼识别 | MediaPipe Pose，输出四肢关节角度 |
+| 🧠 情绪识别 | Keras 模型，识别 Angry/Happy/Neutral/Sad/Surprise |
+| 👶 年龄性别 | Caffe 模型，估计年龄区间与性别 |
+| 🔍 目标检测 | YOLO (onnxruntime)，80 类 COCO 目标 |
+| 🎨 颜色识别 | HSV 阈值分割，支持红/绿/蓝/黄 + 自定义色块 |
+| ⚪ 球体追踪 | 霍夫圆检测，返回圆心坐标和半径 |
+| 📷 二维码 | pyzbar 解码 QR / 条码 |
+| 📸 摄像头 | Picamera2 集成：拍照、录像、相机应用 |
+| 🔘 按键读取 | 4 按键状态读取（gpio-keys 驱动） |
+| 🔊 音频 | 播放 wav、录音、百度语音识别/合成 |
+
+---
+
+## 安装
+
+```bash
+pip install xgoedu-luwuos
+```
+
+### 系统要求
+
+- Raspberry Pi (CM4 / CM5) 运行 LuwU OS 新镜像
+- SPI LCD 已配置 fbtft 内核驱动（设备节点 `/dev/fb-spi` 存在）
+- Python 3.7+
+
+### 依赖
+
+以上依赖将在 `pip install` 时自动安装：
+
+```
+opencv-python  numpy  Pillow  mediapipe  onnxruntime
+pyzbar  tensorflow  pyserial  PySide6
+```
+
+---
+
+## 快速开始
+
+```python
+from xgoedu import XGOEDU
+
+# 获取单例实例（首次调用初始化硬件）
+edu = XGOEDU()
+```
+
+XGOEDU 采用**单例模式**，多次调用 `XGOEDU()` 返回同一实例，避免重复初始化硬件。
+
+---
+
+## API 参考
+
+### LCD 绘图
+
+```python
+edu = XGOEDU()
+
+# 清屏
+edu.lcd_clear()
+
+# 文字（x, y, 内容, 颜色, 字号）
+edu.lcd_text(10, 10, "Hello XGO", color="WHITE", fontsize=20)
+
+# 直线（x1, y1, x2, y2, 颜色, 线宽）
+edu.lcd_line(0, 0, 100, 100, color="RED", width=2)
+
+# 矩形（x1, y1, x2, y2, 填充色, 边框色, 线宽）
+edu.lcd_rectangle(50, 50, 150, 150, fill=None, outline="GREEN", width=3)
+
+# 圆形（x1, y1, x2, y2, 起始角, 终止角, 颜色, 线宽）
+edu.lcd_circle(20, 20, 100, 100, 0, 360, color="BLUE", width=2)
+
+# 圆弧
+edu.lcd_arc(20, 20, 100, 100, 0, 180, color=(255, 255, 0), width=2)
+
+# 根据圆心画圆
+edu.lcd_round(160, 120, 50, color="WHITE", width=2)
+
+# 显示 jpg 图片（图片放在 /home/pi/xgoPictures/）
+edu.lcd_picture("my_image.jpg", x=0, y=0)
+
+# 流式排版长文本（自动换行、翻页）
+edu.display_text_on_screen("这是一段很长很长的文字……", color="WHITE", font_size=20)
+```
+
+### 手势识别
+
+```python
+result = edu.gestureRecognition(target="camera")
+if result:
+    gesture, center = result
+    print(f"识别到手势: {gesture}, 手部中心: {center}")
+    # gesture 返回值: '5', '4', '3', '2', '1', 'Stone', 'Good', 'Rock', 'Ok'
+```
+
+### 人脸检测
+
+```python
+rect = edu.face_detect(target="camera")
+if rect:
+    print(f"人脸位置: {rect}")  # [x, y, w, h]
+```
+
+### 骨骼姿态识别
+
+```python
+angles = edu.posenetRecognition(target="camera")
+if angles:
+    print(f"四肢角度: {angles}")  # [左腿, 右腿, 左臂, 右臂]
+```
+
+### 情绪识别
+
+```python
+result = edu.emotion(target="camera")
+if result:
+    label, (x, y) = result
+    print(f"情绪: {label}")  # Angry / Happy / Neutral / Sad / Surprise
+```
+
+### 年龄性别检测
+
+```python
+result = edu.agesex(target="camera")
+if result:
+    gender, age, (x, y) = result
+    print(f"性别: {gender}, 年龄段: {age}")
+```
+
+### YOLO 目标检测
+
+```python
+result = edu.yoloFast(target="camera")
+if result:
+    class_name, (x, y) = result
+    print(f"检测到: {class_name}")  # person, bicycle, car, ...
+```
+
+### 颜色识别
+
+```python
+result = edu.ColorRecognition(target="camera", mode='R')
+if result:
+    (x, y), radius = result
+    print(f"颜色块中心: ({x}, {y}), 半径: {radius}")
+    # mode 参数: 'R'红 'G'绿 'B'蓝 'Y'黄
+```
+
+### 球体追踪
+
+```python
+# 先用摄像头采集色块阈值
+mask = edu.cap_color_mask()  # 按 B 键采样
+
+# 追踪球体
+x, y, r = edu.BallRecognition(mask, target="camera")
+if r > 0:
+    print(f"球体: 中心({x},{y}), 半径{r}")
+```
+
+### 二维码识别
+
+```python
+results = edu.QRRecognition(target="camera")
+for data in results:
+    print(f"扫码结果: {data}")
+```
+
+### 摄像头
+
+```python
+# 打开摄像头预览
+edu.xgoCamera(True)
+
+# 拍照
+edu.xgoTakePhoto("photo.jpg")
+
+# 录像
+edu.xgoVideoRecord("video.mp4", seconds=10)
+
+# 完整相机应用（A拍照 B录像 C退出）
+edu.camera("my_capture")
+
+# 关闭摄像头
+edu.xgoCamera(False)
+```
+
+### 按键
+
+```python
+# 读取按键状态（返回 True/False）
+if edu.xgoButton("a"):
+    print("A 键按下")
+# 按键标识: "a"(左上) "b"(右上) "c"(左下) "d"(右下)
+```
+
+### 音频
+
+```python
+# 播放 wav 文件（文件放在 /home/pi/xgoMusic/）
+edu.xgoSpeaker("sound.wav")
+
+# 录音（保存在 /home/pi/xgoMusic/）
+edu.xgoAudioRecord("recording.wav", seconds=5)
+
+# 百度语音识别
+text = edu.SpeechRecognition(seconds=3)
+print(f"识别结果: {text}")
+
+# 百度语音合成
+edu.SpeechSynthesis("你好，世界")
+```
+
+---
+
+## 与旧版 xgoedu 的关系
+
+| | xgoedu（老镜像） | xgoedu-luwuos（新镜像） |
+|------|------|------|
+| pip 包名 | `xgoedu` | `xgoedu-luwuos` |
+| import 方式 | `from xgoedu import XGOEDU` | `from xgoedu import XGOEDU` |
+| 显示引擎 | PIL ImageDraw + spidev + xgoscreen | PySide6 QPainter + QPixmap + fbtft |
+| 依赖 | RPi.GPIO, spidev, xgoscreen | PySide6 |
+| API | ✅ 完全兼容 | ✅ 完全兼容 |
+
+两个包不会在同一台设备上同时安装。择一安装即可。
+
+---
+
+## License
+
+Copyright © XGO Technology. All rights reserved.

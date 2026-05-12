@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+setup.cfg
+xgoedu/__init__.py
+xgoedu/edulib.py
+xgoedu_luwuos.egg-info/PKG-INFO
+xgoedu_luwuos.egg-info/SOURCES.txt
+xgoedu_luwuos.egg-info/dependency_links.txt
+xgoedu_luwuos.egg-info/requires.txt
+xgoedu_luwuos.egg-info/top_level.txt
