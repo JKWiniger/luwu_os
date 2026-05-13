@@ -42,7 +42,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # ---- 狗库 ----
 sys.path.insert(0, "/home/pi/lib")
-from xgolib_dog import XGO_DOG  # noqa: E402
+from xgolib import XGO  # noqa: E402
 
 mark("imports done")
 
@@ -139,7 +139,7 @@ def execute_action(action_func, *args):
 
 
 # ---- 狗（在 Flask 线程中可用） ----
-dog = XGO_DOG(port="/dev/ttyAMA0", baud=115200, version="xgomini")
+dog = XGO()
 
 
 # ---- 视频流生成器 ----
