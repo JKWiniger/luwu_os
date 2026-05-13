@@ -20,9 +20,11 @@
 pyzbar>=0.1
 
 # ---- 本地包 ----
-# xgolib — 机器人运动库（非 pip 标准包，通过 sys.path 引用）
-#   路径: /home/pi/lib/xgolib_dog.py
-#   如需安装为 pip 包: cd /home/pi/xgolib && pip3 install --break-system-packages -e .
+# xgolib — 机器人运动库（PyPI 安装）
+xgolib>=1.1
 
-# xgoedu-luwuos — 新镜像教育库
-#   cd /home/pi/xgoedu-luwuos && pip3 install --break-system-packages -e .
+# xgoedu-luwuos — 新镜像教育库（PyPI 安装）
+xgoedu-luwuos>=2.0
+
+# xgo-blockly-luwuos — Blockly 图形化编程服务（PyPI 安装）
+xgo-blockly-luwuos>=1.0

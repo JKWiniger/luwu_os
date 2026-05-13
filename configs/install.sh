@@ -11,7 +11,7 @@ echo "[0/8] 安装系统依赖 ..."
 apt install -y \
     python3-pip python3-pyside6 python3-numpy python3-picamera2 python3-evdev \
     python3-flask python3-flask-socketio python3-opencv \
-    mplayer alsa-utils ffmpeg libzbar0t64
+    mplayer alsa-utils ffmpeg libzbar0t64 portaudio19-dev
 echo "  ✓ 系统依赖已安装"
 
 # 0b. pip 依赖（apt 中没有的包 / 本地开发包）

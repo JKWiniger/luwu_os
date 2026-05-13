@@ -1,6 +1,6 @@
 # For more options and information see
 # http://rptl.io/configtxt
-# XGO-Rider 优化版 (WM8960 + OV5647(cam0) + SPI LCD + UART0 + 蓝牙手柄)
+# XGO-Rider 优化版 (WM8960 + OV5647 + SPI LCD + UART0 + 蓝牙手柄) [CM4/CM5 双平台]
 
 # ====== 硬件接口 ======
 dtparam=i2c_arm=on              # I2C: WM8960 寄存器控制
@@ -13,10 +13,6 @@ dtoverlay=fbtft,spi0-0,st7789v,reset_pin=27,dc_pin=25,rotate=270,speed=40000000
 
 # ====== WM8960 外置声卡 ======
 dtoverlay=wm8960-soundcard
-
-# ====== CSI OV5647 摄像头 (显式声明更稳) ======
-camera_auto_detect=0
-dtoverlay=ov5647,cam0
 
 # ====== 4 按键 → gpio-keys 内核驱动 ======
 dtoverlay=luwu-keys
@@ -50,15 +46,20 @@ gpu_mem=128                     # SPI fb1 + Qt, 128MB 稳妥
 [cm4]
 # 启用 CM4 内置 XHCI USB host 模式 (USB 摄像头/蓝牙适配器等)
 otg_mode=1
+# ====== CSI OV5647 (标准CSI接口, 不用cam0) ======
+dtoverlay=ov5647
 
 [cm5]
+# ====== CSI OV5647 (cam0=RP1电源管理) ======
+camera_auto_detect=0
+dtoverlay=ov5647,cam0
 dtoverlay=dwc2,dr_mode=host
 
-[all]
-
 # ====== 风扇温控 (CM5 pwm-fan) ======
-# 参考 fan-control-config 经验配 置, 温度毫摄氏度
+# 参考 fan-control-config 经验配置, 温度毫摄氏度
 dtparam=fan_temp0=36000,fan_temp0_hyst=2000,fan_temp0_speed=80
 dtparam=fan_temp1=40000,fan_temp1_hyst=3000,fan_temp1_speed=80
 dtparam=fan_temp2=52000,fan_temp2_hyst=4000,fan_temp2_speed=80
 dtparam=fan_temp3=58000,fan_temp3_hyst=5000,fan_temp3_speed=80
+
+[all]
