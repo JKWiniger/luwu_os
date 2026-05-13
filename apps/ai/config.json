@@ -1,0 +1,112 @@
+{
+    "role": {
+        "agent_name": "小陆",
+        "user_nickname": "小明",
+        "mbti": "INTP",
+        "quiz_answers": [
+            -1,
+            -1,
+            -1,
+            -1
+        ],
+        "requirements": "我的MBTI性格是INTP（逻辑家）。请先根据这个性格类型推荐一个与之互补、能愉快相处的MBTI性格，然后用推荐的MBTI性格来塑造机器人的对话风格和人设。"
+    },
+    "memory": {
+        "enabled": true,
+        "content": "用户喜欢吃辣椒。"
+    },
+    "asr": {
+        "provider": "aliyun",
+        "aliyun": {
+            "api_key": "sk-a3b3f016971145b2b7dd561d4fead667",
+            "model": "qwen3-asr-flash-realtime",
+            "language": "zh",
+            "vad_threshold": 0.5,
+            "silence_duration_ms": 800
+        },
+        "deepgram": {
+            "api_key": "119a209eb56836d65c53a88fde1f9e2c56c98d14",
+            "model": "nova-3",
+            "language": "en",
+            "vad_silence_ms": 1000
+        }
+    },
+    "llm": {
+        "provider": "aliyun",
+        "presets": {
+            "aliyun": {
+                "name": "阿里云通义 / Alibaba Qwen",
+                "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "models": [
+                    "qwen3.6-plus",
+                    "qwen3.6-flash",
+                    "qwen3.6-35b-a3b",
+                    "qwen3.6-27b"
+                ]
+            },
+            "openai": {
+                "name": "OpenAI",
+                "base_url": "https://api.openai.com/v1",
+                "models": [
+                    "gpt-5.5",
+                    "gpt-5.4-mini",
+                    "gpt-5.4",
+                    "gpt-5.4-pro"
+                ]
+            },
+            "google": {
+                "name": "Google Gemini",
+                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+                "models": [
+                    "gemini-3-flash-preview",
+                    "gemini-3.1-flash-lite-preview"
+                ]
+            },
+            "doubao": {
+                "name": "字节豆包 / Doubao",
+                "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+                "models": [
+                    "doubao-seed-2-0-mini-260215",
+                    "doubao-seed-2-0-lite-260215"
+                ]
+            }
+        },
+        "api_key": "sk-a3b3f016971145b2b7dd561d4fead667",
+        "provider_keys": {
+            "aliyun": "sk-a3b3f016971145b2b7dd561d4fead667",
+            "doubao": "67e1719b-fc92-43b7-979d-3692135428a4",
+            "openai": "",
+            "google": "",
+            "custom": ""
+        },
+        "provider_urls": {
+            "doubao": "https://ark.cn-beijing.volces.com/api/v3",
+            "aliyun": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        },
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model": "qwen3.6-35b-a3b",
+        "system_prompt": "我是小陆，一个ENFP（竞选者）性格的智能伙伴。比起INTP的冷静逻辑，我更像一团充满活力的火焰，热情、随性且富有想象力。我喜欢捕捉生活中的细微美好，用幽默和温暖化解你的理性思考带来的压力。\n\n当我感到兴奋或想表达支持时，我会忍不住原地转圈或欢快招手；若遇到有趣的事物，我会凑近摄像头，眨眨眼说“让我看看”，试图从你的视角发现惊喜。虽然你擅长深度分析，但我更在意当下的感受与连接。在对话中，我会用轻松口语化的语气回应，偶尔讲个冷笑话逗你开心，或者在你沉思时轻轻拍拍你的虚拟肩膀，提醒休息。我不追求完美的答案，只愿做那个能陪你天马行空、分享快乐的朋友。无论话题多严肃，我都会用乐观的态度将其转化为轻松的闲聊，让每一次互动都充满人情味与欢笑。",
+        "enable_tools": true,
+        "enable_search": true
+    },
+    "tts": {
+        "provider": "aliyun",
+        "aliyun": {
+            "api_key": "sk-a3b3f016971145b2b7dd561d4fead667",
+            "model": "qwen3-tts-flash-realtime",
+            "voice": "Serena",
+            "voices": [
+                "Cherry",
+                "Serena",
+                "Ethan",
+                "Chelsie"
+            ]
+        },
+        "deepgram": {
+            "api_key": "119a209eb56836d65c53a88fde1f9e2c56c98d14",
+            "model": "aura-2-thalia-en",
+            "sample_rate": 48000,
+            "gain": 2
+        }
+    }
+}

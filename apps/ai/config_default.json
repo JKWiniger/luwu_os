@@ -1,0 +1,75 @@
+{
+    "memory": {
+        "enabled": true,
+        "content": ""
+    },
+    "asr": {
+        "provider": "aliyun",
+        "aliyun": {
+            "api_key": "",
+            "model": "qwen3-asr-flash-realtime",
+            "language": "zh",
+            "vad_threshold": 0.5,
+            "silence_duration_ms": 800
+        },
+        "deepgram": {
+            "api_key": "",
+            "model": "nova-3",
+            "language": "zh",
+            "vad_silence_ms": 1000
+        }
+    },
+    "llm": {
+        "provider": "aliyun",
+        "presets": {
+            "aliyun": {
+                "name": "阿里云通义 / Alibaba Qwen",
+                "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "models": ["qwen3.6-plus", "qwen3.6-flash", "qwen3.6-35b-a3b", "qwen3.6-27b"]
+            },
+            "openai": {
+                "name": "OpenAI",
+                "base_url": "https://api.openai.com/v1",
+                "models": ["gpt-5.5", "gpt-5.4-mini", "gpt-5.4", "gpt-5.4-pro"]
+            },
+            "google": {
+                "name": "Google Gemini",
+                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+                "models": ["gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"]
+            },
+            "doubao": {
+                "name": "字节豆包 / Doubao",
+                "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+                "models": ["doubao-seed-2-0-mini-260215", "doubao-seed-2-0-lite-260215"]
+            }
+        },
+        "api_key": "",
+        "provider_keys": {
+            "aliyun": "",
+            "openai": "",
+            "google": "",
+            "doubao": "",
+            "custom": ""
+        },
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model": "qwen3.6-plus",
+        "system_prompt": "",
+        "enable_tools": true,
+        "enable_search": true
+    },
+    "tts": {
+        "provider": "aliyun",
+        "aliyun": {
+            "api_key": "",
+            "model": "qwen3-tts-flash-realtime",
+            "voice": "Cherry",
+            "voices": ["Cherry", "Serena", "Ethan", "Chelsie"]
+        },
+        "deepgram": {
+            "api_key": "",
+            "model": "aura-2-thalia-en",
+            "sample_rate": 48000,
+            "gain": 2.0
+        }
+    }
+}

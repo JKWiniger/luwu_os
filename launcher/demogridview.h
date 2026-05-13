@@ -8,6 +8,7 @@ struct DemoItem {
     const char *name;
     const char *color;   // hex color for placeholder icon
     const char *appPath; // placeholder, not used yet
+    const char *iconFile; // icon image file name
 };
 
 class DemoGridView : public QWidget {

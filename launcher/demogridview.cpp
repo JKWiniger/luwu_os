@@ -7,16 +7,17 @@
 
 static constexpr const char *ASSET_DIR = "/home/pi/luwu-os/launcher/assets/";
 
-// 示例程序列表：名字 + 颜色 + appPath
+// 示例程序列表：名字 + 颜色 + appPath + iconFile
 static const DemoItem DEMOS[] = {
-    // 第 1 个：图传模式（有真实图标 demo_rc.png）
-    {"\u56fe\u4f20\u6a21\u5f0f", "#E74C3C", "apps/rc_mode/main.py"},
-    {"Calculator", "#4A90D9", ""},
-    {"Clock",      "#50C878", ""},
-    {"Weather",    "#FF6B6B", ""},
-    {"Notes",      "#FFD93D", ""},
-    {"Music",      "#9B59B6", ""},
-    {"Gallery",    "#E67E22", ""},
+    {"\u56fe\u4f20\u6a21\u5f0f", "#E74C3C", "apps/rc_mode/main.py", "demo_rc.png"},
+    {"\u4eba\u8138\u8ddf\u968f", "#4A90D9", "", "demo_face_track.png"},
+    {"\u5c0f\u7403\u8ddf\u968f", "#50C878", "", "demo_ball_track.png"},
+    {"\u624b\u52bf\u8bc6\u522b", "#FF6B6B", "", "demo_gesture.png"},
+    {"\u624b\u67c4\u63a7\u5236", "#FFD93D", "", "demo_gamepad.png"},
+    {"\u70ed\u70b9\u6a21\u5f0f", "#9B59B6", "", "demo_hotspot.png"},
+    {"\u7fa4\u7ec4\u8868\u6f14", "#E67E22", "", "demo_group.png"},
+    {"\u8868\u6f14\u6a21\u5f0f", "#3498DB", "", "demo_perform.png"},
+    {"\u96f7\u8fbe\u626b\u63cf", "#2ECC71", "", "demo_radar.png"},
 };
 static constexpr int DEMO_COUNT = sizeof(DEMOS) / sizeof(DEMOS[0]);
 
@@ -121,11 +122,7 @@ void DemoGridView::loadImages() {
 
     // 加载图标（优先真实 PNG，否则占位生成）
     for (int i = 0; i < DEMO_COUNT; ++i) {
-        QPixmap icon;
-        // 第 0 项（图传模式）使用真实图标
-        if (i == 0) {
-            icon = QPixmap(QString(ASSET_DIR) + "demo_rc.png");
-        }
+        QPixmap icon(QString(ASSET_DIR) + demoItems[i].iconFile);
         if (icon.isNull()) {
             QColor color(demoItems[i].color);
             icon = makePlaceholderIcon(color, itemW);
