@@ -277,11 +277,9 @@ class ConfigWebServer:
             try:
                 font_title = ImageFont.truetype(FONT_PATH, 18)
                 font_text = ImageFont.truetype(FONT_PATH, 14)
-                font_button = ImageFont.truetype(FONT_PATH, 16)
             except Exception:
                 font_title = ImageFont.load_default()
                 font_text = ImageFont.load_default()
-                font_button = ImageFont.load_default()
 
             # QR code
             qr_img = generate_qr_image(url, size=120)
@@ -299,57 +297,15 @@ class ConfigWebServer:
             draw.text((160, label_y + 20), url,
                        font=font_text, fill=(128, 128, 128), anchor="mt")
 
-            # Exit button (bottom-left)
+            # Bottom hint: config status
             if show_start_button:
-                exit_text = "Exit"
-                try:
-                    exit_text_width = draw.textlength(exit_text, font=font_button)
-                except AttributeError:
-                    exit_text_width = len(exit_text) * 12
-                exit_btn_w = int(max(exit_text_width + 30, 100))
-                exit_btn_h = 30
-                exit_btn_x = 8
-                exit_btn_y = 240 - exit_btn_h - 8
-                draw.rounded_rectangle(
-                    [(exit_btn_x, exit_btn_y), (exit_btn_x + exit_btn_w, exit_btn_y + exit_btn_h)],
-                    radius=8,
-                    fill=(102, 178, 255),
-                    outline=(160, 210, 255),
-                    width=2
-                )
-                draw.text(
-                    (exit_btn_x + exit_btn_w // 2, exit_btn_y + exit_btn_h // 2),
-                    exit_text,
-                    font=font_button,
-                    fill=(15, 21, 46),
-                    anchor="mm"
-                )
-
-            # Start Chat button (bottom-right, only when config ready)
-            if show_start_button and config_ready:
-                btn_text = "Start Chat"
-                try:
-                    text_width = draw.textlength(btn_text, font=font_button)
-                except AttributeError:
-                    text_width = len(btn_text) * 12
-                btn_width = int(max(text_width + 30, 100))
-                btn_height = 30
-                btn_x = 320 - btn_width - 8
-                btn_y = 240 - btn_height - 8
-                draw.rounded_rectangle(
-                    [(btn_x, btn_y), (btn_x + btn_width, btn_y + btn_height)],
-                    radius=8,
-                    fill=(102, 178, 255),
-                    outline=(160, 210, 255),
-                    width=2
-                )
-                draw.text(
-                    (btn_x + btn_width // 2, btn_y + btn_height // 2),
-                    btn_text,
-                    font=font_button,
-                    fill=(15, 21, 46),
-                    anchor="mm"
-                )
+                hint_y = 240 - 16
+                if config_ready:
+                    draw.text((160, hint_y), "D: Start Chat  |  C: Exit",
+                               font=font_text, fill=(150, 150, 150), anchor="mb")
+                else:
+                    draw.text((160, hint_y), "Configure via web →",
+                               font=font_text, fill=(150, 150, 150), anchor="mb")
 
             return img
         except Exception as e:

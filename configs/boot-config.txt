@@ -23,11 +23,13 @@ dtoverlay=luwu-keys
 # max_framebuffers=2
 # disable_fw_kms_setup=1
 
-# ====== UART 机器人 (ttyAMA0 给 xgolib) ======
+# ====== UART 机器狗 (老硬件 ttyAMA0 / 新硬件 ttyAMA5, xgolib 自动扫描) ======
 enable_uart=1
-dtoverlay=uart0
+dtoverlay=uart0                 # 老硬件: 机器狗; 新硬件: 闲置(GPIO14/15 被蓝牙占用)
+dtoverlay=uart5                 # 新硬件: 机器狗走 RP1 UART5; 老硬件: 闲置无影响
 
-# ====== 蓝牙 (手柄需要, 切到 mini-uart, 把 PL011 留给机器人) ======
+# ====== 蓝牙 (miniuart-bt 把蓝牙赶到 mini-UART, 兼容老/新两种硬件) ======
+# 新硬件理想应去掉 miniuart-bt 让蓝牙独享 PL011, 但老硬件仍需 mini-UART 腾出 ttyAMA0 给机器狗
 # dtoverlay=disable-bt          # 不要禁用, 项目依赖蓝牙手柄自动配对
 dtoverlay=miniuart-bt
 core_freq=250                   # 锁频, 保证 mini-uart 蓝牙波特率稳定

@@ -6,8 +6,8 @@ AI Chat - PySide6 版 (Luwu OS App)
 ASR -> LLM (streaming + Function Call) -> TTS + Expression -> Loop
 
 按键映射:
-  A 键 (左上 / KEY_LEFT)   → 开始聊天
-  C 键 (左下 / KEY_BACK)   → 退出
+  D 键 (右下 / KEY_ENTER)   → 开始聊天
+  C 键 (左下 / KEY_BACK)    → 退出
 """
 
 import os
@@ -88,33 +88,27 @@ class AIChatPage(QWidget):
         self._first_paint_logged = False
         self.running = True
 
-        # ---- Display label (acts as LCD) ----
+        # ---- Display label (acts as LCD, fills entire widget) ----
         self.display = QLabel(self)
-        self.display.setFixedSize(SCREEN_W, SCREEN_H)
+        self.display.setGeometry(0, 0, self.width(), self.height())
         self.display.setScaledContents(True)
-        self.display.setStyleSheet("background-color: #0f1530; border: 1px solid #1a2a50;")
+        self.display.setStyleSheet("background-color: #0f1530;")
 
-        # ---- Status label ----
-        self.status_label = QLabel("AI Chat - Loading...")
+        # ---- Status label (overlay on bottom center) ----
+        self.status_label = QLabel("AI Chat - Loading...", self)
         f2 = QFont()
-        f2.setPointSize(11)
+        f2.setPointSize(10)
         self.status_label.setFont(f2)
-        self.status_label.setStyleSheet("color: #8892c9;")
+        self.status_label.setStyleSheet("color: #8892c9; background: transparent;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # ---- Corner hints ----
         corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
-        self.corner_tl = QLabel("A: Chat", self)     # KEY_LEFT
-        self.corner_tl.setStyleSheet(corner_style)
-        self.corner_bl = QLabel("C: Exit", self)     # KEY_BACK
+        self.corner_bl = QLabel("C: 退出", self)     # KEY_BACK
         self.corner_bl.setStyleSheet(corner_style)
-
-        # ---- Layout ----
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.display, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(4)
-        layout.addWidget(self.status_label)
+        self.corner_br = QLabel("D: 开始", self)     # KEY_ENTER
+        self.corner_br.setStyleSheet(corner_style)
+        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         # ---- Focus for key events ----
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -136,11 +130,20 @@ class AIChatPage(QWidget):
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         w, h = self.width(), self.height()
-        pad = 16
-        self.corner_tl.adjustSize()
+        pad = 12
+
+        # Display fills entire widget
+        self.display.setGeometry(0, 0, w, h)
+
+        # Status label centered near bottom
+        self.status_label.adjustSize()
+        self.status_label.move((w - self.status_label.width()) // 2, h - self.status_label.height() - pad)
+
+        # Corners
         self.corner_bl.adjustSize()
-        self.corner_tl.move(pad, pad)
+        self.corner_br.adjustSize()
         self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -152,16 +155,16 @@ class AIChatPage(QWidget):
 
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Back:
-            # C key (bottom-left, KEY_BACK) → exit
+            # C key (bottom-left, KEY_BACK) → 退出
             print("[ai_chat] KEY_BACK (C) -> exit", flush=True)
             self.close()
-        elif ev.key() == Qt.Key.Key_Left:
-            # A key (top-left, KEY_LEFT) → start chat
-            print("[ai_chat] KEY_LEFT (A) -> start chat", flush=True)
-            self._start_conversation()
         elif ev.key() == Qt.Key.Key_Enter or ev.key() == Qt.Key.Key_Return:
-            # D key (bottom-right, KEY_ENTER) → also start chat
+            # D key (bottom-right, KEY_ENTER) → 开始聊天
             print("[ai_chat] KEY_ENTER (D) -> start chat", flush=True)
+            self._start_conversation()
+        elif ev.key() == Qt.Key.Key_Left:
+            # A key (top-left, KEY_LEFT) → 也支持开始聊天
+            print("[ai_chat] KEY_LEFT (A) -> start chat", flush=True)
             self._start_conversation()
 
     def closeEvent(self, ev):
@@ -192,7 +195,7 @@ class AIChatPage(QWidget):
         try:
             img = self.web_server.generate_idle_image(show_start_button=True)
             self._on_display_update(img)
-            self.status_label.setText("A: Start Chat  |  C: Exit")
+            self.status_label.setText("D: Start Chat  |  C: Exit")
         except Exception as e:
             print(f"[UI] _show_idle error: {e}")
 
