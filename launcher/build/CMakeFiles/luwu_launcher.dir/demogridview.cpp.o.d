@@ -436,4 +436,6 @@ CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qtimer.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qbasictimer.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QDebug \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qdebug.h
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qdebug.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QGraphicsDropShadowEffect \
+ /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qgraphicseffect.h

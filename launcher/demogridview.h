@@ -43,12 +43,14 @@ private:
     QVector<QLabel*> itemIcons;
     QVector<QLabel*> itemLabels;
     int selectedIdx = 0;
+    int currentPage = 0;
     static constexpr int COLUMNS = 3;
+    static constexpr int ITEMS_PER_PAGE = 6;  // 每页显示6个
 
     // 布局参数
-    int itemW = 64;
-    int itemH = 64;
-    int labelH = 14;
+    int itemW = 66;
+    int itemH = 66;
+    int labelH = 12;
     int topOffset = 36;   // 顶部留给角标区域
 
     void updateCornerPositions();

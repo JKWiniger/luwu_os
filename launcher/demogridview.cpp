@@ -4,6 +4,7 @@
 #include <QKeyEvent>
 #include <QTimer>
 #include <QDebug>
+#include <QGraphicsDropShadowEffect>
 
 static constexpr const char *ASSET_DIR = "/home/pi/luwu-os/launcher/assets/";
 
@@ -97,7 +98,7 @@ DemoGridView::DemoGridView(QWidget *parent)
         auto *lbl = new QLabel(DEMOS[i].name, this);
         lbl->setAlignment(Qt::AlignCenter);
         lbl->setAttribute(Qt::WA_TransparentForMouseEvents);
-        lbl->setStyleSheet("color: #cccccc; font-size: 12px; background: transparent;");
+        lbl->setStyleSheet("color: #1a3a6e; font-size: 11px; background: transparent;");
         itemLabels.append(lbl);
     }
 
@@ -186,11 +187,15 @@ void DemoGridView::updateItemPositions() {
     if (w == 0 || h == 0) return;
 
     int cols = COLUMNS;
-    int rows = (DEMO_COUNT + cols - 1) / cols;
-
     // 间距
-    int gapX = 12;
-    int gapY = 8;
+    int gapX = 18;
+    int gapY = 16;
+
+    // 当前页的起止索引
+    int startItem = currentPage * ITEMS_PER_PAGE;
+    int endItem = qMin(startItem + ITEMS_PER_PAGE, DEMO_COUNT);
+    int pageCount = endItem - startItem;
+    int rows = (pageCount + cols - 1) / cols;
 
     // 计算总网格宽高（注意：icon 和 label 之间有 2px 间隙）
     int totalW = cols * itemW + (cols - 1) * gapX;
@@ -205,31 +210,70 @@ void DemoGridView::updateItemPositions() {
     if (startY < topOffset) startY = topOffset;
 
     for (int i = 0; i < DEMO_COUNT; ++i) {
-        int col = i % cols;
-        int row = i / cols;
-
+        int pageIdx = i - startItem;
+        if (pageIdx < 0 || pageIdx >= ITEMS_PER_PAGE) {
+            // 非当前页，隐藏
+            itemIcons[i]->setVisible(false);
+            itemLabels[i]->setVisible(false);
+            continue;
+        }
+        int col = pageIdx % cols;
+        int row = pageIdx / cols;
         int ix = startX + col * (itemW + gapX);
         int iy = startY + row * (itemH + labelH + gapY);
 
-        itemIcons[i]->setGeometry(ix, iy, itemW, itemH);
-        itemLabels[i]->setGeometry(ix, iy + itemH + 2, itemW, labelH);
+        // 选中项放大 8px，居中对齐
+        bool sel = (i == selectedIdx);
+        if (sel) {
+            int zoomW = itemW + 5;
+            int zoomH = itemH + 5;
+            int dx = (zoomW - itemW) / 2;
+            int dy = (zoomH - itemH) / 2;
+            itemIcons[i]->setGeometry(ix - dx, iy - dy, zoomW, zoomH);
+        } else {
+            itemIcons[i]->setGeometry(ix, iy, itemW, itemH);
+        }
+        itemLabels[i]->setGeometry(ix, iy + itemH + 8, itemW, labelH);
+        itemIcons[i]->setVisible(true);
+        itemLabels[i]->setVisible(true);
     }
 }
 
 void DemoGridView::updateSelectionStyle() {
     for (int i = 0; i < DEMO_COUNT; ++i) {
         bool sel = (i == selectedIdx);
-        // 选中项加白色边框和加粗大字
         if (sel) {
-            itemIcons[i]->setStyleSheet(
-                "QLabel { border: 3px solid #ffffff; border-radius: 10px; background: transparent; }");
-            itemLabels[i]->setStyleSheet(
-                "color: #ffffff; font-size: 15px; font-weight: bold; background: transparent;");
-        } else {
+            // 选中：无边框无底色，文字深蓝半粗，图标下方阴影
             itemIcons[i]->setStyleSheet(
                 "QLabel { border: none; background: transparent; }");
             itemLabels[i]->setStyleSheet(
-                "color: #aaaaaa; font-size: 12px; background: transparent;");
+                "color: #0b1e4a; background: transparent;");
+            {
+                QFont f = itemLabels[i]->font();
+                f.setPixelSize(14);
+                f.setWeight(QFont::DemiBold);
+                itemLabels[i]->setFont(f);
+            }
+            // 图标阴影
+            auto *iconShadow = new QGraphicsDropShadowEffect(this);
+            iconShadow->setBlurRadius(12);
+            iconShadow->setOffset(0, 4);
+            iconShadow->setColor(QColor(0, 0, 0, 80));
+            itemIcons[i]->setGraphicsEffect(iconShadow);
+        } else {
+            // 未选中：无底色，深蓝文字，清除阴影
+            itemIcons[i]->setStyleSheet(
+                "QLabel { border: none; background: transparent; }");
+            itemLabels[i]->setStyleSheet(
+                "color: #1a3a6e; background: transparent;");
+            {
+                QFont f = itemLabels[i]->font();
+                f.setPixelSize(11);
+                f.setWeight(QFont::Normal);
+                itemLabels[i]->setFont(f);
+            }
+            itemIcons[i]->setGraphicsEffect(nullptr);
+            itemLabels[i]->setGraphicsEffect(nullptr);
         }
     }
 }
@@ -239,10 +283,17 @@ QString DemoGridView::selectedDemoPath() const {
 }
 
 void DemoGridView::moveSelection(int delta) {
-    int cols = COLUMNS;
     int newIdx = selectedIdx + delta;
     if (newIdx < 0) newIdx = DEMO_COUNT - 1;
     if (newIdx >= DEMO_COUNT) newIdx = 0;
     selectedIdx = newIdx;
+
+    // 自动翻页：当选中项不在当前页时切换页面
+    int newPage = selectedIdx / ITEMS_PER_PAGE;
+    if (newPage != currentPage) {
+        currentPage = newPage;
+    }
+    // 先重新布局（含缩放），再刷样式
+    updateItemPositions();
     updateSelectionStyle();
 }
