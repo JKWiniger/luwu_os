@@ -179,9 +179,8 @@ class FaceFollowWidget(QWidget):
             return
 
         try:
-            # Capture frame
+            # Capture frame (Picamera2 "RGB888" actually delivers BGR on Pi)
             img = self.picam2.capture_array()
-            # img is in RGB888 format
             img = cv2.flip(img, 1) if self.mirror_enabled else img
 
             h, w = img.shape[:2]
@@ -219,15 +218,15 @@ class FaceFollowWidget(QWidget):
 
                     found_face = True
 
-                    # Draw bounding box
+                    # Draw bounding box (green) in BGR
                     cv2.rectangle(img, (x1, y1), (x1 + fw, y1 + fh), (0, 255, 100), 2)
 
-                    # Draw center point
+                    # Draw center point (yellow)
                     cv2.circle(img, (face_cx, face_cy), 4, (0, 255, 255), -1)
 
-                    # Draw crosshair at image center
-                    cv2.line(img, (w // 2 - 15, h // 2), (w // 2 + 15, h // 2), (100, 100, 255), 1)
-                    cv2.line(img, (w // 2, h // 2 - 15), (w // 2, h // 2 + 15), (100, 100, 255), 1)
+                    # Draw crosshair at image center (red)
+                    cv2.line(img, (w // 2 - 15, h // 2), (w // 2 + 15, h // 2), (0, 0, 255), 1)
+                    cv2.line(img, (w // 2, h // 2 - 15), (w // 2, h // 2 + 15), (0, 0, 255), 1)
 
                 # Smooth movement
                 if found_face:
@@ -252,13 +251,14 @@ class FaceFollowWidget(QWidget):
 
                 self.info_label.setText(f"{ctrl_status} | {mirror_status} | {face_status}")
             else:
-                cv2.line(img, (w // 2 - 15, h // 2), (w // 2 + 15, h // 2), (100, 100, 255), 1)
-                cv2.line(img, (w // 2, h // 2 - 15), (w // 2, h // 2 + 15), (100, 100, 255), 1)
+                cv2.line(img, (w // 2 - 15, h // 2), (w // 2 + 15, h // 2), (0, 0, 255), 1)
+                cv2.line(img, (w // 2, h // 2 - 15), (w // 2, h // 2 + 15), (0, 0, 255), 1)
 
                 cv2.putText(img, "Face Detector N/A", (10, h // 2),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 1)
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
 
-            # Convert to QPixmap and display
+            # Convert BGR → RGB for QImage display
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             h, w, c = img.shape
             qimg = QImage(img.data.tobytes(), w, h, w * c, QImage.Format.Format_RGB888)
             pixmap = QPixmap.fromImage(qimg).scaled(

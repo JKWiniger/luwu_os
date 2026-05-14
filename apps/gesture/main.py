@@ -32,8 +32,8 @@ mark("python entry")
 
 # ===================== 重载导入 =====================
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QKeyEvent, QImage, QPixmap
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
+from PySide6.QtGui import QKeyEvent, QImage, QPixmap
+from PySide6.QtWidgets import QApplication, QWidget, QLabel
 
 from picamera2 import Picamera2
 
@@ -47,7 +47,6 @@ from mp_handpose import MPHandPose
 mark("onnx model imports done")
 
 # ===================== 常量 =====================
-AUTO_EXIT_SEC = 120
 CAM_W, CAM_H = 320, 240
 
 PALM_MODEL = '/home/pi/luwu-os/model/palm_detection_mediapipe_2023feb.onnx'
@@ -65,15 +64,15 @@ HAND_CONNECTIONS = [
 
 # 手势名称映射
 GESTURE_NAMES = {
-    "Good": "Good 👍",
-    "1": "One ☝️",
-    "2": "Two ✌️",
+    "Good": "Good",
+    "1": "One",
+    "2": "Two",
     "3": "Three",
     "4": "Four",
-    "5": "Five ✋",
-    "Stone": "Stone ✊",
-    "OK": "OK 👌",
-    "Rock": "Rock 🤘",
+    "5": "Five",
+    "Stone": "Stone",
+    "OK": "OK",
+    "Rock": "Rock",
 }
 
 
@@ -256,59 +255,25 @@ class HandDetectorONNX:
 
 # ===================== PySide6 页面 =====================
 class GesturePage(QWidget):
-    """手势识别 LCD 界面。"""
+    """手势识别 LCD 界面 — 全屏视频。"""
 
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #0a0a1a;")
+        self.setStyleSheet("background-color: black;")
         self._first_paint_logged = False
 
-        # ---- 标题 ----
-        self.title = QLabel("手势识别")
-        f1 = QFont()
-        f1.setPointSize(16)
-        f1.setBold(True)
-        self.title.setFont(f1)
-        self.title.setStyleSheet("color: white;")
-        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 摄像头画面 ----
-        self.camera_label = QLabel("启动摄像头中...")
-        self.camera_label.setFixedSize(320, 240)
+        # ---- 全屏摄像头画面 ----
+        self.camera_label = QLabel("启动摄像头中...", self)
         self.camera_label.setStyleSheet(
-            "background-color: black; border: 1px solid #333; color: #666;"
+            "background-color: black; color: #666;"
         )
         self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 手势结果 ----
-        self.gesture_label = QLabel("")
-        f2 = QFont()
-        f2.setPointSize(22)
-        f2.setBold(True)
-        self.gesture_label.setFont(f2)
-        self.gesture_label.setStyleSheet("color: #18df6b;")
-        self.gesture_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 提示 ----
-        self.hint = QLabel("C: 退出")
-        self.hint.setStyleSheet("color: #5c6a9c; font-size: 11px;")
-        self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.camera_label.setScaledContents(True)
 
         # ---- 四角按键提示 ----
-        corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
+        corner_style = "color: rgba(255,255,255,100); font-size: 12px; background: transparent;"
         self.corner_bl = QLabel("C: 退出", self)
         self.corner_bl.setStyleSheet(corner_style)
-
-        # ---- 布局 ----
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.title)
-        layout.addSpacing(8)
-        layout.addWidget(self.camera_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(8)
-        layout.addWidget(self.gesture_label)
-        layout.addSpacing(4)
-        layout.addWidget(self.hint)
 
         # ---- ONNX 手势检测器 ----
         self.detector = HandDetectorONNX(max_num_hands=1, conf=0.7)
@@ -329,7 +294,6 @@ class GesturePage(QWidget):
         self.camera_timer.start(100)  # ~10fps (ONNX 推理较慢)
 
         # ---- 自动退出兜底 ----
-        QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
@@ -354,6 +318,9 @@ class GesturePage(QWidget):
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         w, h = self.width(), self.height()
+        # 全屏铺满
+        self.camera_label.setGeometry(0, 0, w, h)
+        # 左下角按键提示
         pad = 16
         self.corner_bl.adjustSize()
         self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
@@ -434,25 +401,16 @@ class GesturePage(QWidget):
             self._prev_gesture = current_gesture
             self._stable_count = 1
 
-        # 显示已确认的手势
-        if (
-            self._prev_gesture is not None
-            and self._stable_count >= self.MIN_STABLE_FRAMES
-        ):
+        # 在帧上绘制已确认的手势文字
+        if self._prev_gesture is not None and self._stable_count >= self.MIN_STABLE_FRAMES:
             display_name = GESTURE_NAMES.get(self._prev_gesture, self._prev_gesture)
-            self.gesture_label.setText(display_name)
-        elif self._prev_gesture is None:
-            self.gesture_label.setText("")
-
-        # 在帧上绘制手势文字
-        if gesture_result:
             cv2.putText(
                 frame_display,
-                gesture_result,
-                (10, 30),
+                display_name,
+                (10, 40),
                 cv2.FONT_HERSHEY_COMPLEX,
-                1,
-                (255, 255, 0),
+                1.2,
+                (0, 255, 0),
                 2,
             )
 

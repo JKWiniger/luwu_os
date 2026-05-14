@@ -11,6 +11,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o.d"
   "CMakeFiles/luwu_launcher.dir/main.cpp.o"
   "CMakeFiles/luwu_launcher.dir/main.cpp.o.d"
+  "CMakeFiles/luwu_launcher.dir/statusbar.cpp.o"
+  "CMakeFiles/luwu_launcher.dir/statusbar.cpp.o.d"
   "luwu_launcher"
   "luwu_launcher.pdb"
   "luwu_launcher_autogen/mocs_compilation.cpp"

@@ -13,6 +13,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/pi/luwu-os/launcher/galleryview.cpp" "CMakeFiles/luwu_launcher.dir/galleryview.cpp.o" "gcc" "CMakeFiles/luwu_launcher.dir/galleryview.cpp.o.d"
   "/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/mocs_compilation.cpp" "CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o" "gcc" "CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o.d"
   "/home/pi/luwu-os/launcher/main.cpp" "CMakeFiles/luwu_launcher.dir/main.cpp.o" "gcc" "CMakeFiles/luwu_launcher.dir/main.cpp.o.d"
+  "/home/pi/luwu-os/launcher/statusbar.cpp" "CMakeFiles/luwu_launcher.dir/statusbar.cpp.o" "gcc" "CMakeFiles/luwu_launcher.dir/statusbar.cpp.o.d"
   "" "luwu_launcher" "gcc" "CMakeFiles/luwu_launcher.dir/link.d"
   )
 

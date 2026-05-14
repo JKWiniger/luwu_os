@@ -71,7 +71,7 @@ CMakeFiles/luwu_launcher_autogen: luwu_launcher_autogen/timestamp
 luwu_launcher_autogen/timestamp: /usr/lib/qt6/libexec/moc
 luwu_launcher_autogen/timestamp: CMakeFiles/luwu_launcher_autogen.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic MOC for target luwu_launcher"
-	/usr/bin/cmake -E cmake_autogen /home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/AutogenInfo.json ""
+	/usr/bin/cmake -E cmake_autogen /home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/AutogenInfo.json Release
 	/usr/bin/cmake -E touch /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/timestamp
 
 CMakeFiles/luwu_launcher_autogen.dir/codegen:

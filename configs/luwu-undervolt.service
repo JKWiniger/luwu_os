@@ -1,11 +1,11 @@
 [Unit]
-Description=Luwu OS 欠压监控与保护关机
+Description=Luwu OS 欠压+电池联合监控
 After=multi-user.target
 Wants=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/luwu-undervolt-monitor.sh
+ExecStart=/usr/local/bin/luwu-undervolt-monitor.py
 Restart=always
 RestartSec=5
 StandardOutput=journal

@@ -19,6 +19,9 @@
 # pyzbar — QR 码扫描（底层依赖 libzbar0t64 需用 apt 安装）
 pyzbar>=0.1
 
+# ---- MQTT（群组表演等）----
+paho-mqtt>=2.0
+
 # ---- 本地包 ----
 # xgolib — 机器人运动库（PyPI 安装）
 xgolib>=1.1

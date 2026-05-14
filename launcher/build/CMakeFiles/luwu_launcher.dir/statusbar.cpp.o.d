@@ -1,6 +1,6 @@
-CMakeFiles/luwu_launcher.dir/galleryview.cpp.o: \
- /home/pi/luwu-os/launcher/galleryview.cpp /usr/include/stdc-predef.h \
- /home/pi/luwu-os/launcher/galleryview.h \
+CMakeFiles/luwu_launcher.dir/statusbar.cpp.o: \
+ /home/pi/luwu-os/launcher/statusbar.cpp /usr/include/stdc-predef.h \
+ /home/pi/luwu-os/launcher/statusbar.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QWidget \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qwidget.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qtwidgetsglobal.h \
@@ -387,63 +387,13 @@ CMakeFiles/luwu_launcher.dir/galleryview.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qsizepolicy.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qcursor.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qbitmap.h \
- /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QLabel \
- /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qlabel.h \
- /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qframe.h \
- /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qwidget.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qpicture.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qiodevice.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qtextdocument.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qurl.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QTimer \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qtimer.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qbasictimer.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QVector \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qvector.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QRect \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qrect.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/QPixmap \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qpixmap.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/QPainter \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qpainter.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qtextoption.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qpen.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/QResizeEvent \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qevent.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qcoreevent.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qeventpoint.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qvector2d.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qvectornd.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qpointingdevice.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qinputdevice.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qscreen.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QList \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qlist.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QObject \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qobject.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QRect \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QSize \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qsize.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QSizeF \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/QTransform \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qtransform.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qnativeinterface.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qscreen_platform.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qguiapplication.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qcoreapplication.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qdeadlinetimer.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qelapsedtimer.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qeventloop.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qcoreapplication_platform.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qinputmethod.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qlocale.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qguiapplication_platform.h \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/QKeyEvent \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QDebug \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/qdebug.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QFile \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfile.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfiledevice.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qiodevice.h \
  /usr/include/c++/14/filesystem /usr/include/c++/14/bits/fs_fwd.h \
  /usr/include/c++/14/bits/fs_path.h /usr/include/c++/14/locale \
  /usr/include/c++/14/bits/locale_facets.h /usr/include/c++/14/cwctype \
@@ -464,4 +414,47 @@ CMakeFiles/luwu_launcher.dir/galleryview.cpp.o: \
  /usr/include/c++/14/bits/ostream.tcc \
  /usr/include/c++/14/bits/istream.tcc \
  /usr/include/c++/14/bits/sstream.tcc /usr/include/c++/14/codecvt \
- /usr/include/c++/14/bits/fs_dir.h /usr/include/c++/14/bits/fs_ops.h
+ /usr/include/c++/14/bits/fs_dir.h /usr/include/c++/14/bits/fs_ops.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QDateTime \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qdatetime.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qcalendar.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qlocale.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QResizeEvent \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qevent.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qcoreevent.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qurl.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qeventpoint.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qvector2d.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qvectornd.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qpointingdevice.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qinputdevice.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qscreen.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QList \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qlist.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QObject \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qobject.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QRect \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qrect.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QSize \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qsize.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QSizeF \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QTransform \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qtransform.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qnativeinterface.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qscreen_platform.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qguiapplication.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qcoreapplication.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qdeadlinetimer.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qelapsedtimer.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qeventloop.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qcoreapplication_platform.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qinputmethod.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qguiapplication_platform.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QPainter \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qpainter.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qtextoption.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qpen.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QFont \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qfont.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QFontMetrics \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qfontmetrics.h

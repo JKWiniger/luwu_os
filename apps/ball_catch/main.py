@@ -2,7 +2,7 @@
 """
 PySide6 小球抓取 App — 由 Luwu OS launcher 启动。
 识别并抓取指定颜色（红/绿/蓝）的小球。
-物理按键：A=切换颜色  B=退出  C=抓取  D=调试
+物理按键：A=切换颜色  B=调试  C=退出  D=抓取
 
 抓取逻辑在后台线程运行，主线程负责 UI 和按键响应。
 """
@@ -29,7 +29,7 @@ mark("python entry")
 # ---- PySide6 导入 ----
 from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtGui import QFont, QKeyEvent, QImage, QPixmap
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QWidget, QLabel
 
 # ---- 摄像头 ----
 from picamera2 import Picamera2
@@ -411,7 +411,7 @@ class CatchingWorker(QThread):
 class BallCatchPage(QWidget):
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #0f1530;")
+        self.setStyleSheet("background-color: black;")
         self._first_paint_logged = False
 
         # 状态
@@ -421,57 +421,41 @@ class BallCatchPage(QWidget):
         self.x_center = load_var(160.0, "x_center.txt")
         self.min_radius = load_var(float(MIN_RADIUS_DEFAULT), "min_radius.txt")
 
-        # ---- 标题 ----
-        self.title = QLabel("小球抓取")
-        f1 = QFont()
-        f1.setPointSize(18)
-        f1.setBold(True)
-        self.title.setFont(f1)
-        self.title.setStyleSheet("color: white;")
-        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 摄像头画面 ----
-        self.camera_label = QLabel("摄像头启动中...")
-        self.camera_label.setFixedSize(CAM_W, CAM_H)
+        # ---- 摄像头画面（全屏填充） ----
+        self.camera_label = QLabel("摄像头启动中...", self)
         self.camera_label.setStyleSheet(
-            "background-color: black; border: 2px solid #333; color: #666;"
+            "background-color: black; color: #666; border: none;"
         )
         self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.camera_label.setScaledContents(True)
 
-        # ---- 状态行 ----
-        self.status_label = QLabel()
-        self.status_label.setStyleSheet("color: #8892c9; font-size: 12px;")
+        # ---- 状态文字（底部叠加） ----
+        self.status_label = QLabel(self)
+        self.status_label.setStyleSheet(
+            "color: #00ff88; font-size: 13px; background: rgba(0,0,0,120); border: none; padding: 4px 8px;"
+        )
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_label.setWordWrap(True)
 
-        # ---- 提示 ----
-        self.hint = QLabel("A:切换颜色 | B:退出 | C:抓取 | D:调试")
-        self.hint.setStyleSheet("color: #5c6a9c; font-size: 11px;")
-        self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 四角按键说明 ----
-        corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
+        # ---- 四角按键说明（叠加在视频上） ----
+        corner_style = "color: #aaccee; font-size: 11px; background: rgba(0,0,0,100); border: none; padding: 2px 6px;"
         self.corner_tl = QLabel("A:颜色", self)
         self.corner_tl.setStyleSheet(corner_style)
-        self.corner_tr = QLabel("B:退出", self)
+        self.corner_tr = QLabel("B:调试", self)
         self.corner_tr.setStyleSheet(corner_style)
         self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.corner_bl = QLabel("C:抓取", self)
+        self.corner_bl = QLabel("C:退出", self)
         self.corner_bl.setStyleSheet(corner_style)
-        self.corner_br = QLabel("D:调试", self)
+        self.corner_br = QLabel("D:抓取", self)
         self.corner_br.setStyleSheet(corner_style)
         self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        # ---- 布局 ----
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.title)
-        layout.addSpacing(8)
-        layout.addWidget(self.camera_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(4)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.hint)
+        # ---- 提示（顶部叠加） ----
+        self.hint = QLabel("A:切换颜色 | B:调试 | C:退出 | D:抓取", self)
+        self.hint.setStyleSheet(
+            "color: #8899bb; font-size: 11px; background: rgba(0,0,0,100); border: none; padding: 2px 8px;"
+        )
+        self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # ---- 空闲模式摄像头 ----
         self._idle_picam2 = None
@@ -516,25 +500,42 @@ class BallCatchPage(QWidget):
             return
 
         if self.mode == "idle":
+            # picamera2 "RGB888" 实际是 BGR，转为 RGB，再水平翻转
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.flip(frame, 1)
             h, w, c = frame.shape
             qimg = QImage(frame.data.tobytes(), w, h, w * c, QImage.Format.Format_RGB888)
-            pixmap = QPixmap.fromImage(qimg).scaled(
-                CAM_W, CAM_H,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            self.camera_label.setPixmap(pixmap)
+            self.camera_label.setPixmap(QPixmap.fromImage(qimg))
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         w, h = self.width(), self.height()
-        pad = 16
+        if w == 0 or h == 0:
+            return
+
+        # 摄像头全屏填充
+        self.camera_label.setGeometry(0, 0, w, h)
+
+        # 四角按键
+        pad = 8
+        self.corner_tl.adjustSize()
         self.corner_tl.move(pad, pad)
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
         self.corner_tr.adjustSize()
-        self.corner_br.adjustSize()
         self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
+        self.corner_bl.adjustSize()
+        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        self.corner_br.adjustSize()
         self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
+
+        # 顶部提示
+        self.hint.adjustSize()
+        self.hint.move((w - self.hint.width()) // 2, pad + self.corner_tl.height() + 4)
+
+        # 底部状态
+        self.status_label.setFixedWidth(w - 32)
+        self.status_label.adjustSize()
+        self.status_label.move((w - self.status_label.width()) // 2,
+                               h - self.status_label.height() - pad - self.corner_bl.height() - 4)
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -543,22 +544,28 @@ class BallCatchPage(QWidget):
             mark("first paintEvent")
 
     def keyPressEvent(self, ev: QKeyEvent):
-        if ev.key() == Qt.Key.Key_Up:
+        # 物理按键映射 (gpio-keys DTS):
+        #   A(GPIO17)→Key_Left, B(GPIO22)→Key_Right, C(GPIO23)→Key_Back, D(GPIO24)→Key_Return
+        if ev.key() == Qt.Key.Key_Left:
+            # A 键：切换颜色
             self._change_color()
-        elif ev.key() == Qt.Key.Key_Down:
-            print("[ball_catch] KEY_DOWN -> exit", flush=True)
-            self.close()
-        elif ev.key() == Qt.Key.Key_Left:
-            if self.mode == "debug":
-                self._save_debug()
-            else:
-                self._start_catching()
         elif ev.key() == Qt.Key.Key_Right:
+            # B 键：调试模式 / 调试模式下增加距离
             if self.mode == "debug":
                 self.x_distance += 0.5
                 self._update_status()
             else:
                 self._toggle_debug()
+        elif ev.key() == Qt.Key.Key_Back:
+            # C 键：退出
+            print("[ball_catch] KEY_BACK(C) -> exit", flush=True)
+            self.close()
+        elif ev.key() == Qt.Key.Key_Return or ev.key() == Qt.Key.Key_Enter:
+            # D 键：抓取 / 调试模式下保存
+            if self.mode == "debug":
+                self._save_debug()
+            else:
+                self._start_catching()
 
     def _change_color(self):
         self.color_idx = (self.color_idx + 1) % 3
@@ -572,7 +579,7 @@ class BallCatchPage(QWidget):
             if self._worker:
                 self._worker._running = False
                 self._worker.stop_robot()
-            self.hint.setText("A:切换颜色 | B:退出 | C:抓取 | D:调试")
+            self.hint.setText("A:切换颜色 | B:调试 | C:退出 | D:抓取")
             self._update_status()
             print("[ball_catch] catch mode exit")
             return
@@ -580,7 +587,7 @@ class BallCatchPage(QWidget):
         # 开始抓取
         self.mode = "catching"
         self._auto_exit_timer.start(AUTO_EXIT_SEC * 1000)
-        self.hint.setText("C:停止抓取")
+        self.hint.setText("D:停止抓取")
         self._update_status()
 
         # 停止空闲摄像头
@@ -613,14 +620,12 @@ class BallCatchPage(QWidget):
         if self.mode != "catching":
             return
         try:
+            # picamera2 "RGB888" 实际是 BGR，转为 RGB，再水平翻转
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.flip(frame, 1)
             h, w, c = frame.shape
             qimg = QImage(frame.data.tobytes(), w, h, w * c, QImage.Format.Format_RGB888)
-            pixmap = QPixmap.fromImage(qimg).scaled(
-                CAM_W, CAM_H,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            self.camera_label.setPixmap(pixmap)
+            self.camera_label.setPixmap(QPixmap.fromImage(qimg))
         except Exception:
             pass
 
@@ -641,7 +646,7 @@ class BallCatchPage(QWidget):
         if self._worker:
             self._worker.wait(5000)
         self.mode = "idle"
-        self.hint.setText("A:切换颜色 | B:退出 | C:抓取 | D:调试")
+        self.hint.setText("A:切换颜色 | B:调试 | C:退出 | D:抓取")
         self._update_status()
 
         # 重新打开空闲摄像头
@@ -660,10 +665,10 @@ class BallCatchPage(QWidget):
     def _toggle_debug(self):
         if self.mode == "debug":
             self.mode = "idle"
-            self.hint.setText("A:切换颜色 | B:退出 | C:抓取 | D:调试")
+            self.hint.setText("A:切换颜色 | B:调试 | C:退出 | D:抓取")
         else:
             self.mode = "debug"
-            self.hint.setText("A:颜色 | B:退出 | C:保存 | D:距离+0.5")
+            self.hint.setText("A:颜色 | B:距离+ | C:退出 | D:保存")
         self._update_status()
 
     def _save_debug(self):

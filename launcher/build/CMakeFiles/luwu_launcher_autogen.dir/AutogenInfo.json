@@ -247,6 +247,12 @@
 			"Mu",
 			"EWIEGA46WW/moc_keyfilter.cpp",
 			null
+		],
+		[
+			"/home/pi/luwu-os/launcher/statusbar.h",
+			"Mu",
+			"EWIEGA46WW/moc_statusbar.cpp",
+			null
 		]
 	],
 	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
@@ -309,7 +315,8 @@
 	[
 		[ "/home/pi/luwu-os/launcher/demogridview.cpp", "Mu", null ],
 		[ "/home/pi/luwu-os/launcher/galleryview.cpp", "Mu", null ],
-		[ "/home/pi/luwu-os/launcher/main.cpp", "Mu", null ]
+		[ "/home/pi/luwu-os/launcher/main.cpp", "Mu", null ],
+		[ "/home/pi/luwu-os/launcher/statusbar.cpp", "Mu", null ]
 	],
 	"USE_BETTER_GRAPH" : true,
 	"VERBOSITY" : 0

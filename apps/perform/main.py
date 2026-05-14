@@ -12,7 +12,6 @@ import sys
 import time
 import signal
 import subprocess
-import threading
 
 # ===================== 阶段计时 =====================
 T0 = time.monotonic()
@@ -27,8 +26,8 @@ mark("python entry")
 
 # ===================== PySide6 导入 =====================
 from PySide6.QtCore import Qt, QTimer, QThread, Signal
-from PySide6.QtGui import QFont, QKeyEvent, QImage, QPixmap
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
+from PySide6.QtGui import QKeyEvent, QImage, QPixmap
+from PySide6.QtWidgets import QApplication, QWidget, QLabel
 
 mark("PySide6 import done")
 
@@ -112,54 +111,16 @@ class PerformPage(QWidget):
         self._expression_worker = None
         self._current_expr_name = ""
 
-        # ---- 标题 ----
-        self.title = QLabel("🎭 表演模式")
-        f1 = QFont()
-        f1.setPointSize(18)
-        f1.setBold(True)
-        self.title.setFont(f1)
-        self.title.setStyleSheet("color: white;")
-        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 表情画面 (居中显示) ----
-        self.expr_label = QLabel()
+        # ---- 表情画面 (全屏) ----
+        self.expr_label = QLabel(self)
         self.expr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.expr_label.setStyleSheet(
-            "background-color: black; border: 2px solid #333;"
-        )
-        self.expr_label.setMinimumSize(320, 240)
+        self.expr_label.setStyleSheet("background-color: black;")
         self.expr_label.setScaledContents(False)
 
-        # ---- 状态行 ----
-        self.status_label = QLabel("正在初始化...")
-        self.status_label.setStyleSheet("color: #8892c9; font-size: 13px;")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setWordWrap(True)
-
-        # ---- 音乐指示 ----
-        self.music_label = QLabel("")
-        self.music_label.setStyleSheet("color: #f0a030; font-size: 12px;")
-        self.music_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 操作提示 ----
-        hint_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
-        self.hint_bl = QLabel("B: 退出", self)
+        # ---- 操作提示 (底部覆盖) ----
+        hint_style = "color: #3a4060; font-size: 10px; background: transparent;"
+        self.hint_bl = QLabel("B 退出", self)
         self.hint_bl.setStyleSheet(hint_style)
-        self.hint_br = QLabel("表演模式", self)
-        self.hint_br.setStyleSheet(hint_style)
-        self.hint_br.setAlignment(Qt.AlignmentFlag.AlignRight)
-
-        # ---- 布局 ----
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(6)
-        layout.addWidget(self.title)
-        layout.addSpacing(8)
-        layout.addWidget(self.expr_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(4)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.music_label)
-        layout.addStretch()
 
         # ---- 自动退出 ----
         self._auto_exit_timer = QTimer(self)
@@ -188,9 +149,7 @@ class PerformPage(QWidget):
             time.sleep(1)
         except Exception as e:
             self._dog = None
-            self.status_label.setText(f"机器狗未连接: {e}")
             print(f"[perform] XGO 初始化失败: {e}")
-            return
 
         # 2. 启动表演模式 (硬件层自动循环)
         try:
@@ -203,16 +162,14 @@ class PerformPage(QWidget):
         # 3. 启动音乐
         try:
             self._music_proc = subprocess.Popen(
-                f"mplayer -really-quiet -loop 0 '{MUSIC_PATH}'",
+                f"mplayer -ao alsa:device=hw=0,0 -really-quiet -loop 0 '{MUSIC_PATH}'",
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
             print(f"[perform] 音乐已启动: {MUSIC_PATH}")
-            self.music_label.setText("♪ 正在播放: Dream.mp3")
         except Exception as e:
             print(f"[perform] 音乐启动失败: {e}")
-            self.music_label.setText("音乐启动失败")
 
         # 4. 启动表情动画线程
         self._expression_worker = ExpressionWorker()
@@ -220,7 +177,7 @@ class PerformPage(QWidget):
         self._expression_worker.status_update.connect(self._on_expr_name)
         self._expression_worker.start()
 
-        self.status_label.setText("表演模式运行中 | 狗自动表演 + 表情循环 | 按 B 键退出")
+        print("[perform] 表演模式运行中")
 
     # ===================== 帧显示 =====================
     def _on_frame(self, pil_img: Image.Image):
@@ -245,17 +202,17 @@ class PerformPage(QWidget):
 
     def _on_expr_name(self, name: str):
         self._current_expr_name = name
-        self.status_label.setText(f"表演模式运行中 | 表情: {name} | 按 B 键退出")
 
     # ===================== 布局事件 =====================
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         w, h = self.width(), self.height()
-        pad = 16
+        # 表情全屏填充
+        self.expr_label.setGeometry(0, 0, w, h)
+        # 退出提示固定在左下角
+        pad = 12
         self.hint_bl.adjustSize()
         self.hint_bl.move(pad, h - self.hint_bl.height() - pad)
-        self.hint_br.adjustSize()
-        self.hint_br.move(w - self.hint_br.width() - pad, h - self.hint_br.height() - pad)
 
     # ---- 首帧日志 ----
     def paintEvent(self, ev):

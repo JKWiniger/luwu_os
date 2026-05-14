@@ -9,6 +9,8 @@ luwu_launcher_autogen/timestamp: \
 	/home/pi/luwu-os/launcher/galleryview.h \
 	/home/pi/luwu-os/launcher/keyfilter.h \
 	/home/pi/luwu-os/launcher/main.cpp \
+	/home/pi/luwu-os/launcher/statusbar.cpp \
+	/home/pi/luwu-os/launcher/statusbar.h \
 	/usr/include/aarch64-linux-gnu/bits/atomic_wide_counter.h \
 	/usr/include/aarch64-linux-gnu/bits/byteswap.h \
 	/usr/include/aarch64-linux-gnu/bits/cpu-set.h \

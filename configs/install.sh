@@ -105,15 +105,15 @@ sed -i 's/#Storage=auto/Storage=persistent/' /etc/systemd/journald.conf
 systemctl restart systemd-journald
 echo "  ✓ 日志持久化已配置"
 
-# 10. 欠压监控 — 电压不足自动保护关机
-echo "[10/11] 欠压监控 ..."
-cp luwu-undervolt-monitor.sh /usr/local/bin/
-chmod +x /usr/local/bin/luwu-undervolt-monitor.sh
+# 10. 欠压+电池联合监控 — 分级响应防误关机
+echo "[10/11] 欠压+电池监控 ..."
+cp luwu-undervolt-monitor.py /usr/local/bin/
+chmod +x /usr/local/bin/luwu-undervolt-monitor.py
 cp luwu-undervolt.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable luwu-undervolt.service
 systemctl start luwu-undervolt.service
-echo "  ✓ 欠压监控已启用 (10秒阈值)"
+echo "  ✓ 欠压+电池监控已启用 (电池>10%忽略, 5~10%延迟关, <5%立即关)"
 
 # 11. 完成
 echo "[11/11] 部署完成。必须重启以加载新的设备树和防护配置: sudo reboot"

@@ -18,6 +18,7 @@
 #include "keyfilter.h"
 #include "galleryview.h"
 #include "demogridview.h"
+#include "statusbar.h"
 
 // ========================================================================
 // 配置常量
@@ -50,6 +51,7 @@ int main(int argc, char *argv[]) {
     QElapsedTimer launchTimer;
 
     KeyFilter *keyFilter = nullptr;  // early decl for lambdas below
+    int preAppPage = 0;               // 启动 app 前记录当前页面索引
 
     auto startPreload = [&]() {
         unlink(FIFO_PATH);
@@ -77,15 +79,19 @@ int main(int argc, char *argv[]) {
                                       .arg(QDateTime::currentMSecsSinceEpoch()).arg(code).arg(int(st)).arg(total);
             keyFilter->blocked = false;
             unlink(KEYS_FIFO);
-            // 恢复桌面显示：先 show + force paint，再切回主页
+            // 恢复桌面显示：先 show + force paint，再切回进入前的页面
             stack.showFullScreen();
-            QApplication::processEvents();  // 确保窗口系统处理 show 事件
+            QApplication::processEvents();
             stack.repaint();
-            QApplication::processEvents();  // 强制提交 framebuffer
-            stack.setCurrentIndex(0);
+            QApplication::processEvents();
+            stack.setCurrentIndex(preAppPage);
             stack.repaint();
-            QApplication::processEvents();  // 确保页面切换后的重绘完成
-            gallery->setFocus();
+            QApplication::processEvents();
+            if (preAppPage == 0) {
+                gallery->setFocus();
+            } else {
+                demoGrid->setFocus();
+            }
             // 延迟恢复 preload 进程，同时兜底重绘防黑屏
             QTimer::singleShot(300, &stack, [&]() {
                 stack.repaint();
@@ -99,6 +105,8 @@ int main(int argc, char *argv[]) {
             startPreload();
             return;
         }
+        // 记录当前页面，返回时恢复
+        preAppPage = stack.currentIndex();
         // Hide launcher so child app gets framebuffer + key events
         unlink(KEYS_FIFO);
         mkfifo(KEYS_FIFO, 0666);
@@ -220,6 +228,19 @@ int main(int argc, char *argv[]) {
 
     stack.showFullScreen();
     gallery->setFocus();
+
+    // --- 顶部状态栏覆盖层（时间 + 电量）---
+    auto *statusBar = new StatusBar(&stack);
+    // 延迟 200ms 确保 linuxfb 全屏尺寸已就绪后再定位
+    QTimer::singleShot(200, [&stack, statusBar]() {
+        statusBar->setGeometry(0, 0, stack.width(), 26);
+        statusBar->raise();
+        statusBar->show();
+    });
+    // 每次切换页面后重新置顶
+    QObject::connect(&stack, &QStackedWidget::currentChanged, [statusBar]() {
+        statusBar->raise();
+    });
 
     int rc = app.exec();
 

@@ -251,6 +251,30 @@ main.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/main.cpp.s
 .PHONY : main.cpp.s
 
+statusbar.o: statusbar.cpp.o
+.PHONY : statusbar.o
+
+# target to build an object file
+statusbar.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/statusbar.cpp.o
+.PHONY : statusbar.cpp.o
+
+statusbar.i: statusbar.cpp.i
+.PHONY : statusbar.i
+
+# target to preprocess a source file
+statusbar.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/statusbar.cpp.i
+.PHONY : statusbar.cpp.i
+
+statusbar.s: statusbar.cpp.s
+.PHONY : statusbar.s
+
+# target to generate assembly for a file
+statusbar.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/luwu_launcher.dir/build.make CMakeFiles/luwu_launcher.dir/statusbar.cpp.s
+.PHONY : statusbar.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -274,6 +298,9 @@ help:
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... statusbar.o"
+	@echo "... statusbar.i"
+	@echo "... statusbar.s"
 .PHONY : help
 
 

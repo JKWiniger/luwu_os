@@ -12,5 +12,7 @@ qt_add_executable(luwu_launcher
     demogridview.cpp
     demogridview.h
     keyfilter.h
+    statusbar.cpp
+    statusbar.h
 )
 target_link_libraries(luwu_launcher PRIVATE Qt6::Widgets)
