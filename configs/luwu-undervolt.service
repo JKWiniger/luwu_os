@@ -1,0 +1,15 @@
+[Unit]
+Description=Luwu OS 欠压监控与保护关机
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/luwu-undervolt-monitor.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
