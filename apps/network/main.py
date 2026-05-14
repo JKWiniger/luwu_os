@@ -163,7 +163,7 @@ def _connect_wifi(ssid: str, password: str, security: str = "wpa") -> bool:
     """
     def _run(args):
         r = subprocess.run(
-            args, capture_output=True, text=True, input="pi\n"
+            args, capture_output=True, text=True
         )
         out = (r.stdout + r.stderr).strip()
         if out:
@@ -172,20 +172,20 @@ def _connect_wifi(ssid: str, password: str, security: str = "wpa") -> bool:
 
     con_name = "luwu-wifi"
     # Remove any stale connection with same name
-    _run(["sudo", "-S", "nmcli", "connection", "delete", con_name])
+    _run(["sudo", "nmcli", "connection", "delete", con_name])
 
     # Build add command; key-mgmt based on QR T: field
     sec = security.upper()
     if sec in ("NOPASS", ""):
-        add_args = ["sudo", "-S", "nmcli", "connection", "add",
+        add_args = ["sudo", "nmcli", "connection", "add",
                     "type", "wifi", "con-name", con_name, "ssid", ssid]
     elif sec == "WEP":
-        add_args = ["sudo", "-S", "nmcli", "connection", "add",
+        add_args = ["sudo", "nmcli", "connection", "add",
                     "type", "wifi", "con-name", con_name, "ssid", ssid,
                     "wifi-sec.key-mgmt", "ieee8021x",
                     "wifi-sec.wep-key0", password]
     else:  # WPA / WPA2 / WPA3 / default
-        add_args = ["sudo", "-S", "nmcli", "connection", "add",
+        add_args = ["sudo", "nmcli", "connection", "add",
                     "type", "wifi", "con-name", con_name, "ssid", ssid,
                     "wifi-sec.key-mgmt", "wpa-psk",
                     "wifi-sec.psk", password]
@@ -196,11 +196,11 @@ def _connect_wifi(ssid: str, password: str, security: str = "wpa") -> bool:
         return False
 
     # Rescan so NetworkManager knows the AP is visible
-    _run(["sudo", "-S", "nmcli", "device", "wifi", "rescan"])
+    _run(["sudo", "nmcli", "device", "wifi", "rescan"])
     import time as _time; _time.sleep(2)
 
     # Bring up
-    up_args = ["sudo", "-S", "nmcli", "connection", "up", con_name]
+    up_args = ["sudo", "nmcli", "connection", "up", con_name]
     print(f"[wifi_setup] up: {' '.join(up_args)}", flush=True)
     return _run(up_args) == 0
 
@@ -559,8 +559,8 @@ class WifiSetupPage(QWidget):
         # (iw reg get returns internal kernel enum numbers, not alpha-2)
         try:
             r = subprocess.run(
-                ["sudo", "-S", "raspi-config", "nonint", "get_wifi_country"],
-                input="pi\n", capture_output=True, text=True, timeout=5
+                ["sudo", "raspi-config", "nonint", "get_wifi_country"],
+                capture_output=True, text=True, timeout=5
             )
             self._country_current_code = r.stdout.strip() if r.returncode == 0 else ""
         except Exception:
@@ -622,8 +622,8 @@ class WifiSetupPage(QWidget):
     def _apply_country(self, code):
         try:
             r = subprocess.run(
-                ["sudo", "-S", "raspi-config", "nonint", "do_wifi_country", code],
-                input="pi\n", capture_output=True, text=True, timeout=15
+                ["sudo", "raspi-config", "nonint", "do_wifi_country", code],
+                capture_output=True, text=True, timeout=15
             )
             if r.returncode == 0:
                 print(f"[wifi_setup] Country set to {code}", flush=True)
@@ -648,7 +648,7 @@ class WifiSetupPage(QWidget):
 
     def _do_reboot(self):
         print("[wifi_setup] Rebooting...", flush=True)
-        subprocess.run(["sudo", "-S", "reboot"], input="pi\n", capture_output=True, text=True)
+        subprocess.run(["sudo", "reboot"], capture_output=True, text=True)
 
     def _draw_country_ui(self):
         bg = Image.new('RGB', (320, 240), (10, 10, 26))
@@ -768,8 +768,8 @@ class WifiSetupPage(QWidget):
                         _t.sleep(4)
                     # rescan needs sudo to actually trigger hardware scan
                     sp.run(
-                        ["sudo", "-S", "nmcli", "device", "wifi", "rescan"],
-                        input="pi\n", capture_output=True, text=True, timeout=15
+                        ["sudo", "nmcli", "device", "wifi", "rescan"],
+                        capture_output=True, text=True, timeout=15
                     )
                     _t.sleep(3)
                     r = sp.run(
