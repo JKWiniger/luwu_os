@@ -100,6 +100,7 @@ SETTING_ITEMS = [
     {"id": "contact_us",  "icon": "qrcode.png",        "label_key": "CONTACT"},
     {"id": "app_download","icon": "app_download.png",  "label_key": "APPDOWN"},
     {"id": "shutdown",    "icon": "power.png",         "label_key": "SHUTDOWN"},
+    {"id": "reboot",      "icon": "power.png",         "label_key": "REBOOT"},
 ]
 
 # ============================================================================
@@ -752,6 +753,75 @@ class ShutdownPage(QWidget):
 
 
 # ============================================================================
+# Reboot Confirmation Page
+# ============================================================================
+class RebootPage(QWidget):
+    def __init__(self, stack: QStackedWidget):
+        super().__init__()
+        self.stack = stack
+        self.la = load_language()
+        self.setStyleSheet("background-color: #0f1530;")
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+        self.icon_label = QLabel("🔄", self)
+        icon_font = QFont()
+        icon_font.setPointSize(36)
+        self.icon_label.setFont(icon_font)
+        self.icon_label.setStyleSheet("color: #FFD93D; background: transparent;")
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.title_label = QLabel(self)
+        title_font = QFont()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        self.title_label.setFont(title_font)
+        self.title_label.setStyleSheet("color: #ffffff; background: transparent;")
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setWordWrap(True)
+
+        self.hint_label = QLabel(self)
+        hint_font = QFont()
+        hint_font.setPointSize(11)
+        self.hint_label.setFont(hint_font)
+        self.hint_label.setStyleSheet("color: #8892c9; background: transparent;")
+        self.hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.hint_label.setWordWrap(True)
+
+        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
+        self.corner_bl = QLabel("C:取消", self)
+        self.corner_bl.setStyleSheet(hint_style)
+        self.corner_br = QLabel("D:确认重启", self)
+        self.corner_br.setStyleSheet(hint_style)
+        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._update_texts()
+
+    def _update_texts(self):
+        self.la = load_language()
+        title = self.la.get("DEMOEN", {}).get("REBOOT_TITLE", "重启确认")
+        hint = self.la.get("DEMOEN", {}).get("REBOOT_HINT", "确定要重启树莓派？")
+        self.title_label.setText(title)
+        self.hint_label.setText(hint)
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        w, h = self.width(), self.height()
+        self.icon_label.setGeometry(0, h // 2 - 90, w, 40)
+        self.title_label.setGeometry(20, h // 2 - 45, w - 40, 30)
+        self.hint_label.setGeometry(20, h // 2 - 10, w - 40, 50)
+        pad = 12
+        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        self.corner_br.adjustSize()
+        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
+
+    def keyPressEvent(self, ev: QKeyEvent):
+        if ev.key() == Qt.Key.Key_Back:
+            self.stack.navigate_to("list")
+        elif ev.key() == Qt.Key.Key_Return:
+            os.system("echo pi | sudo -S reboot")
+
+
+# ============================================================================
 # SettingsStack (manages all pages)
 # ============================================================================
 class SettingsStack(QStackedWidget):
@@ -766,6 +836,7 @@ class SettingsStack(QStackedWidget):
         self.contact_page = QRPage(self, " xgorobot_wx.png", "hello@xgorobot.com")
         self.download_page = QRPage(self, "app_down_qr.png")
         self.shutdown_page = ShutdownPage(self)
+        self.reboot_page = RebootPage(self)
 
         self.addWidget(self.list_page)     # 0
         self.addWidget(self.sn_page)       # 1
@@ -774,6 +845,7 @@ class SettingsStack(QStackedWidget):
         self.addWidget(self.contact_page)  # 4
         self.addWidget(self.download_page) # 5
         self.addWidget(self.shutdown_page) # 6
+        self.addWidget(self.reboot_page)   # 7
 
         self.setCurrentIndex(0)
         self.page_map = {
@@ -784,6 +856,7 @@ class SettingsStack(QStackedWidget):
             "contact_us":   4,
             "app_download": 5,
             "shutdown":     6,
+            "reboot":       7,
         }
 
     def navigate_to(self, page_id: str):

@@ -191,6 +191,9 @@
         "SHUTDOWN": "Shutdown",
         "SHUTDOWN_TITLE": "Shutdown Confirm",
         "SHUTDOWN_HINT": "Only shuts down Raspberry Pi. Robot dog needs button shutdown.",
+        "REBOOT": "Reboot",
+        "REBOOT_TITLE": "Reboot Confirm",
+        "REBOOT_HINT": "Are you sure to reboot Raspberry Pi?",
         "RC": "VTM",
         "HOTSPOT": "Hotspot",
         "SN": "SN Code"

@@ -5,8 +5,8 @@ Wants=multi-user.target
 
 [Service]
 Type=simple
-User=pi
-SupplementaryGroups=tty input
+User=luwu
+SupplementaryGroups=tty input dialout
 Environment="QT_QPA_PLATFORM=linuxfb:fb=/dev/fb-spi"
 Environment="QT_QPA_FONTDIR=/usr/share/fonts"
 # 先停掉 splash mplayer，释放 SPI 帧缓冲，再启动 Qt

@@ -7,8 +7,8 @@ After=local-fs.target
 
 [Service]
 Type=simple
-# 用 pi 运行（pi 在 video 组可访问 /dev/fb0，且 launcher 的 kill-splash.sh 以 pi 运行可以杀掉它）
-User=pi
+# 用 luwu 运行（luwu 在 video 组可访问 /dev/fb0，且 launcher 的 kill-splash.sh 以 luwu 运行可以杀掉它）
+User=luwu
 # 防止 mplayer 尝试读取 TTY
 StandardInput=null
 StandardOutput=journal

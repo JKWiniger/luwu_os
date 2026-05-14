@@ -190,6 +190,9 @@
         "SHUTDOWN":"关机",
         "SHUTDOWN_TITLE":"关机确认",
         "SHUTDOWN_HINT":"当前仅关机树莓派，机器狗关机还需按键",
+        "REBOOT":"重启",
+        "REBOOT_TITLE":"重启确认",
+        "REBOOT_HINT":"确定要重启树莓派？",
         "RC":"图传模式",
         "HOTSPOT":"热点模式",
         "SN":"sn 码"
