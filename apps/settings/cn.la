@@ -187,6 +187,9 @@
         "PROXY":"网络代理",
         "AICHAT":"AI 互动",
         "CONTACT":"联系我们",
+        "SHUTDOWN":"关机",
+        "SHUTDOWN_TITLE":"关机确认",
+        "SHUTDOWN_HINT":"当前仅关机树莓派，机器狗关机还需按键",
         "RC":"图传模式",
         "HOTSPOT":"热点模式",
         "SN":"sn 码"
