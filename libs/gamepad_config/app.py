@@ -195,6 +195,10 @@ FUNCTIONS = {
         # 循环动作
         {"id": "rider_perform_on",   "label": "开启循环动作",          "cat": "系统"},
         {"id": "rider_perform_off",  "label": "关闭循环动作",          "cat": "系统"},
+        # 震动
+        {"id": "rumble_short",       "label": "震动: 短振 (150ms)",      "cat": "震动"},
+        {"id": "rumble_long",        "label": "震动: 长振 (600ms)",      "cat": "震动"},
+        {"id": "rumble_pulse",       "label": "震动: 轻振 (80ms)",       "cat": "震动"},
     ],
     # ── XGO-MINI（四足机器狗，带机械臂）────────────────────────────
     "xgomini": [
@@ -240,6 +244,10 @@ FUNCTIONS = {
         {"id": "imu_off",            "label": "关闭自稳",              "cat": "系统"},
         {"id": "perform_on",         "label": "开启循环动作",          "cat": "系统"},
         {"id": "perform_off",        "label": "关闭循环动作",          "cat": "系统"},
+        # 震动
+        {"id": "rumble_short",       "label": "震动: 短振 (150ms)",      "cat": "震动"},
+        {"id": "rumble_long",        "label": "震动: 长振 (600ms)",      "cat": "震动"},
+        {"id": "rumble_pulse",       "label": "震动: 轻振 (80ms)",       "cat": "震动"},
     ],
     # ── XGO-LITE（四足机器狗，同 MINI 方法集，无机械臂硬件）──────
     "xgolite": [
@@ -280,6 +288,10 @@ FUNCTIONS = {
         {"id": "imu_off",            "label": "关闭自稳",              "cat": "系统"},
         {"id": "perform_on",         "label": "开启循环动作",          "cat": "系统"},
         {"id": "perform_off",        "label": "关闭循环动作",          "cat": "系统"},
+        # 震动
+        {"id": "rumble_short",       "label": "震动: 短振 (150ms)",      "cat": "震动"},
+        {"id": "rumble_long",        "label": "震动: 长振 (600ms)",      "cat": "震动"},
+        {"id": "rumble_pulse",       "label": "震动: 轻振 (80ms)",       "cat": "震动"},
     ],
 }
 

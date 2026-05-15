@@ -7,8 +7,8 @@ Wants=network.target
 [Service]
 Type=simple
 User=luwu
-WorkingDirectory=/home/luwu/XGO-Rider/gamepad_config
-ExecStart=/usr/bin/python3 /home/luwu/XGO-Rider/gamepad_config/app.py
+WorkingDirectory=/home/luwu/XGO-Rider/Luwu-OS/libs/gamepad_config
+ExecStart=/usr/bin/python3 /home/luwu/XGO-Rider/Luwu-OS/libs/gamepad_config/app.py
 Restart=on-failure
 RestartSec=5
 # 日志
