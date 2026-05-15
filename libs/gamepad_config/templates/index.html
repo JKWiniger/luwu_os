@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手柄配置 — XGO</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e0e0e0; min-height: 100vh; }
+header { background: #1a1d27; border-bottom: 1px solid #2a2d3e; padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+header h1 { font-size: 18px; font-weight: 600; color: #fff; }
+.device-tabs { display: flex; gap: 8px; }
+.tab { padding: 6px 16px; border-radius: 6px; border: 1px solid #2a2d3e; background: transparent; color: #888; cursor: pointer; font-size: 13px; transition: all .2s; }
+.tab.active { background: #3d7aff; border-color: #3d7aff; color: #fff; }
+.tab:hover:not(.active) { border-color: #3d7aff; color: #ccc; }
+.status-badge { margin-left: auto; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+.status-badge.connected { background: #1a3a20; color: #4caf50; border: 1px solid #2d6b37; }
+.status-badge.disconnected { background: #3a1a1a; color: #f44336; border: 1px solid #6b2d2d; }
+.status-badge.waiting { background: #2a2a10; color: #ffc107; border: 1px solid #6b5c00; }
+.layout { display: flex; gap: 0; height: calc(100vh - 57px); }
+
+/* ── 左侧：手柄视觉 ─────────────────────────────────────── */
+.panel-left { width: 380px; min-width: 320px; background: #13161f; border-right: 1px solid #2a2d3e; overflow-y: auto; padding: 20px; }
+.panel-left h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: #555; margin-bottom: 16px; }
+.gamepad-svg-wrap { display: flex; justify-content: center; margin-bottom: 20px; }
+.gamepad-svg-wrap svg { width: 100%; max-width: 300px; }
+.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gp-btn { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #1e2130; border: 1px solid #2a2d3e; font-size: 12px; transition: all .15s; cursor: default; }
+.gp-btn.active { background: #1e3a5f; border-color: #3d7aff; color: #7db8ff; }
+.gp-btn .dot { width: 8px; height: 8px; border-radius: 50%; background: #333; flex-shrink: 0; }
+.gp-btn.active .dot { background: #3d7aff; box-shadow: 0 0 6px #3d7aff; }
+.axis-row { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.axis-item { padding: 8px 10px; border-radius: 8px; background: #1e2130; border: 1px solid #2a2d3e; }
+.axis-item .axis-label { font-size: 11px; color: #666; margin-bottom: 4px; }
+.axis-bar-wrap { background: #0d0f16; border-radius: 4px; height: 8px; position: relative; overflow: hidden; }
+.axis-bar { position: absolute; top: 0; height: 100%; background: #3d7aff; transition: all .05s; border-radius: 4px; }
+.axis-val { font-size: 11px; color: #888; margin-top: 2px; text-align: right; }
+
+/* ── 右侧：映射表 ────────────────────────────────────────── */
+.panel-right { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.panel-right h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: #555; margin-bottom: 16px; }
+.section-title { font-size: 12px; color: #444; text-transform: uppercase; letter-spacing: .08em; margin: 20px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #1e2130; }
+.mapping-table { width: 100%; border-collapse: collapse; }
+.mapping-table th { font-size: 11px; color: #555; text-align: left; padding: 6px 12px; border-bottom: 1px solid #1e2130; }
+.mapping-table td { padding: 6px 12px; border-bottom: 1px solid #1a1d27; font-size: 13px; vertical-align: middle; }
+.mapping-table tr:hover td { background: #1a1d27; }
+.mapping-table tr.highlight td { background: #1e2d45 !important; }
+.key-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #1e2130; border: 1px solid #2a2d3e; font-size: 11px; font-family: monospace; color: #aaa; }
+.key-badge.active { background: #1e3a5f; border-color: #3d7aff; color: #7db8ff; }
+select.fn-select { background: #1e2130; border: 1px solid #2a2d3e; color: #e0e0e0; padding: 4px 8px; border-radius: 6px; font-size: 12px; width: 100%; max-width: 240px; cursor: pointer; }
+select.fn-select:focus { outline: none; border-color: #3d7aff; }
+.reverse-label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #888; cursor: pointer; white-space: nowrap; user-select: none; }
+.reverse-label input[type=checkbox] { accent-color: #3d7aff; width: 14px; height: 14px; cursor: pointer; }
+.reverse-label:hover { color: #ccc; }
+optgroup { color: #888; font-size: 11px; }
+.toolbar { display: flex; gap: 10px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #1e2130; }
+.btn { padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .2s; }
+.btn-primary { background: #3d7aff; color: #fff; }
+.btn-primary:hover { background: #5590ff; }
+.btn-secondary { background: #1e2130; border: 1px solid #2a2d3e; color: #ccc; }
+.btn-secondary:hover { border-color: #3d7aff; color: #fff; }
+.btn-danger { background: #2a1a1a; border: 1px solid #6b2d2d; color: #f44336; }
+.btn-danger:hover { background: #3a2020; }
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; background: #1a3a20; border: 1px solid #2d6b37; color: #4caf50; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎮 手柄映射配置</h1>
+  <div class="device-tabs" id="deviceTabs"></div>
+  <div class="status-badge disconnected" id="statusBadge">手柄未连接</div>
+</header>
+
+<div class="layout">
+  <!-- 左：实时状态 -->
+  <div class="panel-left">
+    <h2>实时状态</h2>
+    <div class="btn-grid" id="btnGrid"></div>
+    <div class="axis-row" id="axisRows"></div>
+  </div>
+
+  <!-- 右：映射表 -->
+  <div class="panel-right">
+    <h2>按键映射</h2>
+    <div id="mappingContent"></div>
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="saveConfig()">💾 保存配置</button>
+      <button class="btn btn-secondary" onclick="loadConfig()">↩ 重新加载</button>
+      <button class="btn btn-danger" onclick="resetConfig()">🔄 恢复默认</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 常量 ──────────────────────────────────────────────────────────
+const BUTTON_LABELS = [
+  'A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT',
+  'Back', 'Start', 'L3', 'R3', '↑', '↓', '←', '→', 'Home'
+];
+const AXIS_LABELS = [
+  '左摇杆 X', '左摇杆 Y', '右摇杆 X', '右摇杆 Y', 'LT (模拟)', 'RT (模拟)'
+];
+
+// ── 状态 ─────────────────────────────────────────────────────────
+let currentDevice = 'xgorider';
+let devices = [];
+let functions = [];
+let config = {};
+let prevButtons = [];
+
+// ── 初始化 ────────────────────────────────────────────────────────
+async function init() {
+  const [devRes] = await Promise.all([fetch('/api/devices')]);
+  devices = await devRes.json();
+  renderTabs();
+  await switchDevice(devices[0] || 'xgorider');
+  buildStatePanels();
+  _initSocket();
+}
+
+function renderTabs() {
+  const el = document.getElementById('deviceTabs');
+  el.innerHTML = devices.map(d =>
+    `<button class="tab${d === currentDevice ? ' active' : ''}" onclick="switchDevice('${d}')">${d.toUpperCase()}</button>`
+  ).join('');
+}
+
+async function switchDevice(device) {
+  currentDevice = device;
+  renderTabs();
+  const [fnRes, cfgRes] = await Promise.all([
+    fetch(`/api/functions?device=${device}`),
+    fetch(`/api/config?device=${device}`),
+  ]);
+  functions = await fnRes.json();
+  config = await cfgRes.json();
+  renderMappingTable();
+}
+
+// ── 左侧面板：按钮 + 轴 ───────────────────────────────────────────
+function buildStatePanels() {
+  const grid = document.getElementById('btnGrid');
+  grid.innerHTML = BUTTON_LABELS.map((lbl, i) =>
+    `<div class="gp-btn" id="btn${i}"><div class="dot"></div><span>${lbl}</span></div>`
+  ).join('');
+
+  const axRows = document.getElementById('axisRows');
+  axRows.innerHTML = AXIS_LABELS.map((lbl, i) =>
+    `<div class="axis-item" id="axis${i}">
+       <div class="axis-label">${lbl}</div>
+       <div class="axis-bar-wrap"><div class="axis-bar" id="axisBar${i}" style="left:50%;width:0"></div></div>
+       <div class="axis-val" id="axisVal${i}">0.00</div>
+     </div>`
+  ).join('');
+}
+
+// ── 映射表渲染 ────────────────────────────────────────────────────
+function renderMappingTable() {
+  const el = document.getElementById('mappingContent');
+
+  const btnRows = BUTTON_LABELS.map((lbl, i) => {
+    const key = `button_${i}`;
+    return `<tr id="row_${key}">
+      <td><span class="key-badge" id="badge_${key}">${lbl}</span></td>
+      <td>${buildSelect(key)}</td>
+    </tr>`;
+  }).join('');
+
+  const axisRows = AXIS_LABELS.map((lbl, i) => {
+    const key = `axis_${i}`;
+    const revKey = `${key}_reversed`;
+    const isReversed = config[revKey] === true;
+    return `<tr id="row_${key}">
+      <td><span class="key-badge" id="badge_${key}">${lbl}</span></td>
+      <td>${buildSelect(key)}</td>
+      <td><label class="reverse-label"><input type="checkbox" onchange="onAxisReverse('${key}', this.checked)"${isReversed ? ' checked' : ''}> 反向</label></td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="section-title">按钮 (Buttons)</div>
+    <table class="mapping-table">
+      <thead><tr><th style="width:130px">按键</th><th>功能</th></tr></thead>
+      <tbody>${btnRows}</tbody>
+    </table>
+    <div class="section-title">摇杆 / 扳机 (Axes)</div>
+    <table class="mapping-table">
+      <thead><tr><th style="width:130px">轴</th><th>功能</th><th style="width:70px">反向</th></tr></thead>
+      <tbody>${axisRows}</tbody>
+    </table>
+  `;
+}
+
+function buildSelect(key) {
+  const current = config[key] || 'none';
+  // 按 cat 分组
+  const cats = {};
+  for (const fn of functions) {
+    const cat = fn.cat || '';
+    if (!cats[cat]) cats[cat] = [];
+    cats[cat].push(fn);
+  }
+  let opts = '';
+  for (const [cat, items] of Object.entries(cats)) {
+    if (cat) opts += `<optgroup label="${cat}">`;
+    for (const fn of items) {
+      opts += `<option value="${fn.id}"${fn.id === current ? ' selected' : ''}>${fn.label}</option>`;
+    }
+    if (cat) opts += `</optgroup>`;
+  }
+  return `<select class="fn-select" onchange="onSelectChange('${key}', this.value)">${opts}</select>`;
+}
+
+function onSelectChange(key, value) {
+  config[key] = value;
+}
+
+function onAxisReverse(key, checked) {
+  const revKey = `${key}_reversed`;
+  if (checked) {
+    config[revKey] = true;
+  } else {
+    delete config[revKey];
+  }
+}
+
+// ── WebSocket 接收手柄状态 ────────────────────────────────────────
+let socket = null;
+
+function applyGamepadState(state) {
+  const badge = document.getElementById('statusBadge');
+  if (!state.connected) {
+    badge.textContent = '手柄未连接';
+    badge.className = 'status-badge disconnected';
+  } else {
+    badge.textContent = `已连接: ${state.device.slice(0, 30)}`;
+    badge.className = 'status-badge connected';
+  }
+
+  // 按钮
+  (state.buttons || []).forEach((pressed, i) => {
+    const el = document.getElementById(`btn${i}`);
+    if (el) el.className = `gp-btn${pressed ? ' active' : ''}`;
+    const b = document.getElementById(`badge_button_${i}`);
+    if (b) b.className = `key-badge${pressed ? ' active' : ''}`;
+    const row = document.getElementById(`row_button_${i}`);
+    if (row) row.className = pressed ? 'highlight' : '';
+  });
+
+  // 轴
+  (state.axes || []).forEach((val, i) => {
+    const bar = document.getElementById(`axisBar${i}`);
+    const valEl = document.getElementById(`axisVal${i}`);
+    if (bar) {
+      const pct = (val + 1) / 2 * 100;
+      const center = 50;
+      if (val >= 0) { bar.style.left = center+'%'; bar.style.width = (pct-center)+'%'; }
+      else { bar.style.left = pct+'%'; bar.style.width = (center-pct)+'%'; }
+    }
+    if (valEl) valEl.textContent = val.toFixed(2);
+    const b = document.getElementById(`badge_axis_${i}`);
+    if (b) b.className = `key-badge${Math.abs(val) > 0.15 ? ' active' : ''}`;
+    const row = document.getElementById(`row_axis_${i}`);
+    if (row) row.className = Math.abs(val) > 0.15 ? 'highlight' : '';
+  });
+}
+
+
+function _initSocket() {
+  if (typeof io === 'undefined') {
+    console.warn('socket.io 未加载，尝试本地备用');
+    return;
+  }
+  socket = io();
+  socket.on('gamepad_state', applyGamepadState);
+  socket.on('connect', () => console.log('WebSocket 已连接'));
+  socket.on('disconnect', () => {
+    document.getElementById('statusBadge').textContent = '服务器断开';
+    document.getElementById('statusBadge').className = 'status-badge disconnected';
+  });
+}
+
+// ── CRUD ──────────────────────────────────────────────────────────
+async function saveConfig() {
+  const res = await fetch(`/api/config?device=${currentDevice}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  if ((await res.json()).ok) showToast('✅ 配置已保存');
+}
+
+async function loadConfig() {
+  const res = await fetch(`/api/config?device=${currentDevice}`);
+  config = await res.json();
+  renderMappingTable();
+  showToast('↩ 已重新加载');
+}
+
+async function resetConfig() {
+  if (!confirm(`恢复 ${currentDevice.toUpperCase()} 的默认映射？`)) return;
+  const res = await fetch(`/api/reset?device=${currentDevice}`, { method: 'POST' });
+  config = await res.json();
+  renderMappingTable();
+  showToast('🔄 已恢复默认');
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+
+
+init();
+</script>
+</body>
+</html>
