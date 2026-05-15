@@ -195,7 +195,17 @@
         "REBOOT_HINT":"确定要重启树莓派？",
         "RC":"图传模式",
         "HOTSPOT":"热点模式",
-        "SN":"sn 码"
+        "SN":"sn 码",
+        "ABOUT":"关于本机",
+        "TIME":"日期时间",
+        "TIME_TITLE":"日期与时间",
+        "TIME_SYNC":"同步时间",
+        "TIME_SYNC_OK":"时间同步成功",
+        "TIME_SYNC_FAIL":"同步失败",
+        "TIME_SAVED":"时区设置成功",
+        "TIMEZONE":"时区",
+        "BACK":"返回",
+        "CONFIRM":"确定"
 
     },
     "UPDATE":{

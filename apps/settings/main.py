@@ -8,6 +8,8 @@ import os
 import sys
 import json
 import uuid
+import time
+import datetime
 import signal
 from pathlib import Path
 
@@ -80,6 +82,91 @@ def write_volume(vol):
     else:
         os.system("amixer set Playback " + str(vol) + "% > /dev/null 2>&1")
 
+# ---- System info helpers ----
+def get_cpu_model():
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            for line in f:
+                if line.startswith("Model"):
+                    return line.split(":")[1].strip()
+    except Exception:
+        return "Unknown"
+    return "Unknown"
+
+def get_cpu_cores():
+    return os.cpu_count() or 0
+
+def get_ram_total():
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                if line.startswith("MemTotal"):
+                    kb = int(line.split(":")[1].strip().split()[0])
+                    gb = kb / (1024 * 1024)
+                    if gb >= 1:
+                        return f"{gb:.1f} GB"
+                    return f"{kb // 1024} MB"
+    except Exception:
+        return "Unknown"
+    return "Unknown"
+
+def get_ram_available():
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                if line.startswith("MemAvailable"):
+                    kb = int(line.split(":")[1].strip().split()[0])
+                    gb = kb / (1024 * 1024)
+                    if gb >= 1:
+                        return f"{gb:.1f} GB"
+                    return f"{kb // 1024} MB"
+    except Exception:
+        return "Unknown"
+    return "Unknown"
+
+def get_disk_info():
+    try:
+        st = os.statvfs("/")
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        used = total - free
+        def fmt(size):
+            gb = size / (1024**3)
+            if gb >= 1:
+                return f"{gb:.1f} GB"
+            return f"{size // (1024**2)} MB"
+        return f"{fmt(total)} | 用{fmt(used)} | 剩{fmt(free)}"
+    except Exception:
+        return "Unknown"
+
+def get_xgolib_version():
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["pip", "show", "xgolib"],
+            capture_output=True, text=True, timeout=10
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("Version:"):
+                return line.split(":")[1].strip()
+        return "未知"
+    except Exception:
+        return "未安装"
+
+def get_xgoedu_version():
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["pip", "show", "xgoedu-luwuos"],
+            capture_output=True, text=True, timeout=10
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("Version:"):
+                return line.split(":")[1].strip()
+        return "未知"
+    except Exception:
+        return "未安装"
+
 # ---- Color constants ----
 COLOR_BG = QColor(15, 21, 48)
 COLOR_CARD = QColor(25, 32, 65)
@@ -94,6 +181,7 @@ COLOR_GREEN = QColor(0, 229, 255)
 # Setting Item Data
 # ============================================================================
 SETTING_ITEMS = [
+    {"id": "about",       "icon": "icon_sn.png",       "label_key": "ABOUT"},
     {"id": "sn",          "icon": "icon_sn.png",       "label_key": "SN"},
     {"id": "volume",      "icon": "volume.png",        "label_key": "VOLUME"},
     {"id": "language",    "icon": "language.png",      "label_key": "LANGUAGE"},
@@ -101,6 +189,7 @@ SETTING_ITEMS = [
     {"id": "app_download","icon": "app_download.png",  "label_key": "APPDOWN"},
     {"id": "shutdown",    "icon": "power.png",         "label_key": "SHUTDOWN"},
     {"id": "reboot",      "icon": "power.png",         "label_key": "REBOOT"},
+    {"id": "time",        "icon": "icon_sn.png",       "label_key": "TIME"},
 ]
 
 # ============================================================================
@@ -304,6 +393,129 @@ class SettingsListPage(QWidget):
     def refresh_language(self):
         self.la = load_language()
         self.update_selection()
+
+
+# ============================================================================
+# About Page (关于本机)
+# ============================================================================
+class AboutPage(QWidget):
+    def __init__(self, stack: QStackedWidget):
+        super().__init__()
+        self.stack = stack
+        self.la = load_language()
+        self.setStyleSheet("background-color: #0f1530;")
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+        self.scroll_offset = 0
+        self.visible_count = 1
+
+        # Gather info
+        self.info_items = self._gather_info()
+
+        # Info labels
+        self.info_labels = []
+        for key, value in self.info_items:
+            lbl = QLabel(f"{key}:  {value}", self)
+            lbl_font = QFont()
+            lbl_font.setPointSize(9)
+            lbl.setFont(lbl_font)
+            lbl.setStyleSheet("color: #c0c8e0; background: transparent; padding: 0px 6px;")
+            lbl.setWordWrap(False)
+            self.info_labels.append(lbl)
+
+        # Corner hints
+        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
+        self.corner_tl = QLabel("A:上翻", self)
+        self.corner_tl.setStyleSheet(hint_style)
+        self.corner_tr = QLabel("B:下翻", self)
+        self.corner_tr.setStyleSheet(hint_style)
+        self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.corner_bl = QLabel("C:返回", self)
+        self.corner_bl.setStyleSheet(hint_style)
+        self.corner_br = QLabel("D:退出", self)
+        self.corner_br.setStyleSheet(hint_style)
+        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+    def _gather_info(self):
+        items = []
+        items.append(("LuwuOS 版本", "2.0.0"))
+        items.append(("xgolib 版本", get_xgolib_version()))
+        items.append(("xgoedu 版本", get_xgoedu_version()))
+        items.append(("CPU", get_cpu_model()))
+        items.append(("CPU 核心数", str(get_cpu_cores())))
+        items.append(("内存总量", get_ram_total()))
+        items.append(("可用内存", get_ram_available()))
+        items.append(("硬盘", get_disk_info()))
+        items.append(("SN", f"{get_sn_short()}{get_mac_address()}"))
+        return items
+
+    def refresh_language(self):
+        self.la = load_language()
+
+    def _visible_count(self):
+        h = self.height()
+        if h == 0:
+            return len(self.info_items)
+        top_margin = 28
+        bottom_margin = 32
+        avail = h - top_margin - bottom_margin
+        item_h = 22
+        gap = 2
+        count = (avail + gap) // (item_h + gap)
+        return max(1, min(count, len(self.info_items)))
+
+    def _relayout_items(self):
+        w = self.width()
+        if w == 0:
+            return
+        h = self.height()
+        top_margin = 28
+        item_h = 22
+        gap = 2
+        self.visible_count = self._visible_count()
+        x = 20
+
+        for i, lbl in enumerate(self.info_labels):
+            if self.scroll_offset <= i < self.scroll_offset + self.visible_count:
+                rel = i - self.scroll_offset
+                y = top_margin + rel * (item_h + gap)
+                lbl.setGeometry(x, y, w - 40, item_h)
+                lbl.show()
+            else:
+                lbl.hide()
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        w, h = self.width(), self.height()
+
+        # Keep selection in visible range after resize
+        self.visible_count = self._visible_count()
+        if self.scroll_offset > len(self.info_items) - self.visible_count:
+            self.scroll_offset = max(0, len(self.info_items) - self.visible_count)
+
+        self._relayout_items()
+
+        pad = 12
+        self.corner_tl.move(pad, pad)
+        self.corner_tr.adjustSize()
+        self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
+        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        self.corner_br.adjustSize()
+        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
+
+    def keyPressEvent(self, ev: QKeyEvent):
+        if ev.key() == Qt.Key.Key_Up or ev.key() == Qt.Key.Key_Left:
+            if self.scroll_offset > 0:
+                self.scroll_offset -= 1
+                self._relayout_items()
+        elif ev.key() == Qt.Key.Key_Down or ev.key() == Qt.Key.Key_Right:
+            if self.scroll_offset < len(self.info_items) - self.visible_count:
+                self.scroll_offset += 1
+                self._relayout_items()
+        elif ev.key() == Qt.Key.Key_Back:
+            self.stack.navigate_to("list")
+        elif ev.key() == Qt.Key.Key_Return:
+            QApplication.instance().quit()
 
 
 # ============================================================================
@@ -680,6 +892,252 @@ class QRPage(QWidget):
 
 
 # ============================================================================
+# Time / Date Page
+# ============================================================================
+class TimeDatePage(QWidget):
+    COMMON_TIMEZONES = [
+        "Asia/Shanghai",
+        "Asia/Tokyo",
+        "Asia/Seoul",
+        "Asia/Singapore",
+        "Asia/Kolkata",
+        "Europe/London",
+        "Europe/Berlin",
+        "Europe/Paris",
+        "America/New_York",
+        "America/Los_Angeles",
+        "America/Chicago",
+        "Australia/Sydney",
+    ]
+
+    def __init__(self, stack: QStackedWidget):
+        super().__init__()
+        self.stack = stack
+        self.la = load_language()
+        self.setStyleSheet("background-color: #0f1530;")
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+        # Get current timezone
+        self._sync_timezone_from_system()
+
+        # Time display (large)
+        self.time_label = QLabel(self)
+        time_font = QFont()
+        time_font.setPointSize(30)
+        time_font.setBold(True)
+        self.time_label.setFont(time_font)
+        self.time_label.setStyleSheet("color: #00E5FF; background: transparent;")
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Date display
+        self.date_label = QLabel(self)
+        date_font = QFont()
+        date_font.setPointSize(14)
+        self.date_label.setFont(date_font)
+        self.date_label.setStyleSheet("color: #8892c9; background: transparent;")
+        self.date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Saved hint
+        self.saved_label = QLabel("", self)
+        saved_font = QFont()
+        saved_font.setPointSize(12)
+        self.saved_label.setFont(saved_font)
+        self.saved_label.setStyleSheet("color: #00E5FF; background: transparent;")
+        self.saved_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.saved_label.hide()
+
+        # Corner hints
+        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
+        self.corner_tl = QLabel(self)
+        self.corner_tl.setStyleSheet(hint_style)
+        self.corner_tr = QLabel(self)
+        self.corner_tr.setStyleSheet(hint_style)
+        self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.corner_bl = QLabel(self)
+        self.corner_bl.setStyleSheet(hint_style)
+        self.corner_br = QLabel(self)
+        self.corner_br.setStyleSheet(hint_style)
+        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._update_texts()
+        self._update_clock()
+
+        # Timer to refresh clock every second
+        self.clock_timer = QTimer(self)
+        self.clock_timer.timeout.connect(self._update_clock)
+        self.clock_timer.start(1000)
+
+    def _sync_timezone_from_system(self):
+        """Re-read system timezone (called on init and every page entry)."""
+        self.current_tz = self._get_current_timezone()
+        if self.current_tz not in self.COMMON_TIMEZONES:
+            self.tz_list = self.COMMON_TIMEZONES + [self.current_tz]
+        else:
+            self.tz_list = list(self.COMMON_TIMEZONES)
+        self.tz_index = self._find_tz_index()
+        self.update()
+
+    def _get_current_timezone(self):
+        """Read current system timezone via timedatectl (most reliable)."""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["timedatectl", "show", "-p", "Timezone", "--value"],
+                capture_output=True, text=True, timeout=5
+            )
+            tz = result.stdout.strip()
+            if tz:
+                return tz
+        except Exception:
+            pass
+        # Fallback to /etc/timezone
+        try:
+            with open("/etc/timezone", "r") as f:
+                return f.read().strip()
+        except Exception:
+            return "Asia/Shanghai"
+
+    def _find_tz_index(self):
+        try:
+            return self.tz_list.index(self.current_tz)
+        except ValueError:
+            return 0
+
+    def _update_clock(self):
+        now = datetime.datetime.now()
+        self.time_label.setText(now.strftime("%H:%M:%S"))
+        weekdays_cn = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+        weekdays_en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        lang = get_lang_code()
+        if lang == "cn":
+            wd = weekdays_cn[now.weekday()]
+            self.date_label.setText(now.strftime(f"%Y-%m-%d {wd}"))
+        else:
+            wd = weekdays_en[now.weekday()]
+            self.date_label.setText(now.strftime(f"%Y-%m-%d {wd}"))
+
+    def _update_texts(self):
+        self.la = load_language()
+        t = self.la.get("DEMOEN", {})
+        self.corner_tl.setText("A: ◀" + t.get("TIMEZONE", "TZ"))
+        self.corner_tr.setText("B: " + t.get("TIMEZONE", "TZ") + "▶")
+        self.corner_bl.setText("C: " + t.get("BACK", "Back"))
+        self.corner_br.setText("D: " + t.get("CONFIRM", "Confirm"))
+        self.update()
+
+    def _current_tz_display(self):
+        """Display name for the current timezone selection."""
+        display_map = {
+            "Asia/Shanghai":     "上海 UTC+8",
+            "Asia/Tokyo":        "东京 UTC+9",
+            "Asia/Seoul":        "首尔 UTC+9",
+            "Asia/Singapore":    "新加坡 UTC+8",
+            "Asia/Kolkata":      "印度 UTC+5:30",
+            "Europe/London":     "伦敦 UTC+0",
+            "Europe/Berlin":     "柏林 UTC+1",
+            "Europe/Paris":      "巴黎 UTC+1",
+            "America/New_York":  "纽约 UTC-5",
+            "America/Los_Angeles": "洛杉矶 UTC-8",
+            "America/Chicago":   "芝加哥 UTC-6",
+            "Australia/Sydney":  "悉尼 UTC+10",
+        }
+        return display_map.get(self.current_tz, self.current_tz)
+
+    def paintEvent(self, ev):
+        super().paintEvent(ev)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+
+        # Timezone selector row
+        tz_y = h // 2 + 20
+        rect_w, rect_h = 220, 36
+        rect_x = (w - rect_w) // 2
+
+        # Background card
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(COLOR_CARD)
+        painter.drawRoundedRect(rect_x, tz_y, rect_w, rect_h, 10, 10)
+
+        # Timezone text
+        tz_font = QFont()
+        tz_font.setPointSize(12)
+        tz_font.setBold(True)
+        painter.setFont(tz_font)
+        painter.setPen(COLOR_GREEN)
+
+        display = self._current_tz_display()
+        painter.drawText(QRect(rect_x, tz_y, rect_w, rect_h), Qt.AlignmentFlag.AlignCenter, display)
+
+        # Left / Right arrows on sides
+        arrow_font = QFont()
+        arrow_font.setPointSize(16)
+        painter.setFont(arrow_font)
+        painter.setPen(COLOR_GRAY)
+        painter.drawText(QRect(rect_x - 30, tz_y, 30, rect_h), Qt.AlignmentFlag.AlignCenter, "◀")
+        painter.drawText(QRect(rect_x + rect_w, tz_y, 30, rect_h), Qt.AlignmentFlag.AlignCenter, "▶")
+
+        painter.end()
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        w, h = self.width(), self.height()
+        self.time_label.setGeometry(0, h // 2 - 70, w, 40)
+        self.date_label.setGeometry(0, h // 2 - 30, w, 25)
+        self.saved_label.setGeometry(0, h - 60, w, 25)
+        pad = 12
+        self.corner_tl.move(pad, pad)
+        self.corner_tr.adjustSize()
+        self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
+        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        self.corner_br.adjustSize()
+        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
+
+    def keyPressEvent(self, ev: QKeyEvent):
+        if ev.key() == Qt.Key.Key_Left or ev.key() == Qt.Key.Key_Up:
+            self.tz_index = (self.tz_index - 1) % len(self.tz_list)
+            self.current_tz = self.tz_list[self.tz_index]
+            self.update()
+        elif ev.key() == Qt.Key.Key_Right or ev.key() == Qt.Key.Key_Down:
+            self.tz_index = (self.tz_index + 1) % len(self.tz_list)
+            self.current_tz = self.tz_list[self.tz_index]
+            self.update()
+        elif ev.key() == Qt.Key.Key_Back:
+            # Just go back, don't save
+            self.stack.navigate_to("list")
+        elif ev.key() == Qt.Key.Key_Return:
+            # Save timezone + sync time
+            self._save_timezone()
+            self._sync_time()
+            self._update_clock()
+
+    def _save_timezone(self):
+        """Write timezone setting and refresh local clock."""
+        os.system(f"echo pi | sudo -S timedatectl set-timezone {self.current_tz}")
+        # Also sync /etc/timezone for consistency
+        os.system(f"echo pi | sudo -S sh -c 'echo \"{self.current_tz}\" > /etc/timezone'")
+        time.tzset()  # refresh Python's timezone cache
+
+    def _sync_time(self):
+        """Force NTP time sync and show result."""
+        t = self.la.get("DEMOEN", {})
+        self.saved_label.setText("⏳ " + t.get("TIME_SYNC", "Syncing..."))
+        self.saved_label.show()
+        ret = os.system("echo pi | sudo -S systemctl restart systemd-timesyncd 2>/dev/null")
+        if ret == 0:
+            msg = "✓ " + t.get("TIME_SYNC_OK", "Time synced!")
+        else:
+            msg = "✗ " + t.get("TIME_SYNC_FAIL", "Sync failed")
+        self.saved_label.setText(msg)
+        QTimer.singleShot(1500, lambda: self.stack.navigate_to("list"))
+
+    def refresh_language(self):
+        self._sync_timezone_from_system()
+        self._update_texts()
+        self._update_clock()
+
+
+# ============================================================================
 # Shutdown Confirmation Page
 # ============================================================================
 class ShutdownPage(QWidget):
@@ -830,6 +1288,7 @@ class SettingsStack(QStackedWidget):
         self.setStyleSheet("background-color: #0f1530;")
 
         self.list_page = SettingsListPage(self)
+        self.about_page = AboutPage(self)
         self.sn_page = SNPage(self)
         self.volume_page = VolumePage(self)
         self.language_page = LanguagePage(self)
@@ -837,26 +1296,31 @@ class SettingsStack(QStackedWidget):
         self.download_page = QRPage(self, "app_down_qr.png")
         self.shutdown_page = ShutdownPage(self)
         self.reboot_page = RebootPage(self)
+        self.time_page = TimeDatePage(self)
 
         self.addWidget(self.list_page)     # 0
-        self.addWidget(self.sn_page)       # 1
-        self.addWidget(self.volume_page)   # 2
-        self.addWidget(self.language_page) # 3
-        self.addWidget(self.contact_page)  # 4
-        self.addWidget(self.download_page) # 5
-        self.addWidget(self.shutdown_page) # 6
-        self.addWidget(self.reboot_page)   # 7
+        self.addWidget(self.about_page)    # 1
+        self.addWidget(self.sn_page)       # 2
+        self.addWidget(self.volume_page)   # 3
+        self.addWidget(self.language_page) # 4
+        self.addWidget(self.contact_page)  # 5
+        self.addWidget(self.download_page) # 6
+        self.addWidget(self.shutdown_page) # 7
+        self.addWidget(self.reboot_page)   # 8
+        self.addWidget(self.time_page)     # 9
 
         self.setCurrentIndex(0)
         self.page_map = {
             "list":         0,
-            "sn":           1,
-            "volume":       2,
-            "language":     3,
-            "contact_us":   4,
-            "app_download": 5,
-            "shutdown":     6,
-            "reboot":       7,
+            "about":        1,
+            "sn":           2,
+            "volume":       3,
+            "language":     4,
+            "contact_us":   5,
+            "app_download": 6,
+            "shutdown":     7,
+            "reboot":       8,
+            "time":         9,
         }
 
     def navigate_to(self, page_id: str):

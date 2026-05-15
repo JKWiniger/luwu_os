@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import math
 import os, sys, time, json, base64
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import json
 import threading
 import subprocess
@@ -135,6 +135,30 @@ def hand_pos(angle):
             pos = 'Stone'
     
     return pos
+
+# 手部关键点连接（用于绘制骨架），基于 MediaPipe 21 点模型
+HAND_CONNECTIONS = [
+    (0, 1), (1, 2), (2, 3), (3, 4),       # 拇指
+    (0, 5), (5, 6), (6, 7), (7, 8),       # 食指
+    (0, 9), (9, 10), (10, 11), (11, 12),  # 中指
+    (0, 13), (13, 14), (14, 15), (15, 16),# 无名指
+    (0, 17), (17, 18), (18, 19), (19, 20),# 小指
+    (5, 9), (9, 13), (13, 17),             # 指根横向
+]
+
+def draw_hand_landmarks(img, pts, color=(0, 255, 0), thickness=2):
+    """在手部图像上绘制 21 个关键点和连接线。"""
+    h, w = img.shape[:2]
+    for x, y in pts:
+        if 0 <= x < w and 0 <= y < h:
+            cv2.circle(img, (x, y), 3, color, -1)
+    for i, j in HAND_CONNECTIONS:
+        if i < len(pts) and j < len(pts):
+            x1, y1 = pts[i]
+            x2, y2 = pts[j]
+            if 0 <= x1 < w and 0 <= y1 < h and 0 <= x2 < w and 0 <= y2 < h:
+                cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+
 def color(value):
   digit = list(map(str, range(10))) + list("ABCDEF")
   value = value.upper()
@@ -185,7 +209,7 @@ class XGOEDU():
         self._label.setPixmap(self._canvas)
         self._label.show()
 
-        font_id = QFontDatabase.addApplicationFont("/home/pi/luwu-os/model/msyh.ttc")
+        font_id = QFontDatabase.addApplicationFont("/home/pi/luwu-os/apps/ai/msyh.ttc")
         families = QFontDatabase.applicationFontFamilies(font_id)
         self._font_family = families[0] if families else ""
 
@@ -196,9 +220,21 @@ class XGOEDU():
         self.face_classifier = None
         self.classifier = None
         self.agesexmark = None
+        self._emo_history = {}   # {label: count} 时序平滑
+        self._emo_smooth = 5      # 平滑窗口帧数
         self.camera_still = False
         self.picam2 = None
         self.camera_config = None
+
+        # ── Framebuffer 直接写入（绕过 QLabel，避免与 Launcher 窗口冲突）──
+        self._fb_fd = None
+        for fb_path in ("/dev/fb-spi", "/dev/fb1"):
+            try:
+                self._fb_fd = os.open(fb_path, os.O_RDWR)
+                print(f"[XGOEDU] framebuffer direct: {fb_path}")
+                break
+            except Exception as e:
+                print(f"[XGOEDU] fb open failed for {fb_path}: {e}")
 
         # ── gpio-keys 按键设备初始化 ──────────────────────────
         import evdev
@@ -237,11 +273,49 @@ class XGOEDU():
         return QColor('white')
 
     def _flush(self):
+        """刷新显示：优先直接写 framebuffer，绕过 QLabel 避免与 Launcher 窗口冲突"""
+        if self._fb_fd is not None:
+            try:
+                from PySide6.QtGui import QImage
+                import numpy as np
+                img = self._canvas.toImage().convertToFormat(QImage.Format.Format_RGB888)
+                mv = img.constBits()
+                arr = np.array(mv, dtype=np.uint8).reshape((240, 320, 3)).copy()
+                # RGB888 → RGB565
+                r = (arr[:, :, 0].astype(np.uint16) >> 3)
+                g = (arr[:, :, 1].astype(np.uint16) >> 2)
+                b = (arr[:, :, 2].astype(np.uint16) >> 3)
+                rgb565 = (r << 11) | (g << 5) | b
+                os.lseek(self._fb_fd, 0, os.SEEK_SET)
+                os.write(self._fb_fd, rgb565.tobytes())
+                return
+            except Exception as e:
+                print(f"[XGOEDU] fb flush failed: {e}")
+        # Fallback: QLabel
         self._label.setPixmap(self._canvas)
         self._app.processEvents()
 
     def _show_pil(self, img):
-        """PIL Image → QPixmap 显示"""
+        """PIL Image → framebuffer 直接显示"""
+        if self._fb_fd is not None:
+            try:
+                import numpy as np
+                arr = np.array(img.convert("RGB"))
+                if arr.shape[0] != 240 or arr.shape[1] != 320:
+                    from PIL import Image as PILImage
+                    img = img.resize((320, 240), PILImage.LANCZOS)
+                    arr = np.array(img.convert("RGB"))
+                # RGB888 → RGB565
+                r = (arr[:, :, 0].astype(np.uint16) >> 3)
+                g = (arr[:, :, 1].astype(np.uint16) >> 2)
+                b = (arr[:, :, 2].astype(np.uint16) >> 3)
+                rgb565 = (r << 11) | (g << 5) | b
+                os.lseek(self._fb_fd, 0, os.SEEK_SET)
+                os.write(self._fb_fd, rgb565.tobytes())
+                return
+            except Exception as e:
+                print(f"[XGOEDU] fb _show_pil failed: {e}")
+        # Fallback: QLabel
         import numpy as np
         from PySide6.QtGui import QImage, QPixmap
         arr = np.array(img.convert("RGB"))
@@ -263,7 +337,9 @@ class XGOEDU():
             self.picam2 = Picamera2()
             self.camera_config = self.picam2.create_preview_configuration(
                 main={"size": (320, 240), "format": "RGB888"},  # 强制指定RGB格式
-                transform=Transform(hflip=1, vflip=0)
+                # ⚠️ 不在硬件层做 hflip：AprilTag/QR/face/yolo 等识别算法对镜像方向敏感，硬件镜像会导致 0 候选。
+                # 显示侧若需要自拍视角，由调用方在显示前自行 flip。
+                transform=Transform(hflip=0, vflip=0)
             )
             self.picam2.configure(self.camera_config)
             self.picam2.start()
@@ -291,6 +367,14 @@ class XGOEDU():
             print("[XGOEDU] GPIO 已释放")
         except Exception as e:
             print(f"[XGOEDU] GPIO 释放异常: {e}")
+        # 关闭 framebuffer
+        if self._fb_fd is not None:
+            try:
+                os.close(self._fb_fd)
+                self._fb_fd = None
+                print("[XGOEDU] framebuffer 已关闭")
+            except Exception as e:
+                print(f"[XGOEDU] fb close 异常: {e}")
         # 重置单例状态，允许下次重新初始化
         XGOEDU._initialized = False
         XGOEDU._instance = None
@@ -690,9 +774,7 @@ class XGOEDU():
         if image is None:
             print('xgoTakePhoto: capture failed, image is None')
             return
-        # 镜像翻转（自拍模式）
-        image = cv2.flip(image, 1)
-        # 保存为JPEG
+        # 保存为JPEG（不再做软件镜像，open_camera 已不做 hflip）
         cv2.imwrite(path + filename , image)
         
         # 显示预览
@@ -779,15 +861,13 @@ class XGOEDU():
             if image is not None:
                 print(f'[xgoTakePhotoHD] 拍照成功, 图像尺寸: {image.shape}')
                 
-                # Picamera2 使用 RGB888 格式，hflip=0 时原始图像已经是正确方向，无需翻转
-                # 保存时需要转换为 BGR
-                image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                cv2.imwrite(photo_path, image_bgr)
+                # 保存（摄像头输出 BGR，imwrite 直接写即可）
+                cv2.imwrite(photo_path, image)
                 print(f'[xgoTakePhotoHD] 照片已保存: {photo_path}')
                 
-                # 缩放后显示预览（image 已经是 RGB 格式）
+                # 缩放后显示预览（转换 BGR→RGB 给 PIL）
                 preview = cv2.resize(image, (320, 240))
-                imgok = Image.fromarray(preview)
+                imgok = Image.fromarray(cv2.cvtColor(preview, cv2.COLOR_BGR2RGB))
                 self._show_pil(imgok)
                 
                 return photo_path
@@ -833,7 +913,7 @@ class XGOEDU():
         from PIL import Image, ImageDraw, ImageFont
         
         # 1. 初始化配置
-        font = ImageFont.truetype("/home/pi/luwu-os/model/msyh.ttc", 20)
+        font = ImageFont.truetype("/home/pi/luwu-os/apps/ai/msyh.ttc", 20)
         video_fps = 15
         preview_size = (320, 240)
         photo_path = f"/home/pi/xgoPictures/{filename}.jpg"
@@ -996,12 +1076,31 @@ class XGOEDU():
         # result: [bbox(2,2), landmarks(39,5), world_lm(39,3), mask, heatmap, conf]
         landmarks = result[1]  # shape (39, 5): x, y, z, visibility, presence
 
+        # 骨骼连接定义（MediaPipe 33 点 POSE_CONNECTIONS）
+        POSE_CONNECTIONS = [
+            (0, 1), (1, 2), (2, 3), (3, 7), (0, 4), (4, 5), (5, 6), (6, 8),
+            (9, 10), (11, 12), (11, 13), (13, 15), (15, 17), (15, 19), (15, 21),
+            (17, 19), (12, 14), (14, 16), (16, 18), (16, 20), (16, 22), (18, 20),
+            (11, 23), (12, 24), (23, 24), (23, 25), (24, 26), (25, 27), (26, 28),
+            (27, 29), (28, 30), (29, 31), (30, 32), (27, 31), (28, 32)
+        ]
+        GREEN = (0, 255, 0)
+        h, w = image_rgb.shape[:2]
+
+        # 绘制骨骼连线
+        for a, b in POSE_CONNECTIONS:
+            if (landmarks[a, 3] > 0.5 and landmarks[b, 3] > 0.5):
+                x1, y1 = int(landmarks[a, 0]), int(landmarks[a, 1])
+                x2, y2 = int(landmarks[b, 0]), int(landmarks[b, 1])
+                if 0 <= x1 < w and 0 <= y1 < h and 0 <= x2 < w and 0 <= y2 < h:
+                    cv2.line(image_rgb, (x1, y1), (x2, y2), GREEN, 2, cv2.LINE_AA)
+
         # 绘制关键点
         for i in range(33):
             x, y = int(landmarks[i, 0]), int(landmarks[i, 1])
             vis = landmarks[i, 3]
-            if vis > 0.5 and 0 <= x < image_rgb.shape[1] and 0 <= y < image_rgb.shape[0]:
-                cv2.circle(image_rgb, (x, y), 3, (255, 255, 255), -1)
+            if vis > 0.5 and 0 <= x < w and 0 <= y < h:
+                cv2.circle(image_rgb, (x, y), 3, GREEN, -1)
 
         # 计算关节角度（与原 mediapipe 版本相同的关节组合）
         joint_list = [[24, 26, 28], [23, 25, 27], [14, 12, 24], [13, 11, 23]]
@@ -1015,7 +1114,6 @@ class XGOEDU():
             angle = np.abs(radians * 180.0 / np.pi)
             angellist.append(angle if angle <= 180 else 360 - angle)
 
-        image_rgb = cv2.flip(image_rgb, 1)
         if angellist:
             ges = '|'.join(str(int(a)) for a in angellist[:4])
             cv2.putText(image_rgb, ges, (10, 220),
@@ -1028,145 +1126,47 @@ class XGOEDU():
     '''
     def gestureRecognition(self, target="camera"):
         ges = ''
-        # 优化手势识别参数，提高检测精度
+        center = (0, 0)
         if self.hand is None:
-            self.hand = hands(1, 2, 0.7, 0.7)  # 提高检测和跟踪置信度
-        
-        # 图像采集优化
+            self.hand = hands(1, 2, 0.7, 0.7)
+
         if target == "camera":
             self.open_camera()
-            time.sleep(0.5)  # 给摄像头稳定时间
-            # 多帧采集，提高稳定性
-            stable_image = None
-            for _ in range(3):
-                frame = self.picam2.capture_array()
-                if stable_image is None:
-                    stable_image = frame
-                time.sleep(0.1)
-            image = cv2.cvtColor(stable_image, cv2.COLOR_BGR2RGB)
+            time.sleep(0.3)
+            image_bgr = self.picam2.capture_array()
+            if image_bgr is None:
+                return None
         else:
             path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
-            image = np.array(Image.open(path + target).convert('RGB'))
-        
-        # 图像预处理优化 - 提高识别准确性
-        # 1. 降噪处理
-        image = cv2.bilateralFilter(image, 9, 75, 75)
-        # 2. 对比度增强
-        lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        l = clahe.apply(l)
-        image = cv2.merge([l, a, b])
-        image = cv2.cvtColor(image, cv2.COLOR_LAB2RGB)
-        
-        # 水平镜像（自拍模式）
-        image = cv2.flip(image, 1)
-        
-        # 手势识别优化 - 多次检测取最稳定结果
-        best_data = None
-        best_confidence = 0
-        
-        # 尝试3次检测，选择最佳结果
-        for attempt in range(3):
-            try:
-                # 轻微变换图像角度提高检测率
-                if attempt == 1:
-                    # 轻微旋转
-                    rows, cols = image.shape[:2]
-                    M = cv2.getRotationMatrix2D((cols/2, rows/2), 2, 1)
-                    test_image = cv2.warpAffine(image, M, (cols, rows))
-                elif attempt == 2:
-                    # 轻微缩放
-                    test_image = cv2.resize(image, None, fx=1.1, fy=1.1)
-                    test_image = cv2.resize(test_image, (image.shape[1], image.shape[0]))
-                else:
-                    test_image = image.copy()
-                
-                datas = self.hand.run(cv2.cvtColor(test_image, cv2.COLOR_RGB2BGR))
-                
-                if datas:
-                    for data in datas:
-                        # 计算手势置信度（基于手部区域大小和关键点质量）
-                        rect = data['rect']
-                        dlandmark = data['dlandmark']
-                        
-                        # 手部区域大小合理性检查
-                        area = rect[2] * rect[3]
-                        if area < 1000 or area > 50000:  # 过小或过大的区域可能不准确
-                            continue
-                            
-                        # 关键点质量检查
-                        if len(dlandmark) < 20:  # MediaPipe手部模型有21个关键点
-                            continue
-                            
-                        # 计算手势角度的稳定性
-                        hand_angle = data['hand_angle']
-                        if not hand_angle or len(hand_angle) != 5:
-                            continue
-                            
-                        # 简单的置信度评分
-                        confidence = area / 10000.0  # 基于区域大小
-                        confidence += len(dlandmark) / 21.0  # 基于关键点完整性
-                        
-                        if confidence > best_confidence:
-                            best_confidence = confidence
-                            best_data = data
-                            
-            except Exception as e:
-                continue
-        
-        # 使用最佳检测结果进行绘制
-        if best_data:
-            data = best_data
-            rect = data['rect']
-            right_left = data['right_left']
-            center = data['center']
-            dlandmark = data['dlandmark']
-            hand_angle = data['hand_angle']
-            
-            # 手势角度后处理 - 平滑化处理
-            smoothed_angles = []
-            for angle in hand_angle:
-                # 角度范围限制和平滑
-                if angle < 0:
-                    angle = 0
-                elif angle > 180:
-                    angle = 180
-                smoothed_angles.append(angle)
-            
-            # 绘制手部区域
-            cv2.rectangle(image, 
-                         (rect[0], rect[1]),
-                         (rect[0]+rect[2], rect[1]+rect[3]),
-                         (51, 204, 0), 2)  # RGB格式的绿色
-            
-            # 显示手势结果
-            ges = hand_pos(smoothed_angles)
-            if ges:  # 只有识别到有效手势才显示
-                text_pos = (180, 80) if right_left == 'L' else (50, 80)
-                color = (51, 204, 0) if right_left == 'L' else (255, 0, 0)
-                cv2.putText(image, ges, text_pos,
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-                
-                # 显示置信度
-                conf_text = f"Conf: {best_confidence:.2f}"
-                cv2.putText(image, conf_text, (text_pos[0], text_pos[1] + 25),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-            
-            # 绘制关键点（只绘制重要的关键点）
-            important_points = [0, 4, 8, 12, 16, 20]  # 指尖和手腕
-            for i, point in enumerate(dlandmark):
-                if i in important_points:
-                    cv2.circle(image, (int(point[0]), int(point[1])),
-                              4, (255, 153, 0), -1)  # RGB格式的橙色
-                else:
-                    cv2.circle(image, (int(point[0]), int(point[1])),
-                              2, (255, 204, 153), -1)  # 淡橙色
-        
-        # 显示结果
-        imgok = Image.fromarray(image)  # PIL需要RGB格式
+            image_bgr = cv2.imread(path + target)
+            if image_bgr is None:
+                return None
+
+        # 单次 ONNX 推理（hands.run 需要 BGR 输入）
+        datas = self.hand.run(image_bgr)
+
+        # 转为 RGB 用于显示
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+        if datas:
+            for data in datas:
+                pts = data['dlandmark']
+                center = data['center']
+                # 绘制手部骨架（21个关键点 + 连接线）
+                draw_hand_landmarks(image_rgb, pts, color=(0, 255, 0), thickness=2)
+                # 手势识别
+                g = hand_pos(data['hand_angle'])
+                if g:
+                    ges = g
+
+        # 绘制手势名称（与 main.py 一致的显示风格）
+        if ges:
+            cv2.putText(image_rgb, ges, (10, 40),
+                        cv2.FONT_HERSHEY_COMPLEX, 1.2, (0, 255, 0), 2)
+
+        imgok = Image.fromarray(image_rgb)
         self._show_pil(imgok)
-        
+
         return (ges, center) if ges else None
     '''
     yolo
@@ -1175,7 +1175,7 @@ class XGOEDU():
         ret=''
         self.open_camera()
         if self.yolo==None:
-            self.yolo = yoloXgo('/home/pi/luwu-os/model/Model.onnx',
+            self.yolo = yoloXgo('/home/pi/luwu-os/model/yolo_coco.onnx',
             ['person','bicycle','car','motorbike','aeroplane','bus','train','truck','boat','traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack','umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','sofa','pottedplant','bed','diningtable','toilet','tvmonitor','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'],
             [352,352],0.66)
         if target=="camera":
@@ -1184,21 +1184,20 @@ class XGOEDU():
             if image is None:
                 print("摄像头读取帧失败")
                 return None
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 如果需要RGB格式
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 转为 RGB 供 ONNX 推理
+            image_for_yolo = image
         else:
-            image=np.array(Image.open(target))
-        datas = self.yolo.run(image)
-        b,g,r = cv2.split(image)
-        image = cv2.merge((r,g,b))
-        image = cv2.flip(image,1)
+            image_for_yolo = np.array(Image.open(target))  # PIL 直接 RGB
+            image = cv2.cvtColor(image_for_yolo, cv2.COLOR_RGB2BGR)  # OpenCV 绘制需要 BGR
+        datas = self.yolo.run(image_for_yolo)
         if datas:
             for data in datas:
-                XGOEDU.rectangle(self,image,data['xywh'],"#33cc00",2)
-                xy= (data['xywh'][0], data['xywh'][1])
-                XGOEDU.text(self,image,data['classes'],xy,1,"#ff0000",2)
+                XGOEDU.rectangle(self, image, data['xywh'], "#33cc00", 2)
+                xy = (data['xywh'][0], data['xywh'][1])
+                XGOEDU.text(self, image, data['classes'], xy, 1, "#ff0000", 2)
                 value_yolo = data['classes']
-                ret=(value_yolo,xy)
-        imgok = Image.fromarray(image)
+                ret = (value_yolo, xy)
+        imgok = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         self._show_pil(imgok)
         if ret=='':
             return None
@@ -1214,15 +1213,15 @@ class XGOEDU():
             self.face = face_detection(0.7)
         if target=="camera":
             self.open_camera()
-            image = self.picam2.capture_array()
+            image = self.picam2.capture_array()  # BGR
             if image is None:
                 print("摄像头读取帧失败")
                 return None
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 如果需要RGB格式    
+            image_for_detect = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # face.run 需要 RGB
         else:
-            image=np.array(Image.open(target))
-        image = cv2.flip(image,1)
-        datas = self.face.run(image)
+            image_for_detect = np.array(Image.open(target))  # PIL 直接 RGB
+            image = cv2.cvtColor(image_for_detect, cv2.COLOR_RGB2BGR)  # OpenCV 绘制需要 BGR
+        datas = self.face.run(image_for_detect)
         for data in datas:
             lefteye = str(data['left_eye'])
             righteye = str(data['right_eye'])
@@ -1230,19 +1229,19 @@ class XGOEDU():
             mouth = str(data['mouth'])
             leftear = str(data['left_ear'])
             rightear = str(data['right_ear'])
-            cv2.putText(image,'lefteye',(10,30),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,0,0),2)
-            cv2.putText(image,lefteye,(100,30),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,0,0),2)
-            cv2.putText(image,'righteye',(10,50),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,255,0),2)
-            cv2.putText(image,righteye,(100,50),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,255,0),2)
-            cv2.putText(image,'nose',(10,70),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,0,255),2)
-            cv2.putText(image,nose,(100,70),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,0,255),2)
-            cv2.putText(image,'leftear',(10,90),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,255,0),2)
-            cv2.putText(image,leftear,(100,90),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,255,0),2)
-            cv2.putText(image,'rightear',(10,110),cv2.FONT_HERSHEY_SIMPLEX,0.7,(200,0,200),2)
-            cv2.putText(image,rightear,(100,110),cv2.FONT_HERSHEY_SIMPLEX,0.7,(200,0,200),2)
-            XGOEDU.rectangle(self,image,data['rect'],"#33cc00",2)
-            ret=data['rect']
-        imgok = Image.fromarray(image)
+            cv2.putText(image, 'lefteye', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            cv2.putText(image, lefteye, (100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            cv2.putText(image, 'righteye', (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(image, righteye, (100, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(image, 'nose', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(image, nose, (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(image, 'leftear', (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+            cv2.putText(image, leftear, (100, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+            cv2.putText(image, 'rightear', (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 0, 200), 2)
+            cv2.putText(image, rightear, (100, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 0, 200), 2)
+            XGOEDU.rectangle(self, image, data['rect'], "#33cc00", 2)
+            ret = data['rect']
+        imgok = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         self._show_pil(imgok)
         if ret=='':
             return None
@@ -1252,37 +1251,27 @@ class XGOEDU():
     '''
     情绪识别
     '''
-    def emotion(self, target="camera"):
-        '''情绪识别 - 使用 onnxruntime + FER+ 替代 TensorFlow/Keras'''
+    def emotion(self, target="camera", min_confidence=0.4):
+        '''情绪识别 - 使用 onnxruntime + emotion.onnx (RGB/NCHW/260x260/7类)
+        min_confidence: 最低置信度阈值 (0~1)，低于此值沿用上一帧结果
+        '''
         import onnxruntime as ort
-        EMOTION_MODEL = '/home/pi/luwu-os/model/emotion-ferplus-8.onnx'
-        # FER+ 输出 8 个情绪类别
-        FERPLUS_LABELS = ['Neutral', 'Happiness', 'Surprise', 'Sadness',
-                          'Anger', 'Disgust', 'Fear', 'Contempt']
-        # 映射到原五类别接口
+        EMOTION_MODEL = '/home/pi/luwu-os/model/emotion.onnx'
+        EMOTION_LABELS = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
         LABEL_MAP = {
-            'Neutral': 'Neutral', 'Happiness': 'Happy',  'Surprise': 'Surprise',
-            'Sadness': 'Sad',     'Anger': 'Angry',       'Disgust': 'Angry',
-            'Fear': 'Neutral',    'Contempt': 'Neutral',
+            'Angry': 'Angry', 'Disgust': 'Angry', 'Fear': 'Neutral',
+            'Happy': 'Happy', 'Sad': 'Sad', 'Surprise': 'Surprise',
+            'Neutral': 'Neutral',
         }
         ret = ''
         if self.classifier is None:
             if not os.path.exists(EMOTION_MODEL):
                 print(f'[emotion] 缺少情绪模型文件: {EMOTION_MODEL}')
                 return None
-            # 查找 haar cascade 文件
-            haar_candidates = [
-                '/home/pi/luwu-os/model/haarcascade_frontalface_default.xml',
-                '/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml',
-                cv2.data.haarcascades + 'haarcascade_frontalface_default.xml',
-            ]
-            haar_file = next((p for p in haar_candidates if os.path.exists(p)), None)
-            if haar_file is None:
-                print('[emotion] 找不到 haarcascade_frontalface_default.xml')
-                return None
-            self.face_classifier = cv2.CascadeClassifier(haar_file)
+            self.face_detector = face_detection(min_detection_confidence=0.7)
             self.classifier = ort.InferenceSession(EMOTION_MODEL)
             self._emo_input = self.classifier.get_inputs()[0].name
+            self._emo_last_label = 'Neutral'
 
         if target == "camera":
             self.open_camera()
@@ -1294,35 +1283,61 @@ class XGOEDU():
         else:
             image = np.array(Image.open(target))
 
-        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        faces = self.face_classifier.detectMultiScale(gray, 1.3, 5)
+        # YuNet 人脸检测
+        image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        faces = self.face_detector.run(image_bgr)
+        image_disp = image_bgr.copy()
+
         label = ''
+        raw_label = ''
+        conf = 0.0
 
-        for (x, y, w, h) in faces:
-            cv2.rectangle(image, (x, y), (x+w, y+h), (255, 0, 0), 2)
-            roi_gray = gray[y:y+h, x:x+w]
-            roi_gray = cv2.resize(roi_gray, (64, 64), interpolation=cv2.INTER_AREA)
+        for face in faces:
+            x, y, w, h = face['rect']
+            x2 = min(image.shape[1], x + w)
+            y2 = min(image.shape[0], y + h)
+            face_img = image[y:y2, x:x2]
 
-            if np.sum([roi_gray]) != 0:
-                # FER+ 期望输入：[1, 1, 64, 64] float32
-                roi_f = roi_gray.astype(np.float32) / 255.0
-                roi_f = roi_f[np.newaxis, np.newaxis, :, :]
-                preds = self.classifier.run(None, {self._emo_input: roi_f})[0][0]
-                ferplus_label = FERPLUS_LABELS[int(np.argmax(preds))]
-                label = LABEL_MAP.get(ferplus_label, 'Neutral')
-                label_position = (x, y)
-                ret = (label, (x, y))
+            # 预处理: RGB, resize 260x260, HWC→CHW, /255
+            face_resized = cv2.resize(face_img, (260, 260))
+            face_input = face_resized.astype(np.float32) / 255.0
+            face_input = np.transpose(face_input, (2, 0, 1))
+            face_input = face_input[np.newaxis, :, :, :]
+
+            preds = self.classifier.run(None, {self._emo_input: face_input})[0][0]
+            # softmax 获取置信度
+            exp_preds = np.exp(preds - np.max(preds))
+            probs = exp_preds / exp_preds.sum()
+            top_idx = int(np.argmax(probs))
+            conf = float(probs[top_idx])
+            raw_label = EMOTION_LABELS[top_idx]
+            label = LABEL_MAP.get(raw_label, 'Neutral')
+
+            # 时序平滑: 最近 N 帧投票决定最终结果
+            if not hasattr(self, '_emo_buffer'):
+                from collections import deque
+                self._emo_buffer = deque(maxlen=self._emo_smooth)
+            self._emo_buffer.append(label)
+
+            # 统计最近帧中最多的标签
+            if len(self._emo_buffer) >= 3:
+                vote_label = max(set(self._emo_buffer), key=self._emo_buffer.count)
             else:
-                label = 'No Face Found'
+                vote_label = label
 
-            try:
-                cv2.putText(image, label, label_position,
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
-            except:
-                pass
+            # 投票结果只有当置信度够高才采纳，否则沿用上次
+            if conf >= min_confidence:
+                self._emo_last_label = vote_label
+            display_label = self._emo_last_label
 
-        image = cv2.flip(image, 1)
-        imgok = Image.fromarray(image)
+            # 显示标签 + 置信度
+            text = f"{display_label} {conf:.0%}"
+            cv2.putText(image_disp, text, (x, y - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.rectangle(image_disp, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            ret = (display_label, (x, y))
+
+        imgok = Image.fromarray(cv2.cvtColor(image_disp, cv2.COLOR_BGR2RGB))
         self._show_pil(imgok)
 
         if ret == '':
@@ -1330,15 +1345,26 @@ class XGOEDU():
         else:
             return ret
     '''
-    年纪及性别检测
+    年纪及性别检测 - 使用 onnxruntime + gender_age.onnx + YuNet 人脸检测
+    模型: NCHW 输入 [1,3,96,96] raw RGB [0,255], 输出 [1,3] (gender_score, -gender_score, age_feature)
     '''
     def agesex(self, target="camera"):
-        ret = ''
-        MODEL_MEAN_VALUES = (78.4263377603, 87.7689143744, 114.895847746)
+        import onnxruntime as ort
+        AGESEX_MODEL = '/home/pi/luwu-os/model/gender_age.onnx'
         ageList = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
         genderList = ['Male', 'Female']
         padding = 20
-        
+        ret = ''
+
+        if self.agesexmark is None:
+            if not os.path.exists(AGESEX_MODEL):
+                print(f'[agesex] 缺少模型文件: {AGESEX_MODEL}')
+                return None
+            self.face_detector = face_detection(min_detection_confidence=0.7)
+            self.agesex_session = ort.InferenceSession(AGESEX_MODEL)
+            self._agesex_input = self.agesex_session.get_inputs()[0].name
+            self.agesexmark = True
+
         if target == "camera":
             self.open_camera()
             image = self.picam2.capture_array()
@@ -1348,45 +1374,51 @@ class XGOEDU():
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         else:
             image = np.array(Image.open(target))
-        
-        if self.agesexmark == None:
-            faceProto = "/home/pi/luwu-os/model/opencv_face_detector.pbtxt"
-            faceModel = "/home/pi/luwu-os/model/opencv_face_detector_uint8.pb"
-            ageProto = "/home/pi/luwu-os/model/age_deploy.prototxt"
-            ageModel = "/home/pi/luwu-os/model/age_net.caffemodel"
-            genderProto = "/home/pi/luwu-os/model/gender_deploy.prototxt"
-            genderModel = "/home/pi/luwu-os/model/gender_net.caffemodel"
-            self.ageNet = cv2.dnn.readNet(ageModel, ageProto)
-            self.genderNet = cv2.dnn.readNet(genderModel, genderProto)
-            self.faceNet = cv2.dnn.readNet(faceModel, faceProto)
-            self.agesexmark = True
-    
-        image = cv2.flip(image, 1)
-        frameFace, bboxes = getFaceBox(self.faceNet, image)
+
+        # YuNet 人脸检测 (需要 BGR 输入)
+        image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        faces = self.face_detector.run(image_bgr)
+        image_disp = image_bgr.copy()
+
         gender = ''
         age = ''
-        
-        for bbox in bboxes:
-            face = image[max(0, bbox[1]-padding):min(bbox[3]+padding, image.shape[0]-1),
-                        max(0, bbox[0]-padding):min(bbox[2]+padding, image.shape[1]-1)]
-            blob = cv2.dnn.blobFromImage(face, 1.0, (227, 227), MODEL_MEAN_VALUES, swapRB=False)
-            
-            self.genderNet.setInput(blob)
-            genderPreds = self.genderNet.forward()
-            gender = genderList[genderPreds[0].argmax()]
-            
-            self.ageNet.setInput(blob)
-            agePreds = self.ageNet.forward()
-            age = ageList[agePreds[0].argmax()]
-            
+
+        for face in faces:
+            x, y, w, h = face['rect']
+            # 裁剪人脸区域（带 padding）
+            x1 = max(0, x - padding)
+            y1 = max(0, y - padding)
+            x2 = min(image.shape[1], x + w + padding)
+            y2 = min(image.shape[0], y + h + padding)
+            face_img = image[y1:y2, x1:x2]
+
+            # 预处理: RGB raw [0,255], resize 96x96, HWC→CHW (NCHW)
+            face_resized = cv2.resize(face_img, (96, 96))
+            face_input = face_resized.astype(np.float32)  # raw [0,255]
+            face_input = np.transpose(face_input, (2, 0, 1))  # HWC → CHW
+            face_input = face_input[np.newaxis, :, :, :]  # [1, 3, 96, 96]
+
+            outputs = self.agesex_session.run(None, {self._agesex_input: face_input})
+            pred = outputs[0][0]  # [gender_score, -gender_score, age_feature]
+
+            # 性别: pred[0] > 0 → Male, < 0 → Female
+            gender = genderList[0] if pred[0] > 0 else genderList[1]
+
+            # 年龄: 从 pred[2] 估算，映射到年龄段
+            age_val = float(pred[2]) * 100  # 粗略映射到 0-100 岁
+            age_centers = [1, 5, 10, 17.5, 28.5, 40.5, 50.5, 80]
+            closest_idx = min(range(len(age_centers)), key=lambda i: abs(age_centers[i] - age_val))
+            age = ageList[closest_idx]
+
             label = "{},{}".format(gender, age)
-            cv2.putText(frameFace, label, (bbox[0], bbox[1]-10), 
+            cv2.putText(image_disp, label, (x, y - 10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2, cv2.LINE_AA)
-            ret = (gender, age, (bbox[0], bbox[1]))
-        
-        imgok = Image.fromarray(frameFace)
+            cv2.rectangle(image_disp, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            ret = (gender, age, (x, y))
+
+        imgok = Image.fromarray(cv2.cvtColor(image_disp, cv2.COLOR_BGR2RGB))
         self._show_pil(imgok)
-        
+
         if ret == '':
             return None
         else:
@@ -1521,71 +1553,70 @@ class XGOEDU():
             img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(img)
         fontStyle = ImageFont.truetype(
-            "/home/pi/luwu-os/model/msyh.ttc", textSize, encoding="utf-8")
+            "/home/pi/luwu-os/apps/ai/msyh.ttc", textSize, encoding="utf-8")
         draw.text(position, text, textColor, font=fontStyle)
         return cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
     
     def AprilTagRecognition(self, target="camera"):
         """
-        AprilTag码识别（使用OpenCV aruco模块）
+        AprilTag码识别（OpenCV aruco 模块）
         返回: 识别到的第一个Tag ID，没有则返回None
         """
+        # 缓存 detector 参数（参数不变，避免每次重复创建）
+        if not hasattr(self, '_apriltag_params'):
+            params = cv2.aruco.DetectorParameters()
+            params.adaptiveThreshWinSizeMin = 3
+            params.adaptiveThreshWinSizeMax = 53
+            params.adaptiveThreshWinSizeStep = 4
+            params.minMarkerPerimeterRate = 0.02
+            params.polygonalApproxAccuracyRate = 0.08
+            params.errorCorrectionRate = 0.8
+            self._apriltag_params = params
+            self._apriltag_dicts = [
+                cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11),
+                cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_25h9),
+                cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_16h5),
+            ]
+
         if target == "camera":
             self.open_camera()
             image = self.picam2.capture_array()
             if image is None:
-                print("摄像头读取帧失败")
                 return None
-            # open_camera 使用 hflip=1，AprilTag 需要原始方向，翻转回来
-            image = cv2.flip(image, 1)
         else:
-            path = "/home/pi/xgoPictures/"
+            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
             image = np.array(Image.open(path + target).convert('RGB'))
-        
-        # 转为灰度图
-        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        
-        # 支持多种AprilTag字典
-        apriltag_dicts = [
-            cv2.aruco.DICT_APRILTAG_36h11,
-            cv2.aruco.DICT_APRILTAG_25h9,
-            cv2.aruco.DICT_APRILTAG_16h5,
-            cv2.aruco.DICT_APRILTAG_36h10
-        ]
-        
-        # 创建检测参数
-        parameters = cv2.aruco.DetectorParameters()
-        
-        result = None
-        for dict_type in apriltag_dicts:
-            aruco_dict = cv2.aruco.getPredefinedDictionary(dict_type)
-            corners, ids, rejected = cv2.aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
-            
+
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        # 逐个字典检测，找到第一个就停
+        ids, corners = None, None
+        for aruco_dict in self._apriltag_dicts:
+            detector = cv2.aruco.ArucoDetector(aruco_dict, self._apriltag_params)
+            corners, ids, _ = detector.detectMarkers(gray)
             if ids is not None:
-                for i, corner in enumerate(corners):
-                    tag_id = ids[i][0]
-                    pts = corner[0].astype(int)
-                    
-                    # 绘制边框
-                    for j in range(4):
-                        pt1 = tuple(pts[j])
-                        pt2 = tuple(pts[(j + 1) % 4])
-                        cv2.line(image, pt1, pt2, (0, 255, 0), 2)
-                    
-                    # 绘制中心点
-                    center = pts.mean(axis=0).astype(int)
-                    cv2.circle(image, tuple(center), 5, (255, 0, 0), -1)
-                    cv2.putText(image, f"ID:{tag_id}", (center[0] - 20, center[1] - 20),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-                    
-                    if result is None:
-                        result = tag_id
-                break  # 找到就退出
-        
-        # 显示（cv2.flip 已恢复原始方向）
+                break
+
+        result = None
+        if ids is not None:
+            for i in range(len(ids)):
+                tag_id = int(ids[i][0])
+                pts = corners[i][0].astype(int)
+                for j in range(4):
+                    pt1 = tuple(pts[j])
+                    pt2 = tuple(pts[(j + 1) % 4])
+                    cv2.line(image, pt1, pt2, (0, 255, 0), 2)
+                center = pts.mean(axis=0).astype(int)
+                cv2.circle(image, tuple(center), 5, (255, 0, 0), -1)
+                cv2.putText(image, f"ID:{tag_id}", (int(center[0]) - 20, int(center[1]) - 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+                if result is None:
+                    result = tag_id
+
+        if target == "camera":
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         imgok = Image.fromarray(image)
         self._show_pil(imgok)
-        
         return result
 
     def AprilTagDetection(self, marker_length=5, target="camera"):
@@ -1604,22 +1635,6 @@ class XGOEDU():
         except ImportError:
             from camera_calibration import load_calibration
 
-        if target == "camera":
-            self.open_camera()
-            image = self.picam2.capture_array()
-            if image is None:
-                return None
-            # open_camera 使用 hflip=1，AprilTag 需要原始方向，翻转回来
-            image = cv2.flip(image, 1)
-        else:
-            path = "/home/pi/xgoPictures/"
-            image = np.array(Image.open(path + target).convert('RGB'))
-
-        print(f'[AprilTagDetection] image shape: {image.shape}, dtype: {image.dtype}')
-
-        # image 已是正确显示方向（软件 flip 过），直接用于检测和显示
-        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-
         # AprilTag 字典及其名称映射
         apriltag_dicts = [
             (cv2.aruco.DICT_APRILTAG_36h11, "tag36h11"),
@@ -1629,6 +1644,13 @@ class XGOEDU():
         ]
 
         parameters = cv2.aruco.DetectorParameters()
+        # 调松参数，提升小标签和模糊场景下的识别率
+        parameters.adaptiveThreshWinSizeMin = 3
+        parameters.adaptiveThreshWinSizeMax = 53
+        parameters.adaptiveThreshWinSizeStep = 4
+        parameters.minMarkerPerimeterRate = 0.02
+        parameters.polygonalApproxAccuracyRate = 0.08
+        parameters.errorCorrectionRate = 0.8
 
         # 加载标定参数
         camera_matrix, dist_coeffs = load_calibration()
@@ -1636,85 +1658,122 @@ class XGOEDU():
         # marker_length 从厘米转为米
         marker_length_meters = marker_length / 100.0
 
+        if target == "camera":
+            self.open_camera()
+            # 多帧重试提升识别率（单帧可能模糊/曝光不佳）
+            ids = None
+            corners = None
+            matched_family = None
+            image = None
+            for _ in range(2):
+                image = self.picam2.capture_array()
+                if image is None:
+                    continue
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                for dict_type, family_name in apriltag_dicts:
+                    aruco_dict = cv2.aruco.getPredefinedDictionary(dict_type)
+                    detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
+                    corners, ids, rejected = detector.detectMarkers(gray)
+                    if ids is not None:
+                        matched_family = family_name
+                        break
+                if ids is not None:
+                    break
+            if image is None:
+                return None
+        else:
+            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            image = np.array(Image.open(path + target).convert('RGB'))
+            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            ids = None
+            corners = None
+            matched_family = None
+            for dict_type, family_name in apriltag_dicts:
+                aruco_dict = cv2.aruco.getPredefinedDictionary(dict_type)
+                detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
+                corners, ids, rejected = detector.detectMarkers(gray)
+                if ids is not None:
+                    matched_family = family_name
+                    break
+
+        print(f'[AprilTagDetection] image shape: {image.shape}, dtype: {image.dtype}')
+
         result = None
-        for dict_type, family_name in apriltag_dicts:
-            aruco_dict = cv2.aruco.getPredefinedDictionary(dict_type)
-            corners, ids, rejected = cv2.aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+        if ids is not None:
+            for i, corner in enumerate(corners):
+                tag_id = int(ids[i][0])
+                pts = corner[0].astype(int)
 
-            if ids is not None:
-                for i, corner in enumerate(corners):
-                    tag_id = int(ids[i][0])
-                    pts = corner[0].astype(int)
+                # 绘制边框
+                for j in range(4):
+                    pt1 = tuple(pts[j])
+                    pt2 = tuple(pts[(j + 1) % 4])
+                    cv2.line(image, pt1, pt2, (0, 255, 0), 2)
 
-                    # 绘制边框
-                    for j in range(4):
-                        pt1 = tuple(pts[j])
-                        pt2 = tuple(pts[(j + 1) % 4])
-                        cv2.line(image, pt1, pt2, (0, 255, 0), 2)
+                # 绘制中心点
+                center = pts.mean(axis=0).astype(int)
+                cv2.circle(image, tuple(center), 5, (255, 0, 0), -1)
 
-                    # 绘制中心点
-                    center = pts.mean(axis=0).astype(int)
-                    cv2.circle(image, tuple(center), 5, (255, 0, 0), -1)
+                # 位姿估计：使用 solvePnP 替代已废弃的 estimatePoseSingleMarkers
+                half = marker_length_meters / 2.0
+                obj_points = np.array([
+                    [-half,  half, 0],
+                    [ half,  half, 0],
+                    [ half, -half, 0],
+                    [-half, -half, 0]
+                ], dtype=np.float32)
+                success, rvec, tvec = cv2.solvePnP(
+                    obj_points, corner[0], camera_matrix, dist_coeffs
+                )
+                if not success:
+                    continue
+                rvec = rvec.flatten()
+                tvec = tvec.flatten()
 
-                    # 位姿估计：使用 solvePnP 替代已废弃的 estimatePoseSingleMarkers
-                    half = marker_length_meters / 2.0
-                    obj_points = np.array([
-                        [-half,  half, 0],
-                        [ half,  half, 0],
-                        [ half, -half, 0],
-                        [-half, -half, 0]
-                    ], dtype=np.float32)
-                    success, rvec, tvec = cv2.solvePnP(
-                        obj_points, corner[0], camera_matrix, dist_coeffs
-                    )
-                    if not success:
-                        continue
-                    rvec = rvec.flatten()
-                    tvec = tvec.flatten()
+                # 旋转向量 → 旋转矩阵 → 欧拉角
+                R, _ = cv2.Rodrigues(rvec)
+                sy = math.sqrt(R[0, 0] ** 2 + R[1, 0] ** 2)
+                singular = sy < 1e-6
+                if not singular:
+                    x_rot = math.atan2(R[2, 1], R[2, 2])
+                    y_rot = math.atan2(-R[2, 0], sy)
+                    z_rot = math.atan2(R[1, 0], R[0, 0])
+                else:
+                    x_rot = math.atan2(-R[1, 2], R[1, 1])
+                    y_rot = math.atan2(-R[2, 0], sy)
+                    z_rot = 0
 
-                    # 旋转向量 → 旋转矩阵 → 欧拉角
-                    R, _ = cv2.Rodrigues(rvec)
-                    sy = math.sqrt(R[0, 0] ** 2 + R[1, 0] ** 2)
-                    singular = sy < 1e-6
-                    if not singular:
-                        x_rot = math.atan2(R[2, 1], R[2, 2])
-                        y_rot = math.atan2(-R[2, 0], sy)
-                        z_rot = math.atan2(R[1, 0], R[0, 0])
-                    else:
-                        x_rot = math.atan2(-R[1, 2], R[1, 1])
-                        y_rot = math.atan2(-R[2, 0], sy)
-                        z_rot = 0
+                # 弧度转角度
+                x_deg = round(x_rot * 180.0 / math.pi, 2)
+                y_deg = round(y_rot * 180.0 / math.pi, 2)
+                z_deg = round(z_rot * 180.0 / math.pi, 2)
 
-                    # 弧度转角度
-                    x_deg = round(x_rot * 180.0 / math.pi, 2)
-                    y_deg = round(y_rot * 180.0 / math.pi, 2)
-                    z_deg = round(z_rot * 180.0 / math.pi, 2)
+                # 米转厘米
+                x_cm = round(tvec[0] * 100.0, 2)
+                y_cm = round(tvec[1] * 100.0, 2)
+                z_cm = round(tvec[2] * 100.0, 2)
 
-                    # 米转厘米
-                    x_cm = round(tvec[0] * 100.0, 2)
-                    y_cm = round(tvec[1] * 100.0, 2)
-                    z_cm = round(tvec[2] * 100.0, 2)
+                # 在图像上显示位姿信息
+                info_text = f"ID:{tag_id} X:{x_cm} Y:{y_cm} Z:{z_cm}cm"
+                cv2.putText(image, info_text,
+                            (center[0] - 60, center[1] - 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
 
-                    # 在图像上显示位姿信息
-                    info_text = f"ID:{tag_id} X:{x_cm} Y:{y_cm} Z:{z_cm}cm"
-                    cv2.putText(image, info_text,
-                                (center[0] - 60, center[1] - 20),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
+                if result is None:
+                    result = {
+                        "tag_id": tag_id,
+                        "tag_family": matched_family,
+                        "x_translation": x_cm,
+                        "y_translation": y_cm,
+                        "z_translation": z_cm,
+                        "x_rotation": x_deg,
+                        "y_rotation": y_deg,
+                        "z_rotation": z_deg,
+                    }
 
-                    if result is None:
-                        result = {
-                            "tag_id": tag_id,
-                            "tag_family": family_name,
-                            "x_translation": x_cm,
-                            "y_translation": y_cm,
-                            "z_translation": z_cm,
-                            "x_rotation": x_deg,
-                            "y_rotation": y_deg,
-                            "z_rotation": z_deg,
-                        }
-                break  # 找到就退出
-
-        # 显示（已是 320x240，无需缩放）
+        # 摄像头输出为BGR，需转换为RGB后显示
+        if target == "camera":
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         imgok = Image.fromarray(image)
         self._show_pil(imgok)
 
@@ -1733,9 +1792,8 @@ class XGOEDU():
                 image = self.picam2.capture_array()
                 if image is None:
                     continue
-                # open_camera 使用 hflip=1，QR码需要原始方向才能正确解码
-                image = cv2.flip(image, 1)
                 # 灰度化提升 pyzbar 识别率
+
                 gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
                 barcodes = pyzbar.decode(gray)
                 if barcodes:
@@ -1744,7 +1802,7 @@ class XGOEDU():
                 print("摄像头读取帧失败")
                 return None
         else:
-            path = "/home/pi/xgoPictures/"
+            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
             image = np.array(Image.open(path + target))
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             barcodes = pyzbar.decode(gray)
@@ -2159,51 +2217,28 @@ class XGOEDU():
     def cap_color_mask(self, position=None, scale=25, h_error=20, s_limit=[90, 255], v_limit=[90, 230]):
         if position is None:
             position = [160, 100]
-        count = 0
         self.open_camera()
         
-        while True:
-            if self.xgoButton("c"):   
-                break
-                
-            # 图像采集（统一使用image变量）
-            image = self.picam2.capture_array()  # Picamera2默认输出BGR
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 转为RGB用于显示
-            
-            # 颜色空间处理（保持BGR用于HSV转换）
-            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-            h, s, v = cv2.split(hsv)
-            
-            # 颜色采样
-            color = np.mean(h[position[1]:position[1] + scale, position[0]:position[0] + scale])
-            
-            if self.xgoButton("b") and count == 0:
-                count += 1
-                color_lower = [max(color - h_error, 0), s_limit[0], v_limit[0]]
-                color_upper = [min(color + h_error, 255), s_limit[1], v_limit[1]]
-                return [color_lower, color_upper]
-    
-            # 绘制界面（使用RGB图像）
-            if count == 0:
-                cv2.rectangle(image_rgb, 
-                             (position[0], position[1]), 
-                             (position[0] + scale, position[1] + scale),
-                             (255, 255, 255), 2)
-                cv2.putText(image_rgb, 'press button B', 
-                           (40, 40), cv2.FONT_HERSHEY_SIMPLEX, 
-                           0.7, (255, 0, 0), 2)  # RGB格式的红色
-            
-            # 显示（直接使用RGB）
-            imgok = Image.fromarray(image_rgb)
-            self._show_pil(imgok)
+        # 图像采集
+        image = self.picam2.capture_array()  # Picamera2默认输出BGR
+        
+        # 颜色空间处理
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        h, s, v = cv2.split(hsv)
+        
+        # 颜色采样
+        color = np.mean(h[position[1]:position[1] + scale, position[0]:position[0] + scale])
+        
+        color_lower = [float(max(color - h_error, 0)), s_limit[0], v_limit[0]]
+        color_upper = [float(min(color + h_error, 255)), s_limit[1], v_limit[1]]
+        return [color_lower, color_upper]
     
     def filter_img(self,frame,color):
-        b,g,r = cv2.split(frame)
-        frame_bgr = cv2.merge((r,g,b))
-        hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
+        # frame 为 BGR（OpenCV 原生格式）
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         if isinstance(color, list):
-            color_lower = np.array(color[0])
-            color_upper = np.array(color[1])
+            color_lower = np.array(color[0], dtype=np.uint8)
+            color_upper = np.array(color[1], dtype=np.uint8)
         else:
             color_upper, color_lower = get_color_mask(color)
         mask = cv2.inRange(hsv, color_lower, color_upper)
@@ -2214,11 +2249,11 @@ class XGOEDU():
         x=y=ra=0
         if target=="camera":
             self.open_camera()
-            image = self.picam2.capture_array()
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 如果需要RGB格式
+            image = self.picam2.capture_array()  # BGR
         else:
             path="/home/pi/xgoPictures/"
             image=np.array(Image.open(path+target))
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # PIL(RGB) → BGR
 
         frame_mask=self.filter_img(image, color_mask)
         
@@ -2226,14 +2261,13 @@ class XGOEDU():
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
         
         circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, 20, param1=p1, param2=p2, minRadius=minR,maxRadius=maxR)
-        b,g,r = cv2.split(image)
-        image = cv2.merge((r,g,b))
         if circles is not None and len(circles[0]) == 1:
             param = circles[0][0]
             x, y, ra = int(param[0]), int(param[1]), int(param[2])
             cv2.circle(image, (x, y), ra, (255, 255, 255), 2)
             cv2.circle(image, (x, y), 2, (255, 255, 255), 2)
-        imgok = Image.fromarray(image)
+        # 显示前转换 BGR→RGB（camera 分支为 BGR，file 分支也已转 BGR）
+        imgok = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         self._show_pil(imgok)
         return x,y,ra
 

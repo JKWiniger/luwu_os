@@ -196,7 +196,17 @@
         "REBOOT_HINT": "Are you sure to reboot Raspberry Pi?",
         "RC": "VTM",
         "HOTSPOT": "Hotspot",
-        "SN": "SN Code"
+        "SN": "SN Code",
+        "ABOUT": "About",
+        "TIME": "Date & Time",
+        "TIME_TITLE": "Date & Time",
+        "TIME_SYNC": "Sync Time",
+        "TIME_SYNC_OK": "Time synced OK",
+        "TIME_SYNC_FAIL": "Sync failed",
+        "TIME_SAVED": "Timezone saved",
+        "TIMEZONE": "Timezone",
+        "BACK": "Back",
+        "CONFIRM": "Confirm"
     },
     "UPDATE": {
         "TITLE": "Auto Update",
