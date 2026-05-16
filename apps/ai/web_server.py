@@ -297,15 +297,11 @@ class ConfigWebServer:
             draw.text((160, label_y + 20), url,
                        font=font_text, fill=(128, 128, 128), anchor="mt")
 
-            # Bottom hint: config status
-            if show_start_button:
+            # Bottom hint: only show when not configured (left/right已由系统状态栏显示 C:退出 / D:开始)
+            if show_start_button and not config_ready:
                 hint_y = 240 - 16
-                if config_ready:
-                    draw.text((160, hint_y), "D: Start Chat  |  C: Exit",
-                               font=font_text, fill=(150, 150, 150), anchor="mb")
-                else:
-                    draw.text((160, hint_y), "Configure via web →",
-                               font=font_text, fill=(150, 150, 150), anchor="mb")
+                draw.text((160, hint_y), "Configure via web →",
+                           font=font_text, fill=(150, 150, 150), anchor="mb")
 
             return img
         except Exception as e:

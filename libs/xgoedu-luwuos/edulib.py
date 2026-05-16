@@ -240,6 +240,7 @@ class XGOEDU():
         import evdev
         self._key_dev = None
         self._key_states = {"a": False, "b": False, "c": False, "d": False}
+        self._key_pressed = {"a": False, "b": False, "c": False, "d": False}
         self._key_map = {
             evdev.ecodes.KEY_LEFT: "a",
             evdev.ecodes.KEY_RIGHT: "b",
@@ -618,6 +619,8 @@ class XGOEDU():
     返回值 False未按下, True按下
     '''
     def xgoButton(self, button):
+        # 边沿检测语义：按下瞬间返回 True 一次，事件被消费后再次调用返回 False
+        # 配合外层 while True 循环可避免按住期间重复触发
         from evdev import ecodes
         if self._key_dev is None:
             return False
@@ -630,9 +633,14 @@ class XGOEDU():
                     btn = self._key_map.get(event.code)
                     if btn is not None:
                         self._key_states[btn] = (event.value == 1)
+                        if event.value == 1:
+                            self._key_pressed[btn] = True
         except Exception:
             pass
-        return self._key_states.get(button, False)
+        if self._key_pressed.get(button, False):
+            self._key_pressed[button] = False
+            return True
+        return False
     #speaker
     '''
     filename 文件名 字符串
@@ -643,6 +651,27 @@ class XGOEDU():
         subprocess.Popen(["aplay", path + filename],
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
+
+    '''
+    设置系统音量（0~100，整数百分比）
+    底层使用 ALSA amixer（WM8960 card 0），同时设置 Speaker 与 Playback。
+    新镜像走 ALSA dmix + dsnoop，未安装 PulseAudio，不能使用 pactl。
+    '''
+    def set_volume(self, volume):
+        try:
+            v = int(volume)
+        except (TypeError, ValueError):
+            return False
+        if v < 0:
+            v = 0
+        if v > 100:
+            v = 100
+        percent = "{}%".format(v)
+        for ctrl in ("Speaker", "Headphone", "Playback"):
+            subprocess.run(["amixer", "-c", "0", "sset", ctrl, percent],
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
+        return True
 
     def xgoVideoAudio(self,filename):
         path="/home/pi/xgoVideos/"
@@ -818,7 +847,11 @@ class XGOEDU():
         
         self.camera_still = False
         hd_picam = None
-        
+
+        # 局部导入 Picamera2/Transform（与 open_camera 一致，避免模块顶部强依赖）
+        from picamera2 import Picamera2
+        from libcamera import Transform
+
         try:
             # 先停止并关闭已有的 self.picam2（需要用不同分辨率重新配置）
             if self.picam2 is not None:

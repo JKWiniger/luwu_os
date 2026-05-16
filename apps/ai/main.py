@@ -95,12 +95,14 @@ class AIChatPage(QWidget):
         self.display.setStyleSheet("background-color: #0f1530;")
 
         # ---- Status label (overlay on bottom center) ----
-        self.status_label = QLabel("AI Chat - Loading...", self)
+        # 中间提示文字与左下/右下 corner 重复，默认隐藏；仅在需要显示状态信息时使用
+        self.status_label = QLabel("", self)
         f2 = QFont()
         f2.setPointSize(10)
         self.status_label.setFont(f2)
         self.status_label.setStyleSheet("color: #8892c9; background: transparent;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.hide()
 
         # ---- Corner hints ----
         corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
@@ -195,7 +197,9 @@ class AIChatPage(QWidget):
         try:
             img = self.web_server.generate_idle_image(show_start_button=True)
             self._on_display_update(img)
-            self.status_label.setText("D: Start Chat  |  C: Exit")
+            # 中间提示与起下角 corner_bl/corner_br 重复，保持隐藏
+            self.status_label.setText("")
+            self.status_label.hide()
         except Exception as e:
             print(f"[UI] _show_idle error: {e}")
 
@@ -330,14 +334,34 @@ class AIChatPage(QWidget):
         if new_state == State.IDLE:
             self.emotion_mgr.stop_expression()
             QTimer.singleShot(0, self._show_idle)
+            # 回到待机：重新显示底部两个提示
+            QTimer.singleShot(0, self._show_corner_hints)
         elif new_state == State.LISTENING:
             QTimer.singleShot(0, lambda: self.status_label.setText("Listening... Speak now"))
             self.emotion_mgr.play_expression("mic", fps=15, loop=True)
+            # 聊天中：隐藏底部两个提示
+            QTimer.singleShot(0, self._hide_corner_hints)
         elif new_state == State.THINKING:
             QTimer.singleShot(0, lambda: self.status_label.setText("Thinking..."))
             self.emotion_mgr.play_expression("think", fps=15, loop=True)
+            QTimer.singleShot(0, self._hide_corner_hints)
         elif new_state == State.SPEAKING:
             QTimer.singleShot(0, lambda: self.status_label.setText("Speaking..."))
+            QTimer.singleShot(0, self._hide_corner_hints)
+
+    def _hide_corner_hints(self):
+        try:
+            self.corner_bl.hide()
+            self.corner_br.hide()
+        except Exception:
+            pass
+
+    def _show_corner_hints(self):
+        try:
+            self.corner_bl.show()
+            self.corner_br.show()
+        except Exception:
+            pass
 
     # ===== Conversation Flow =====
 
@@ -628,7 +652,40 @@ class AIChatPage(QWidget):
             except Exception:
                 pass
         self.web_server.stop()
+
+        # 关闭 XGOEDU 隐藏顶层窗口并释放 fb 句柄，
+        # 否则它会阻止 quitOnLastWindowClosed 生效，导致 app.exec() 不返回
+        try:
+            from robot_tools import get_xgo_edu
+            edu = get_xgo_edu()
+            if edu is not None:
+                lbl = getattr(edu, "_label", None)
+                if lbl is not None:
+                    try:
+                        lbl.hide()
+                        lbl.close()
+                        lbl.deleteLater()
+                    except Exception:
+                        pass
+                fb_fd = getattr(edu, "_fb_fd", None)
+                if fb_fd is not None:
+                    try:
+                        os.close(fb_fd)
+                    except Exception:
+                        pass
+                    edu._fb_fd = None
+        except Exception as e:
+            print(f"[Main] XGOEDU cleanup error: {e}")
+
         print("[Main] Cleanup done. Goodbye!")
+
+        # 强制退出事件循环，防止残留隐藏顶层窗口/守护线程阻止 app.exec() 返回
+        try:
+            qapp = QApplication.instance()
+            if qapp is not None:
+                QTimer.singleShot(0, qapp.quit)
+        except Exception:
+            pass
 
 
 # ===== Entry Point =====
