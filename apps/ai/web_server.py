@@ -71,6 +71,46 @@ def generate_qr_image(url, size=120):
     return qr_img.resize((size, size))
 
 
+def _sync_aliyun_key(cfg):
+    """统一阿里云 api_key：从 ASR/LLM/TTS 三处中取第一个非空的 aliyun key，
+    回填到其他空缺位置，避免用户在多个 tab 重复输入。"""
+    try:
+        asr = cfg.setdefault("asr", {})
+        llm = cfg.setdefault("llm", {})
+        tts = cfg.setdefault("tts", {})
+        asr_aliyun = asr.setdefault("aliyun", {})
+        tts_aliyun = tts.setdefault("aliyun", {})
+        provider_keys = llm.setdefault("provider_keys", {})
+
+        # 收集候选 key（按优先级：用户最近交互通常 LLM 主键 > 各 provider 副本）
+        llm_aliyun_key = ""
+        if llm.get("provider") == "aliyun":
+            llm_aliyun_key = llm.get("api_key", "") or ""
+        if not llm_aliyun_key:
+            llm_aliyun_key = provider_keys.get("aliyun", "") or ""
+
+        candidates = [
+            asr_aliyun.get("api_key", "") or "",
+            llm_aliyun_key,
+            tts_aliyun.get("api_key", "") or "",
+        ]
+        unified = next((k for k in candidates if k), "")
+        if not unified:
+            return cfg
+
+        if not asr_aliyun.get("api_key"):
+            asr_aliyun["api_key"] = unified
+        if not tts_aliyun.get("api_key"):
+            tts_aliyun["api_key"] = unified
+        if not provider_keys.get("aliyun"):
+            provider_keys["aliyun"] = unified
+        if llm.get("provider") == "aliyun" and not llm.get("api_key"):
+            llm["api_key"] = unified
+    except Exception as e:
+        print(f"[WebServer] _sync_aliyun_key error: {e}")
+    return cfg
+
+
 def is_config_complete(cfg=None):
     """检查 ASR / LLM / TTS / Role 是否都已配置"""
     if cfg is None:
@@ -128,6 +168,8 @@ class ConfigWebServer:
         def save():
             try:
                 cfg = request.get_json()
+                # 统一 aliyun api_key：一处填写、三处共享
+                _sync_aliyun_key(cfg)
                 save_config(cfg)
                 if self.on_config_changed:
                     self.on_config_changed(cfg)
@@ -231,10 +273,11 @@ class ConfigWebServer:
                 requirements = data.get("requirements", "")
                 agent_name = data.get("agent_name", "")
                 user_nickname = data.get("user_nickname", "")
+                user_personality = data.get("user_personality", "")
                 if not requirements.strip():
                     return jsonify({"success": False, "error": "Requirements cannot be empty"})
                 if self._on_generate_prompt:
-                    result = self._on_generate_prompt(requirements, agent_name, user_nickname)
+                    result = self._on_generate_prompt(requirements, agent_name, user_nickname, user_personality)
                     if isinstance(result, dict) and result.get("ok"):
                         return jsonify({"success": True, "prompt": result.get("prompt", "")})
                     else:

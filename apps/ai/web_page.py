@@ -385,30 +385,11 @@ textarea { resize:vertical; min-height:60px; }
     <span id="lbl_quick_test">快速测试</span><span class="arrow">▶</span>
   </div>
   <div class="collapse-body" id="quiz_body">
-    <div class="quiz-q" id="quiz_q1">1. 和主人互动时，你更像...</div>
-    <div class="quiz-opts">
-      <div class="quiz-opt" id="quiz_q1_a" onclick="pickQuiz(0,0,this)">A: 热情话痨，主动找话题</div>
-      <div class="quiz-opt" id="quiz_q1_b" onclick="pickQuiz(0,1,this)">B: 安静陪伴，等主人开口</div>
-    </div>
-    <div class="quiz-q" id="quiz_q2">2. 回答问题时，你更倾向...</div>
-    <div class="quiz-opts">
-      <div class="quiz-opt" id="quiz_q2_a" onclick="pickQuiz(1,0,this)">A: 讲故事、举例子、用比喻</div>
-      <div class="quiz-opt" id="quiz_q2_b" onclick="pickQuiz(1,1,this)">B: 给知识、讲道理、列要点</div>
-    </div>
-    <div class="quiz-q" id="quiz_q3">3. 主人遇到困难时，你会...</div>
-    <div class="quiz-opts">
-      <div class="quiz-opt" id="quiz_q3_a" onclick="pickQuiz(2,0,this)">A: 温暖鼓励，给情感支持</div>
-      <div class="quiz-opt" id="quiz_q3_b" onclick="pickQuiz(2,1,this)">B: 冷静分析，给解决方案</div>
-    </div>
-    <div class="quiz-q" id="quiz_q4">4. 你的说话风格是...</div>
-    <div class="quiz-opts">
-      <div class="quiz-opt" id="quiz_q4_a" onclick="pickQuiz(3,0,this)">A: 活泼跳跃，爱开玩笑</div>
-      <div class="quiz-opt" id="quiz_q4_b" onclick="pickQuiz(3,1,this)">B: 沉稳有序，条理清晰</div>
-    </div>
+    <!-- 题目由 JS 动态渲染，便于扩展/本地化；每题对应一个 MBTI 维度 -->
   </div>
 
-  <div class="section-title" id="sec_requirements">需求描述</div>
-  <textarea id="agent_requirements" rows="3" placeholder="描述你想要的机器人性格，如：一个爱讲冷笑话的机器人..."></textarea>
+  <div class="section-title" id="sec_requirements">对机器人的具体要求</div>
+  <textarea id="agent_requirements" rows="3" placeholder="写下你希望机器人具备的性格、说话风格或行为习惯，例如：活泼开朗、爱讲冷笑话、说话简洁、对新事物充满好奇..."></textarea>
 
   <div class="section-title" id="sec_generate">生成与编辑</div>
   <button class="btn btn-primary btn-generate" id="btn_gen" onclick="generatePrompt()" style="margin-top:8px">
@@ -551,16 +532,33 @@ function showTab(id) {
 }
 
 // === MBTI Data ===
+// name 字段为中文昵称（来自 16personalities），用于卡片小字显示，
+// 不再依赖 LANGS[MBTI_xxx]（默认未注入会导致小字与大字重复）
 const MBTI_LIST = [
-  {code:'INTJ',key:'MBTI_INTJ',cls:'mbti-purple'},{code:'INTP',key:'MBTI_INTP',cls:'mbti-purple'},{code:'ENTJ',key:'MBTI_ENTJ',cls:'mbti-purple'},{code:'ENTP',key:'MBTI_ENTP',cls:'mbti-purple'},
-  {code:'INFJ',key:'MBTI_INFJ',cls:'mbti-green'},{code:'INFP',key:'MBTI_INFP',cls:'mbti-green'},{code:'ENFJ',key:'MBTI_ENFJ',cls:'mbti-green'},{code:'ENFP',key:'MBTI_ENFP',cls:'mbti-green'},
-  {code:'ISTJ',key:'MBTI_ISTJ',cls:'mbti-blue'},{code:'ISFJ',key:'MBTI_ISFJ',cls:'mbti-blue'},{code:'ESTJ',key:'MBTI_ESTJ',cls:'mbti-blue'},{code:'ESFJ',key:'MBTI_ESFJ',cls:'mbti-blue'},
-  {code:'ISTP',key:'MBTI_ISTP',cls:'mbti-yellow'},{code:'ISFP',key:'MBTI_ISFP',cls:'mbti-yellow'},{code:'ESTP',key:'MBTI_ESTP',cls:'mbti-yellow'},{code:'ESFP',key:'MBTI_ESFP',cls:'mbti-yellow'}
+  {code:'INTJ',name:'建筑师',key:'MBTI_INTJ',cls:'mbti-purple'},{code:'INTP',name:'逻辑学家',key:'MBTI_INTP',cls:'mbti-purple'},{code:'ENTJ',name:'指挥官',key:'MBTI_ENTJ',cls:'mbti-purple'},{code:'ENTP',name:'辩论家',key:'MBTI_ENTP',cls:'mbti-purple'},
+  {code:'INFJ',name:'提倡者',key:'MBTI_INFJ',cls:'mbti-green'},{code:'INFP',name:'调停者',key:'MBTI_INFP',cls:'mbti-green'},{code:'ENFJ',name:'主人公',key:'MBTI_ENFJ',cls:'mbti-green'},{code:'ENFP',name:'竞选者',key:'MBTI_ENFP',cls:'mbti-green'},
+  {code:'ISTJ',name:'物流师',key:'MBTI_ISTJ',cls:'mbti-blue'},{code:'ISFJ',name:'守护者',key:'MBTI_ISFJ',cls:'mbti-blue'},{code:'ESTJ',name:'总经理',key:'MBTI_ESTJ',cls:'mbti-blue'},{code:'ESFJ',name:'执政官',key:'MBTI_ESFJ',cls:'mbti-blue'},
+  {code:'ISTP',name:'鉴赏家',key:'MBTI_ISTP',cls:'mbti-yellow'},{code:'ISFP',name:'探险家',key:'MBTI_ISFP',cls:'mbti-yellow'},{code:'ESTP',name:'企业家',key:'MBTI_ESTP',cls:'mbti-yellow'},{code:'ESFP',name:'表演者',key:'MBTI_ESFP',cls:'mbti-yellow'}
 ];
 const MBTI_DESC = {};
-MBTI_LIST.forEach(m => MBTI_DESC[m.code] = (LANGS.MBTI_DESC_TEMPLATE || 'My MBTI is {code} ({name}).').replace('{code}',m.code).replace('{name}', LANGS[m.key] || m.code));
+MBTI_LIST.forEach(m => MBTI_DESC[m.code] = (LANGS.MBTI_DESC_TEMPLATE || 'My MBTI is {code} ({name}).').replace('{code}',m.code).replace('{name}', LANGS[m.key] || m.name || m.code));
 let selectedMBTI = null;
-let quizAnswers = [-1,-1,-1,-1];
+// === Quiz Data ===
+// 10 题，每题归属一个 MBTI 维度；A 选项对应 dim[0]，B 选项对应 dim[1]
+// 分配：EI×3、NS×3、FT×2、PJ×2；同维度按多数票决定最终字母（平局取 A 选项字母）
+const QUIZ_DATA = [
+  {dim:'EI', q:'1. 和主人互动时，你更像...',         a:'热情话痨，主动找话题',     b:'安静陪伴，等主人开口'},
+  {dim:'EI', q:'2. 在热闹的场合里，你会...',         a:'越聊越精神，享受人群',     b:'感到疲惫，想找个安静角落'},
+  {dim:'EI', q:'3. 想表达观点时，你倾向...',         a:'边想边说，思路在交流中清晰', b:'先在心里想清楚，再开口'},
+  {dim:'NS', q:'4. 看待事物时，你更关注...',         a:'背后的含义和未来可能性',   b:'眼前的事实和具体细节'},
+  {dim:'NS', q:'5. 回答问题时，你更倾向...',         a:'讲故事、举例子、用比喻',   b:'给知识、讲道理、列要点'},
+  {dim:'NS', q:'6. 学习新东西，你喜欢...',           a:'先理解概念，再去用',       b:'先动手做，边做边学'},
+  {dim:'FT', q:'7. 主人遇到困难时，你会...',         a:'温暖鼓励，给情感支持',     b:'冷静分析，给解决方案'},
+  {dim:'FT', q:'8. 判断一件事，你更看重...',         a:'对方的感受是否被照顾到',   b:'逻辑是否成立、是非对错'},
+  {dim:'PJ', q:'9. 你的说话风格是...',               a:'活泼跳跃，爱开玩笑',       b:'沉稳有序，条理清晰'},
+  {dim:'PJ', q:'10. 面对计划，你更倾向...',          a:'保持灵活，随机应变',       b:'提前安排好，按部就班'}
+];
+let quizAnswers = new Array(QUIZ_DATA.length).fill(-1);
 
 // Provider official website URLs
 const PROVIDER_URLS = {
@@ -583,7 +581,7 @@ function updateProviderLink(type, provider) {
 
 function renderMBTI() {
   const g = document.getElementById('mbti_grid');
-  g.innerHTML = MBTI_LIST.map(m => `<div class="mbti-card ${m.cls} ${selectedMBTI===m.code?'selected':''}" onclick="pickMBTI('${m.code}')"><div class="code">${m.code}</div><div class="name">${LANGS[m.key] || m.code}</div></div>`).join('');
+  g.innerHTML = MBTI_LIST.map(m => `<div class="mbti-card ${m.cls} ${selectedMBTI===m.code?'selected':''}" onclick="pickMBTI('${m.code}')"><div class="code">${m.code}</div><div class="name">${LANGS[m.key] || m.name || m.code}</div></div>`).join('');
 }
 function pickMBTI(code) {
   selectedMBTI = selectedMBTI===code ? null : code;
@@ -601,13 +599,31 @@ function toggleQuiz() {
   const b = document.getElementById('quiz_body');
   h.classList.toggle('open'); b.classList.toggle('open');
 }
+function renderQuiz() {
+  const b = document.getElementById('quiz_body');
+  if (!b) return;
+  b.innerHTML = QUIZ_DATA.map((item, q) => {
+    const sel = quizAnswers[q];
+    return `
+      <div class="quiz-q" id="quiz_q${q+1}">${item.q}</div>
+      <div class="quiz-opts">
+        <div class="quiz-opt${sel===0?' selected':''}" id="quiz_q${q+1}_a" onclick="pickQuiz(${q},0,this)">A: ${item.a}</div>
+        <div class="quiz-opt${sel===1?' selected':''}" id="quiz_q${q+1}_b" onclick="pickQuiz(${q},1,this)">B: ${item.b}</div>
+      </div>`;
+  }).join('');
+}
 function pickQuiz(q, val, el) {
   quizAnswers[q] = val;
   el.parentElement.querySelectorAll('.quiz-opt').forEach((o,i) => o.classList.toggle('selected', i===val));
-  if (quizAnswers.every(a=>a>=0)) {
-    const dims = ['EI','NS','FT','PJ'];
+  // 全部答完才生成 MBTI；同维度按多数票决定（A 票 vs B 票，平局取 A 字母）
+  if (quizAnswers.every(a => a >= 0)) {
+    const tally = { EI:[0,0], NS:[0,0], FT:[0,0], PJ:[0,0] };
+    QUIZ_DATA.forEach((item, idx) => { tally[item.dim][quizAnswers[idx]]++; });
     let code = '';
-    quizAnswers.forEach((a,i) => code += dims[i][a]);
+    ['EI','NS','FT','PJ'].forEach(d => {
+      // 平局或 A 多 → 取 dim[0]，否则取 dim[1]
+      code += (tally[d][0] >= tally[d][1]) ? d[0] : d[1];
+    });
     selectedMBTI = code;
     renderMBTI();
     fillRequirements();
@@ -621,7 +637,22 @@ async function generatePrompt() {
   const agentName = document.getElementById('agent_name').value;
   const userNickname = document.getElementById('user_nickname').value;
   try {
-    const r = await fetch('/api/generate-prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({requirements:reqs, agent_name:agentName, user_nickname:userNickname})});
+    // 先把当前页面所有配置保存一次，确保后端 self.llm 用最新 base_url/api_key/model 重建/热更新
+    // 否则用户改了 LLM 参数但没点保存就直接生成，会用旧配置或报 "LLM not initialized"
+    try {
+      const sr = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(gatherConfig())});
+      const sd = await sr.json();
+      if (!sd.ok) {
+        alert(sd.msg || (LANGS.SAVE_ERROR || 'Save failed'));
+        btn.classList.remove('loading'); txt.textContent = LANGS.GENERATE_PROMPT || '✨ Auto Generate Prompt';
+        return;
+      }
+    } catch (e) {
+      alert((LANGS.NETWORK_ERROR || 'Network error') + ': ' + e.message);
+      btn.classList.remove('loading'); txt.textContent = LANGS.GENERATE_PROMPT || '✨ Auto Generate Prompt';
+      return;
+    }
+    const r = await fetch('/api/generate-prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({requirements:reqs, agent_name:agentName, user_nickname:userNickname, user_personality: (function(){ if(!selectedMBTI) return ''; const m = MBTI_LIST.find(x=>x.code===selectedMBTI); const cn = m ? (LANGS[m.key] || m.name || '') : ''; return cn ? (selectedMBTI + '（' + cn + '）') : selectedMBTI; })()})});
     const d = await r.json();
     if (d.success && d.prompt) { document.getElementById('agent_prompt').value = d.prompt; }
     else { alert(d.error || (LANGS.GENERATE_FAIL || 'Generation failed')); }
@@ -844,7 +875,7 @@ function applyI18n() {
   set('quiz_q2', 'QUIZ_Q2'); set('quiz_q2_a', 'QUIZ_Q2_A'); set('quiz_q2_b', 'QUIZ_Q2_B');
   set('quiz_q3', 'QUIZ_Q3'); set('quiz_q3_a', 'QUIZ_Q3_A'); set('quiz_q3_b', 'QUIZ_Q3_B');
   set('quiz_q4', 'QUIZ_Q4'); set('quiz_q4_a', 'QUIZ_Q4_A'); set('quiz_q4_b', 'QUIZ_Q4_B');
-  set('sec_requirements', 'REQUIREMENTS', '需求描述');
+  set('sec_requirements', 'REQUIREMENTS', '对机器人的具体要求');
   setPh('agent_requirements', 'REQUIREMENTS_PLACEHOLDER', '描述你想要的机器人性格...');
   set('sec_generate', 'GENERATE_EDIT_SECTION', '生成与编辑');
   set('btn_gen_text', 'GENERATE_PROMPT', '✨ 自动生成提示词');
@@ -946,17 +977,18 @@ function loadUI() {
   document.getElementById('agent_name').value = c.role?.agent_name || '';
   document.getElementById('user_nickname').value = c.role?.user_nickname || '';
   selectedMBTI = c.role?.mbti || null;
-  quizAnswers = c.role?.quiz_answers || [-1,-1,-1,-1];
+  // 兼容旧 4 题 / 新 10 题；长度对不上时清空（避免半填错位）
+  const savedAns = c.role?.quiz_answers;
+  if (Array.isArray(savedAns) && savedAns.length === QUIZ_DATA.length) {
+    quizAnswers = savedAns.slice();
+  } else {
+    quizAnswers = new Array(QUIZ_DATA.length).fill(-1);
+  }
   document.getElementById('agent_requirements').value = c.role?.requirements || '';
   document.getElementById('agent_prompt').value = c.llm?.system_prompt || LANGS.DEFAULT_SYSTEM_PROMPT || '';
   renderMBTI();
-  // Restore quiz UI
-  quizAnswers.forEach((a,q) => {
-    if (a >= 0) {
-      const opts = document.querySelectorAll('#quiz_body .quiz-opts')[q];
-      if (opts) opts.querySelectorAll('.quiz-opt').forEach((o,i) => o.classList.toggle('selected', i===a));
-    }
-  });
+  // 渲染题目（每次都重建，保证选中态与 quizAnswers 同步）
+  renderQuiz();
   // LLM
   const llmProv = c.llm?.provider||'aliyun';
   document.getElementById('llm_provider').value = llmProv;
@@ -1010,6 +1042,63 @@ updateProviderLink('asr', document.getElementById('asr_provider').value);
 updateProviderLink('llm', document.getElementById('llm_provider').value);
 updateProviderLink('tts', document.getElementById('tts_provider').value);
 loadUI();
+
+// ============================================================
+// 阿里云 API Key 跨 tab 自动同步
+// 在 ASR / LLM(provider=aliyun) / TTS 三处中任一框输入时，
+// 把当前值同步到其他两处（无论目标是否为空，都覆盖，保证一致），
+// 这样用户只需在一个 tab 里填一次。
+// ============================================================
+function syncAliyunKey(sourceId) {
+  const src = document.getElementById(sourceId);
+  if (!src) return;
+  const key = src.value;
+  const llmProv = document.getElementById('llm_provider').value;
+  const targets = ['asr_aliyun_key', 'tts_aliyun_key'];
+  if (llmProv === 'aliyun') targets.push('llm_key');
+  targets.forEach(tid => {
+    if (tid === sourceId) return;
+    const el = document.getElementById(tid);
+    if (el && el.value !== key) el.value = key;
+  });
+}
+['asr_aliyun_key', 'tts_aliyun_key'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => syncAliyunKey(id));
+});
+{
+  const llmKey = document.getElementById('llm_key');
+  if (llmKey) llmKey.addEventListener('input', () => {
+    if (document.getElementById('llm_provider').value === 'aliyun') syncAliyunKey('llm_key');
+  });
+}
+// 切换 LLM provider 到 aliyun 时，若 llm_key 为空则从 ASR/TTS 拉取
+(function patchSelectLLM(){
+  const orig = window.selectLLMPreset;
+  window.selectLLMPreset = function() {
+    orig.apply(this, arguments);
+    if (document.getElementById('llm_provider').value === 'aliyun') {
+      const llmKey = document.getElementById('llm_key');
+      if (llmKey && !llmKey.value) {
+        const src = document.getElementById('asr_aliyun_key').value
+                 || document.getElementById('tts_aliyun_key').value;
+        if (src) { llmKey.value = src; syncAliyunKey('llm_key'); }
+      }
+    }
+  };
+})();
+// 页面初次加载后，做一次三向同步（若任一已有值）
+(function initialSync(){
+  const first = document.getElementById('asr_aliyun_key').value
+             || (document.getElementById('llm_provider').value === 'aliyun' ? document.getElementById('llm_key').value : '')
+             || document.getElementById('tts_aliyun_key').value;
+  if (first) {
+    if (!document.getElementById('asr_aliyun_key').value) document.getElementById('asr_aliyun_key').value = first;
+    if (!document.getElementById('tts_aliyun_key').value) document.getElementById('tts_aliyun_key').value = first;
+    if (document.getElementById('llm_provider').value === 'aliyun'
+        && !document.getElementById('llm_key').value) document.getElementById('llm_key').value = first;
+  }
+})();
 </script>
 </body>
 </html>

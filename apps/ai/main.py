@@ -81,6 +81,10 @@ class AIChatPage(QWidget):
 
     # Signal: emit PIL Image from any thread → slot runs on GUI thread
     _display_signal = Signal(object)
+    # Signal: toggle bottom corner hints from any thread → slot runs on GUI thread
+    _corner_visible_signal = Signal(bool)
+    # Signal: request idle screen refresh from non-GUI thread
+    _refresh_idle_signal = Signal()
 
     def __init__(self):
         super().__init__()
@@ -120,6 +124,8 @@ class AIChatPage(QWidget):
 
         # ---- Connect display signal ----
         self._display_signal.connect(self._on_display_update)
+        self._corner_visible_signal.connect(self._on_corner_visible)
+        self._refresh_idle_signal.connect(self._on_refresh_idle)
 
         # ---- Initialize backend ----
         self._init_backend()
@@ -200,6 +206,8 @@ class AIChatPage(QWidget):
             # 中间提示与起下角 corner_bl/corner_br 重复，保持隐藏
             self.status_label.setText("")
             self.status_label.hide()
+            # 根据当前配置完成情况刷新底部按钮（未配置时隐藏 D:开始）
+            self._corner_visible_signal.emit(True)
         except Exception as e:
             print(f"[UI] _show_idle error: {e}")
 
@@ -292,11 +300,11 @@ class AIChatPage(QWidget):
 
     # ===== Config Change Handler =====
 
-    def _generate_prompt(self, requirements, agent_name="", user_nickname=""):
+    def _generate_prompt(self, requirements, agent_name="", user_nickname="", user_personality=""):
         """回调：调用 LLM 生成角色定义提示词"""
         if not self.llm:
             return {"ok": False, "prompt": "", "error": "LLM not initialized"}
-        return self.llm.generate_system_prompt(requirements, agent_name=agent_name, user_nickname=user_nickname)
+        return self.llm.generate_system_prompt(requirements, agent_name=agent_name, user_nickname=user_nickname, user_personality=user_personality)
 
     def _on_config_changed(self, new_cfg):
         """Hot-reload when H5 page saves config"""
@@ -308,13 +316,20 @@ class AIChatPage(QWidget):
         except Exception as e:
             print(f"[Main] ASR reload error: {e}")
 
-        if self.llm:
-            try:
+        # LLM：若已存在则热更新；若先前未初始化则重建一次
+        try:
+            if self.llm:
                 self.llm.reload_config(new_cfg.get("llm", {}), role_config=new_cfg.get("role", {}))
-                mem_cfg = new_cfg.get("memory", {})
-                self.llm.set_memory(mem_cfg.get("enabled", False), mem_cfg.get("content", ""))
-            except Exception as e:
-                print(f"[Main] LLM reload error: {e}")
+            else:
+                tool_defs = self.tool_mgr.get_tool_definitions()
+                self.llm = LLMManager(new_cfg.get("llm", {}), tool_definitions=tool_defs,
+                                       role_config=new_cfg.get("role", {}), lang="cn")
+                self.llm.set_tool_executor(self.tool_mgr.execute)
+                print(f"[Main] LLM (re)initialized: {new_cfg.get('llm', {}).get('model', 'unknown')}")
+            mem_cfg = new_cfg.get("memory", {})
+            self.llm.set_memory(mem_cfg.get("enabled", False), mem_cfg.get("content", ""))
+        except Exception as e:
+            print(f"[Main] LLM reload error: {e}")
 
         try:
             if self.tts:
@@ -324,7 +339,11 @@ class AIChatPage(QWidget):
             print(f"[Main] TTS reload error: {e}")
 
         # Show updated idle screen
-        QTimer.singleShot(0, self._show_idle)
+        # 注意：_on_config_changed 在 Flask 工作线程被回调，
+        # 必须通过 Signal/Slot 切回 GUI 线程刷新界面与按钮显隐，
+        # 否则 linuxfb 平台下 QTimer.singleShot 跨线程不会触发，
+        # 用户保存配置后右下角"D: 开始"按钮不会自动出现。
+        self._refresh_idle_signal.emit()
         print("[Main] Config reload complete")
 
     # ===== State Machine Callback =====
@@ -335,39 +354,76 @@ class AIChatPage(QWidget):
             self.emotion_mgr.stop_expression()
             QTimer.singleShot(0, self._show_idle)
             # 回到待机：重新显示底部两个提示
-            QTimer.singleShot(0, self._show_corner_hints)
+            self._corner_visible_signal.emit(True)
         elif new_state == State.LISTENING:
             QTimer.singleShot(0, lambda: self.status_label.setText("Listening... Speak now"))
             self.emotion_mgr.play_expression("mic", fps=15, loop=True)
             # 聊天中：隐藏底部两个提示
-            QTimer.singleShot(0, self._hide_corner_hints)
+            self._corner_visible_signal.emit(False)
         elif new_state == State.THINKING:
             QTimer.singleShot(0, lambda: self.status_label.setText("Thinking..."))
             self.emotion_mgr.play_expression("think", fps=15, loop=True)
-            QTimer.singleShot(0, self._hide_corner_hints)
+            self._corner_visible_signal.emit(False)
         elif new_state == State.SPEAKING:
             QTimer.singleShot(0, lambda: self.status_label.setText("Speaking..."))
-            QTimer.singleShot(0, self._hide_corner_hints)
+            self._corner_visible_signal.emit(False)
+
+    def _on_corner_visible(self, visible: bool):
+        """Slot: show/hide bottom corner hints on GUI thread"""
+        try:
+            if visible:
+                # 退出按钮永远显示
+                self.corner_bl.show()
+                self.corner_bl.raise_()
+                # 开始按钮：仅当配置完成时显示
+                if self._is_config_ready():
+                    self.corner_br.show()
+                    self.corner_br.raise_()
+                else:
+                    self.corner_br.hide()
+            else:
+                self.corner_bl.hide()
+                self.corner_br.hide()
+            # 触发刷新，确保 linuxfb 同步
+            self.update()
+        except Exception as e:
+            print(f"[UI] _on_corner_visible error: {e}")
+
+    def _is_config_ready(self) -> bool:
+        """检查 ASR/LLM/TTS/Role 是否全部就绪，决定是否显示 D:开始"""
+        try:
+            from web_server import is_config_complete
+            return is_config_complete(self.config)
+        except Exception:
+            return False
+
+    def _on_refresh_idle(self):
+        """Slot: GUI 线程刷新空闲界面与底部按钮（保存配置热更新后调用）"""
+        try:
+            # 仅在 IDLE 状态刷新二维码界面，避免对话中突然覆盖
+            if self.sm.is_idle():
+                self._show_idle()
+            else:
+                # 非 IDLE 也至少重评估一次按钮显隐
+                self._corner_visible_signal.emit(False)
+        except Exception as e:
+            print(f"[UI] _on_refresh_idle error: {e}")
 
     def _hide_corner_hints(self):
-        try:
-            self.corner_bl.hide()
-            self.corner_br.hide()
-        except Exception:
-            pass
+        self._corner_visible_signal.emit(False)
 
     def _show_corner_hints(self):
-        try:
-            self.corner_bl.show()
-            self.corner_br.show()
-        except Exception:
-            pass
+        self._corner_visible_signal.emit(True)
 
     # ===== Conversation Flow =====
 
     def _start_conversation(self):
         """Start conversation in background thread"""
         if not self.sm.is_idle() or not self.running:
+            return
+        # 配置未完成时禁止开始（与 D:开始 按钮隐藏一致）
+        if not self._is_config_ready():
+            print("[Main] Config not ready, ignore start conversation")
             return
 
         print("[Main] Starting conversation...")
@@ -610,17 +666,28 @@ class AIChatPage(QWidget):
             ))
             picam.start()
             time.sleep(0.5)
-            image = picam.capture_array()
-            cv2.imwrite(photo_path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+            # 注意：Picamera2 在树莓派上 format="RGB888" 实际输出的是 BGR 排列
+            image_bgr = picam.capture_array()
+            # cv2.imwrite 期望 BGR 输入，直接写
+            cv2.imwrite(photo_path, image_bgr)
             picam.stop()
             picam.close()
 
-            # Preview on display briefly using QTimer
+            # 预览照片：必须先停掉 think 表情，否则 emotion_mgr 后台 15fps 会立刻覆盖
             try:
                 from PIL import Image as PILImage
-                photo_img = PILImage.fromarray(image).resize((320, 240))
+                try:
+                    self.emotion_mgr.stop_expression()
+                except Exception:
+                    pass
+                # 给停止动作一点缓冲，避免残余帧覆盖照片
+                time.sleep(0.05)
+                # PIL 需要 RGB，转换后再交给显示层
+                image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+                photo_img = PILImage.fromarray(image_rgb).resize((320, 240))
                 self._update_display(photo_img)
-                time.sleep(1)
+                # 停留 2 秒让用户看清照片
+                time.sleep(2.0)
             except Exception as e:
                 print(f"[Main] Photo preview error: {e}")
 

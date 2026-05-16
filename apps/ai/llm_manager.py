@@ -31,7 +31,10 @@ META_PROMPT = """你是一个机器人角色提示词生成专家。请根据用
 3. **视觉能力**：机器人有摄像头可拍照并理解图片。提示词应鼓励角色主动使用视觉（如说"让我看看"、"我来瞧瞧"）。
 4. **语音交互**：回复会被 TTS 语音播放（系统自动保证输出格式合适，无需在提示词中写约束）。提示词中角色语言风格应口语化自然。
 
-## 用户性格描述（注意：这是用户自己的性格，不是机器人的）
+## 用户的人格（MBTI）
+{user_personality}
+
+## 用户对机器人的要求
 {user_requirements}
 
 ## 输出要求
@@ -68,7 +71,10 @@ The following are provided automatically by the system — the generated prompt 
 3. **Vision**: The robot has a camera and can take photos to understand surroundings. The prompt should encourage proactive use of vision (e.g. "Let me take a look", "I'll check it out").
 4. **Voice Interaction**: Replies are played via TTS (the system automatically ensures proper output format — no need to add constraints in the prompt). The character's speaking style should be conversational and natural.
 
-## User Personality Description (Note: This is the user's personality, NOT the robot's)
+## User's Personality (MBTI)
+{user_personality}
+
+## User's Requirements for the Robot
 {user_requirements}
 
 ## Output Requirements
@@ -567,12 +573,12 @@ class LLMManager:
             print(f"[LLM] vlm_describe error: {e}")
             return f"VLM error: {e}"
 
-    def generate_system_prompt(self, requirements: str, agent_name: str = "", user_nickname: str = "") -> dict:
+    def generate_system_prompt(self, requirements: str, agent_name: str = "", user_nickname: str = "", user_personality: str = "") -> dict:
         """使用 LLM 根据用户需求自动生成角色定义提示词，返回结构化结果"""
         try:
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": (META_PROMPT_EN if self.lang == "en" else META_PROMPT).replace("{user_requirements}", requirements).replace("{agent_name}", agent_name or "XGO").replace("{user_nickname}", user_nickname or "")}
+                {"role": "user", "content": (META_PROMPT_EN if self.lang == "en" else META_PROMPT).replace("{user_requirements}", requirements).replace("{agent_name}", agent_name or "XGO").replace("{user_nickname}", user_nickname or "").replace("{user_personality}", user_personality or ("(not provided)" if self.lang == "en" else "（未提供）"))}
             ]
             kwargs = {
                 "model": self.model,
