@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 PySide6 热点模式 App — 由 Luwu OS launcher 启动。
-创建 WiFi 热点，显示 SSID / 密码 / IP 地址。
-按任意物理按键(C)退出并关闭热点。
+- 开放热点（无密码）
+- 同一台设备首次创建后会持久化 SSID，下次进入直接复用，不再重新创建
+- 左下角 C: 退出（保留热点）   右下角 D: 关闭热点
 """
 import os
 import sys
@@ -14,111 +15,88 @@ import subprocess
 import socket
 import struct
 import fcntl
+from pathlib import Path
 
 # ===================== 阶段计时 =====================
 T0 = time.monotonic()
-_stages = []
 
 
 def mark(name: str):
     ms = (time.monotonic() - T0) * 1000.0
-    _stages.append((name, ms))
     print(f"[hotspot][+{ms:7.1f}ms] {name}", flush=True)
 
 
 mark("python entry")
 
-# ===================== PySide6 导入 =====================
+# ===================== PySide6 =====================
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QKeyEvent
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout
+from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
 
 mark("PySide6 imports done")
 
 # ===================== 常量 =====================
-AUTO_EXIT_SEC = 300  # 5 分钟自动退出
+AUTO_EXIT_SEC = 300                       # 5 分钟自动退出页面（保留热点）
+HOTSPOT_CONN_NAME = "LuwuHotspot"         # 固定连接名，便于复用
+SSID_FILE = Path("/home/pi/luwu-os/configs/hotspot_ssid.txt")
+WLAN_IFACE = "wlan0"
 
-# ===================== i18n =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
-try:
-    from libs.i18n import Translator as _Translator
-    _T = _Translator({
-        "cn": {
-            "title": "热点模式",
-            "creating": "正在创建热点...",
-            "hint": "C键: 关闭页面（保留热点）  D键: 关闭热点",
-            "corner_close_page": "C: 关闭页面",
-            "corner_close_hotspot": "D: 关闭热点",
-            "step_activate": "激活无线网卡...",
-            "step_disconnect": "断开当前连接...",
-            "step_restart": "重启网络管理...",
-            "step_creating": "创建热点中...",
-            "step_created": "✅ 热点已创建",
-            "step_warn": "⚠️ 热点创建中...",
-            "step_ready": "✅ 热点已就绪",
-            "password_label": "🔑 密码: {}",
-            "getting": "获取中...",
-        },
-        "en": {
-            "title": "Hotspot Mode",
-            "creating": "Creating hotspot...",
-            "hint": "C: Close page (keep hotspot)  D: Stop hotspot",
-            "corner_close_page": "C: Close page",
-            "corner_close_hotspot": "D: Stop hotspot",
-            "step_activate": "Activating Wi-Fi adapter...",
-            "step_disconnect": "Disconnecting current network...",
-            "step_restart": "Restarting NetworkManager...",
-            "step_creating": "Creating hotspot...",
-            "step_created": "✅ Hotspot created",
-            "step_warn": "⚠️ Hotspot starting...",
-            "step_ready": "✅ Hotspot ready",
-            "password_label": "🔑 Password: {}",
-            "getting": "Getting...",
-        },
-    })
-except Exception:
-    _T = lambda k, *a: k.format(*a) if a else k
 
 # ===================== 工具函数 =====================
-def generate_wifi_ssid():
-    prefix = "xgo-"
-    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return prefix + suffix
-
-
-def generate_wifi_password():
-    return "".join(random.choices(string.ascii_letters + string.digits, k=8))
-
-
-def get_ip(ifname):
-    """获取指定网络接口的 IP 地址"""
+def run_cmd(cmd: str, timeout: int = 30):
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        return socket.inet_ntoa(
-            fcntl.ioctl(
-                s.fileno(), 0x8915, struct.pack("256s", bytes(ifname[:15], "utf-8"))
-            )[20:24]
-        )
-    except Exception:
-        return _T("getting")
-
-
-def run_cmd(cmd):
-    """运行 shell 命令并返回结果"""
-    try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-        return result.returncode, result.stdout.strip(), result.stderr.strip()
-    except subprocess.TimeoutExpired:
-        return -1, "", "timeout"
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        return r.returncode, r.stdout.strip(), r.stderr.strip()
     except Exception as e:
         return -1, "", str(e)
 
 
-mark("utils defined")
+def get_ip(ifname: str = WLAN_IFACE) -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        return socket.inet_ntoa(
+            fcntl.ioctl(s.fileno(), 0x8915, struct.pack("256s", bytes(ifname[:15], "utf-8")))[20:24]
+        )
+    except Exception:
+        return ""
 
 
-# ===================== PySide6 页面 =====================
+def gen_ssid() -> str:
+    return "xgo-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+
+def load_or_create_ssid() -> str:
+    """读取已保存的 SSID；不存在时生成并写入。"""
+    try:
+        if SSID_FILE.exists():
+            s = SSID_FILE.read_text().strip()
+            if s:
+                return s
+    except Exception:
+        pass
+    s = gen_ssid()
+    try:
+        SSID_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SSID_FILE.write_text(s)
+    except Exception:
+        pass
+    return s
+
+
+def hotspot_is_active() -> bool:
+    rc, out, _ = run_cmd("nmcli -t -f NAME,DEVICE connection show --active")
+    for line in out.splitlines():
+        if line.startswith(HOTSPOT_CONN_NAME + ":"):
+            return True
+    return False
+
+
+def hotspot_conn_exists() -> bool:
+    rc, out, _ = run_cmd("nmcli -t -f NAME connection show")
+    return any(line.strip() == HOTSPOT_CONN_NAME for line in out.splitlines())
+
+
+# ===================== UI =====================
 class HotspotPage(QWidget):
     def __init__(self):
         super().__init__()
@@ -126,105 +104,74 @@ class HotspotPage(QWidget):
         self._first_paint_logged = False
 
         self.ssid = ""
-        self.password = ""
         self.ip_address = ""
         self.hotspot_active = False
-        self._keep_hotspot_on_close = False  # True 表示关闭页面但保留热点运行
+        self._keep_hotspot_on_close = False  # C 退出时保留热点
 
-        # ---- 标题 ----
-        self.title = QLabel(_T("title"))
-        f1 = QFont()
-        f1.setPointSize(20)
-        f1.setBold(True)
+        # 标题
+        self.title = QLabel("热点模式")
+        f1 = QFont(); f1.setPointSize(20); f1.setBold(True)
         self.title.setFont(f1)
         self.title.setStyleSheet("color: white;")
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # ---- WiFi 图标 ----
-        self.icon_label = QLabel("📶")
-        self.icon_label.setStyleSheet("font-size: 48px; color: white;")
-        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 状态 ----
-        self.status_label = QLabel(_T("creating"))
-        f2 = QFont()
-        f2.setPointSize(13)
-        self.status_label.setFont(f2)
-        self.status_label.setStyleSheet("color: #18df6b;")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setWordWrap(True)
-
-        # ---- SSID 显示 ----
+        # SSID
         self.ssid_label = QLabel("")
-        f3 = QFont()
-        f3.setPointSize(15)
-        f3.setBold(True)
-        self.ssid_label.setFont(f3)
+        f2 = QFont(); f2.setPointSize(16); f2.setBold(True)
+        self.ssid_label.setFont(f2)
         self.ssid_label.setStyleSheet("color: #FFD93D;")
         self.ssid_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # ---- 密码显示 ----
-        self.pwd_label = QLabel("")
-        f4 = QFont()
-        f4.setPointSize(15)
-        f4.setBold(True)
-        self.pwd_label.setFont(f4)
-        self.pwd_label.setStyleSheet("color: #FF6B6B;")
-        self.pwd_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- IP 显示 ----
+        # IP
         self.ip_label = QLabel("")
-        f5 = QFont()
-        f5.setPointSize(13)
-        self.ip_label.setFont(f5)
+        f3 = QFont(); f3.setPointSize(13)
+        self.ip_label.setFont(f3)
         self.ip_label.setStyleSheet("color: #4A90D9;")
         self.ip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # ---- 提示 ----
-        self.hint = QLabel(_T("hint"))
-        self.hint.setStyleSheet("color: #5c6a9c; font-size: 11px;")
-        self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # 状态（单行，简短）
+        self.status_label = QLabel("正在启动...")
+        f4 = QFont(); f4.setPointSize(12)
+        self.status_label.setFont(f4)
+        self.status_label.setStyleSheet("color: #18df6b;")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # ---- 四角按键提示 ----
-        corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
-        self.corner_bl = QLabel(_T("corner_close_page"), self)
+        # 角落按键提示（仅左下/右下两处）
+        corner_style = "color: #8892c9; font-size: 12px; background: transparent;"
+        self.corner_bl = QLabel("C: 退出", self)
         self.corner_bl.setStyleSheet(corner_style)
-        self.corner_br = QLabel(_T("corner_close_hotspot"), self)
+        self.corner_br = QLabel("D: 关闭热点", self)
         self.corner_br.setStyleSheet(corner_style)
+        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        # ---- 布局 ----
+        # 布局
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.title)
-        layout.addSpacing(16)
-        layout.addWidget(self.icon_label)
-        layout.addSpacing(12)
-        layout.addWidget(self.status_label)
-        layout.addSpacing(20)
-        layout.addWidget(self.ssid_label)
-        layout.addSpacing(6)
-        layout.addWidget(self.pwd_label)
-        layout.addSpacing(6)
-        layout.addWidget(self.ip_label)
         layout.addStretch()
-        layout.addWidget(self.hint)
+        layout.addWidget(self.title)
+        layout.addSpacing(22)
+        layout.addWidget(self.ssid_label)
+        layout.addSpacing(10)
+        layout.addWidget(self.ip_label)
+        layout.addSpacing(18)
+        layout.addWidget(self.status_label)
+        layout.addStretch()
 
-        # ---- 自动退出兜底 ----
         QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
-
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        QTimer.singleShot(200, self._init_hotspot)
 
-        # 延迟启动热点（让 UI 先渲染）
-        QTimer.singleShot(200, self._start_hotspot)
-
+    # ---- 角落定位 ----
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         w, h = self.width(), self.height()
-        pad = 16
+        # 小屏幕物理可视区域比逻辑分辨率小，留足底部安全距离避免遮挡
+        pad_x = 10
+        pad_y_bottom = 28
         self.corner_bl.adjustSize()
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        self.corner_bl.move(pad_x, h - self.corner_bl.height() - pad_y_bottom)
         self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
+        self.corner_br.move(w - self.corner_br.width() - pad_x, h - self.corner_br.height() - pad_y_bottom)
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -232,91 +179,97 @@ class HotspotPage(QWidget):
             self._first_paint_logged = True
             mark("first paintEvent")
 
+    # ---- 按键 ----
     def keyPressEvent(self, ev: QKeyEvent):
         key = ev.key()
         if key == Qt.Key.Key_Back:
-            # C 键：关闭页面但保留热点
-            print("[hotspot] KEY_BACK (C) -> close page, keep hotspot", flush=True)
+            print("[hotspot] C -> close page, keep hotspot", flush=True)
             self._keep_hotspot_on_close = True
             self.close()
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            # D 键：关闭热点并退出
-            print("[hotspot] KEY_RETURN (D) -> stop hotspot and exit", flush=True)
+            print("[hotspot] D -> stop hotspot and exit", flush=True)
             self._stop_hotspot()
             self.close()
 
-    def _start_hotspot(self):
-        """创建 WiFi 热点"""
-        self.ssid = generate_wifi_ssid()
-        self.password = generate_wifi_password()
+    # ---- 热点逻辑 ----
+    def _init_hotspot(self):
+        """启动入口：已激活则直接展示；否则创建/拉起。"""
+        self.ssid = load_or_create_ssid()
 
-        print(f"[hotspot] creating hotspot: SSID={self.ssid}", flush=True)
-
-        # Step 1: 激活 wlan0
-        self.status_label.setText(_T("step_activate"))
-        QApplication.processEvents()
-        run_cmd("sudo ifconfig wlan0 up")
-        time.sleep(2)
-
-        # Step 2: 断开当前连接
-        self.status_label.setText(_T("step_disconnect"))
-        QApplication.processEvents()
-        run_cmd("sudo nmcli device disconnect wlan0")
-        time.sleep(1)
-
-        # Step 3: 重启 NetworkManager
-        self.status_label.setText(_T("step_restart"))
-        QApplication.processEvents()
-        run_cmd("sudo systemctl restart NetworkManager")
-        time.sleep(5)
-
-        # Step 4: 清理可能的残留连接
-        run_cmd("sudo nmcli connection delete Hotspot-7 2>/dev/null")
-        time.sleep(1)
-
-        # Step 5: 创建热点
-        self.status_label.setText(_T("step_creating"))
-        QApplication.processEvents()
-
-        hotspot_cmd = f"sudo nmcli device wifi hotspot ssid {self.ssid} password {self.password}"
-        rc, stdout, stderr = run_cmd(hotspot_cmd)
-
-        if rc == 0:
-            print("[hotspot] Wi-Fi Hotspot Created Successfully", flush=True)
+        if hotspot_is_active():
+            print(f"[hotspot] reuse active hotspot: {self.ssid}", flush=True)
             self.hotspot_active = True
-            self.status_label.setText(_T("step_created"))
-            time.sleep(3)
+            self.ip_address = get_ip() or "192.168.7.1"
+            self._refresh_info("热点已就绪")
+            return
 
-            # 获取 IP
-            self.ip_address = get_ip("wlan0")
-            if not self.ip_address:
-                self.ip_address = "192.168.7.1"
+        self._create_or_up_hotspot()
+
+    def _create_or_up_hotspot(self):
+        self.status_label.setText("正在创建热点...")
+        QApplication.processEvents()
+
+        run_cmd(f"sudo ifconfig {WLAN_IFACE} up")
+        time.sleep(1)
+
+        if hotspot_conn_exists():
+            # 老 connection 可能残留了错误的 wifi-sec 字段（key-mgmt=none
+            # 在 nmcli 中被识别为 WEP，导致 up 时报 "需要密钥" 错误），
+            # 先移除整个 security 字段才是真正的开放热点。
+            run_cmd(
+                f"sudo nmcli connection modify {HOTSPOT_CONN_NAME} "
+                f"remove 802-11-wireless-security 2>/dev/null"
+            )
+            rc, _, err = run_cmd(f"sudo nmcli connection up {HOTSPOT_CONN_NAME}")
+            print(f"[hotspot] up existing rc={rc} err={err}", flush=True)
         else:
-            print(f"[hotspot] Wi-Fi Hotspot Create Failed: rc={rc} stderr={stderr}", flush=True)
-            self.hotspot_active = True  # 有时返回非0但热点实际已创建
-            self.status_label.setText(_T("step_warn"))
-            time.sleep(3)
-            self.ip_address = get_ip("wlan0")
-            if not self.ip_address:
-                self.ip_address = "192.168.7.1"
+            # 清理旧的自动生成 Hotspot 残留（如 Hotspot-7）
+            rc0, out0, _ = run_cmd("nmcli -t -f NAME connection show")
+            for ln in out0.splitlines():
+                n = ln.strip()
+                if n.startswith("Hotspot") and n != HOTSPOT_CONN_NAME:
+                    run_cmd(f"sudo nmcli connection delete '{n}' 2>/dev/null")
 
-        # 更新显示
-        self.ssid_label.setText(f"📡 SSID: {self.ssid}")
-        self.pwd_label.setText(_T("password_label", self.password))
-        self.ip_label.setText(f"🌐 IP: {self.ip_address}")
+            run_cmd(f"sudo nmcli device disconnect {WLAN_IFACE} 2>/dev/null")
+            time.sleep(1)
+            # 不指定密码，不要设置 wifi-sec.key-mgmt（nmcli 中 none = WEP）。
+            # 不带 security 字段 = 开放网络。
+            run_cmd(
+                f"sudo nmcli connection add type wifi ifname {WLAN_IFACE} "
+                f"con-name {HOTSPOT_CONN_NAME} autoconnect no ssid {self.ssid}"
+            )
+            run_cmd(
+                f"sudo nmcli connection modify {HOTSPOT_CONN_NAME} "
+                f"802-11-wireless.mode ap 802-11-wireless.band bg "
+                f"ipv4.method shared"
+            )
+            rc, _, err = run_cmd(f"sudo nmcli connection up {HOTSPOT_CONN_NAME}")
+            print(f"[hotspot] up new rc={rc} err={err}", flush=True)
 
-        if self.hotspot_active:
-            self.status_label.setText(_T("step_ready"))
+        time.sleep(2)
+        # 以是否真的在活动连接里作为最终判断
+        if hotspot_is_active():
+            self.hotspot_active = True
+            self.ip_address = get_ip() or "192.168.7.1"
+            self._refresh_info("热点已就绪")
+        else:
+            self.hotspot_active = False
+            self.ip_address = ""
+            self.ssid_label.setText(f"SSID: {self.ssid}")
+            self.ip_label.setText("")
+            self.status_label.setText("热点启动失败")
+
+    def _refresh_info(self, status_text: str):
+        self.ssid_label.setText(f"SSID: {self.ssid}")
+        self.ip_label.setText(f"IP: {self.ip_address}")
+        self.status_label.setText(status_text)
 
     def _stop_hotspot(self):
-        """关闭 WiFi 热点"""
         print("[hotspot] stopping hotspot...", flush=True)
-        run_cmd("sudo nmcli connection down Hotspot-7 2>/dev/null")
-        time.sleep(1)
-        print("[hotspot] hotspot stopped", flush=True)
+        run_cmd(f"sudo nmcli connection down {HOTSPOT_CONN_NAME} 2>/dev/null")
 
     def closeEvent(self, ev):
-        print(f"[hotspot] closing (keep_hotspot={self._keep_hotspot_on_close})", flush=True)
+        print(f"[hotspot] closing (keep={self._keep_hotspot_on_close})", flush=True)
         if self.hotspot_active and not self._keep_hotspot_on_close:
             self._stop_hotspot()
         super().closeEvent(ev)
