@@ -11,7 +11,12 @@ import uuid
 import time
 import datetime
 import signal
+import io
 from pathlib import Path
+
+import barcode
+from barcode.writer import ImageWriter
+from PIL import Image
 
 from PySide6.QtCore import Qt, QTimer, QRect
 from PySide6.QtGui import QFont, QKeyEvent, QPixmap, QPainter, QColor, QPen
@@ -187,9 +192,9 @@ SETTING_ITEMS = [
     {"id": "language",    "icon": "language.png",      "label_key": "LANGUAGE"},
     {"id": "contact_us",  "icon": "qrcode.png",        "label_key": "CONTACT"},
     {"id": "app_download","icon": "app_download.png",  "label_key": "APPDOWN"},
+    {"id": "time",        "icon": "icon_sn.png",       "label_key": "TIME"},
     {"id": "shutdown",    "icon": "power.png",         "label_key": "SHUTDOWN"},
     {"id": "reboot",      "icon": "power.png",         "label_key": "REBOOT"},
-    {"id": "time",        "icon": "icon_sn.png",       "label_key": "TIME"},
 ]
 
 # ============================================================================
@@ -530,23 +535,21 @@ class SNPage(QWidget):
 
         self.la = load_language()
 
-        # Title
-        self.title_label = QLabel("Device Info", self)
-        title_font = QFont()
-        title_font.setPointSize(18)
-        title_font.setBold(True)
-        self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet("color: #ffffff; background: transparent;")
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         # SN display
-        full_sn = f"SN: {get_sn_short()}{get_mac_address()}"
+        self.sn_id = get_sn_short() + get_mac_address()
+        full_sn = f"SN: {self.sn_id}"
         self.sn_label = QLabel(full_sn, self)
         sn_font = QFont()
         sn_font.setPointSize(14)
         self.sn_label.setFont(sn_font)
         self.sn_label.setStyleSheet("color: #00E5FF; background: transparent;")
         self.sn_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Barcode display
+        self.barcode_label = QLabel(self)
+        self.barcode_label.setStyleSheet("background: transparent;")
+        self.barcode_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._generate_barcode()
 
         # Corner hints
         hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
@@ -556,11 +559,42 @@ class SNPage(QWidget):
         self.corner_br.setStyleSheet(hint_style)
         self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
 
+    def _generate_barcode(self):
+        try:
+            code128 = barcode.get("code128", self.sn_id, writer=ImageWriter())
+            buf = io.BytesIO()
+            # Disable text below bars since we already show SN text
+            code128.write(buf, options={"write_text": False})
+            buf.seek(0)
+            img = Image.open(buf)
+            img = img.convert("RGBA")
+            data = img.tobytes("raw", "RGBA")
+            pixmap = QPixmap(img.width, img.height)
+            # Convert image to QPixmap via QImage
+            from PySide6.QtGui import QImage
+            qimg = QImage(data, img.width, img.height, QImage.Format.Format_RGBA8888)
+            pixmap = QPixmap.fromImage(qimg)
+            self.barcode_label.setPixmap(pixmap)
+            self.barcode_label.setFixedSize(img.width, img.height)
+        except Exception as e:
+            self.barcode_label.setText(f"[Barcode Error: {e}]")
+            self.barcode_label.setStyleSheet("color: #ff5555; background: transparent;")
+
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         w, h = self.width(), self.height()
-        self.title_label.setGeometry(0, 40, w, 30)
-        self.sn_label.setGeometry(0, h // 2 - 20, w, 30)
+        # SN text at top area
+        self.sn_label.setGeometry(0, h // 4 - 20, w, 30)
+        # Barcode centered
+        bw = self.barcode_label.width()
+        bh = self.barcode_label.height()
+        if bw > w - 40:
+            # Scale down if too wide
+            scaled_w = w - 40
+            scaled_h = int(bh * scaled_w / bw)
+            self.barcode_label.setFixedSize(scaled_w, scaled_h)
+            self.barcode_label.setScaledContents(True)
+        self.barcode_label.move((w - self.barcode_label.width()) // 2, h // 2 - self.barcode_label.height() // 2)
         pad = 12
         self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
         self.corner_br.adjustSize()
