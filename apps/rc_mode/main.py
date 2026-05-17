@@ -183,15 +183,35 @@ def video_feed():
     )
 
 
+# ---- 连接状态（线程安全） ----
+_connected_clients = 0
+_conn_lock = threading.Lock()
+
+
+def get_connection_status() -> str:
+    with _conn_lock:
+        if _connected_clients > 0:
+            return f"已连接 ({_connected_clients} 客户端)"
+        return "等待连接..."
+
+
 # ---- WebSocket 事件 ----
 @socketio.on("connect")
 def on_connect():
-    print("[rc_mode] client connected", flush=True)
+    global _connected_clients
+    with _conn_lock:
+        _connected_clients += 1
+        count = _connected_clients
+    print(f"[rc_mode] client connected (total: {count})", flush=True)
 
 
 @socketio.on("disconnect")
 def on_disconnect():
-    print("[rc_mode] client disconnected", flush=True)
+    global _connected_clients
+    with _conn_lock:
+        _connected_clients = max(0, _connected_clients - 1)
+        count = _connected_clients
+    print(f"[rc_mode] client disconnected (total: {count})", flush=True)
 
 
 @socketio.on("balance")
@@ -383,6 +403,7 @@ class RCModePage(QWidget):
     def _update_display(self):
         ip_addr = get_ip("wlan0")
         self.ip_label.setText(f"http://{ip_addr}:{HTTP_PORT}")
+        self.status_label.setText(get_connection_status())
 
 
 # ===================== 入口 =====================

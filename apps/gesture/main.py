@@ -14,6 +14,7 @@ import sys
 import time
 import signal
 import math
+import subprocess
 import numpy as np
 import cv2
 
@@ -46,6 +47,15 @@ from mp_handpose import MPHandPose
 
 mark("onnx model imports done")
 
+# 导入 XGO 机器狗库
+sys.path.insert(0, '/home/pi/lib')
+try:
+    from xgolib import XGO
+    mark("xgolib import done")
+except Exception as _e:
+    XGO = None
+    print(f"[gesture] xgolib import failed: {_e}", flush=True)
+
 # ===================== 常量 =====================
 CAM_W, CAM_H = 320, 240
 
@@ -74,6 +84,38 @@ GESTURE_NAMES = {
     "OK": "OK",
     "Rock": "Rock",
 }
+
+# 手势 → 音频文件映射（不含扩展名）
+GESTURE_AUDIO = {
+    'Good': 'good',
+    '1': 'one',
+    '2': 'two',
+    '3': 'three',
+    '4': 'four',
+    '5': 'five',
+    'Stone': 'stone',
+    'OK': 'OK',
+    'Rock': 'six',  # Rock 复用 six 音效
+}
+
+# 手势 → 机器狗动作 ID 映射（参考 hands.py）
+GESTURE_ACTION = {
+    'Good': 23,
+    '1': 7,
+    '2': 8,
+    '3': 9,
+    '4': 22,
+    '5': 13,  # 招手
+    'Stone': 20,
+    'OK': 19,
+    'Rock': 24,  # 等同 six
+}
+
+# 音频目录
+MUSIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'music')
+
+# 动作冷却时间（秒），避免重复触发
+ACTION_COOLDOWN = 3.0
 
 
 # ===================== 手势识别核心 =====================
@@ -279,6 +321,10 @@ class GesturePage(QWidget):
         self.detector = HandDetectorONNX(max_num_hands=1, conf=0.7)
         mark("ONNX hand detector init")
 
+        # ---- XGO 机器狗初始化 ----
+        self._dog = None
+        self._init_dog()
+
         # ---- 摄像头初始化 ----
         self.picam2 = None
         self._init_camera()
@@ -288,6 +334,9 @@ class GesturePage(QWidget):
         self._stable_count = 0
         self.MIN_STABLE_FRAMES = 3
 
+        # ---- 动作冷却 ----
+        self._last_action_time = 0
+
         # ---- 定时抓帧 ----
         self.camera_timer = QTimer(self)
         self.camera_timer.timeout.connect(self._process_frame)
@@ -296,6 +345,20 @@ class GesturePage(QWidget):
         # ---- 自动退出兜底 ----
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def _init_dog(self):
+        """初始化 XGO 机器狗。"""
+        if XGO is None:
+            print("[gesture] XGO 库不可用，仅启用手势识别", flush=True)
+            return
+        try:
+            self._dog = XGO()
+            self._dog.reset()
+            print("[gesture] XGO 初始化成功", flush=True)
+            mark("xgo dog ready")
+        except Exception as e:
+            self._dog = None
+            print(f"[gesture] XGO 初始化失败: {e}", flush=True)
 
     def _init_camera(self):
         """初始化 Picamera2。"""
@@ -358,7 +421,54 @@ class GesturePage(QWidget):
             except Exception:
                 pass
             self.picam2 = None
+        if self._dog is not None:
+            try:
+                self._dog.reset()
+            except Exception:
+                pass
+        # 兜底：杀掉残留 aplay/ffplay/mplayer
+        try:
+            os.system("pkill -f 'aplay.*gesture/music' 2>/dev/null")
+            os.system("pkill -f 'ffplay.*gesture/music' 2>/dev/null")
+            os.system("pkill -f 'mplayer.*gesture/music' 2>/dev/null")
+        except Exception:
+            pass
         super().closeEvent(ev)
+
+    # ---- 手势动作 & 声音 ----
+    def _process_gesture(self, gesture_result):
+        """根据手势触发机器狗动作并播放对应音频。"""
+        now = time.time()
+        if now - self._last_action_time < ACTION_COOLDOWN:
+            return  # 冷却中，跳过
+
+        action_id = GESTURE_ACTION.get(gesture_result)
+        audio_key = GESTURE_AUDIO.get(gesture_result)
+        if action_id is None and audio_key is None:
+            return
+
+        self._last_action_time = now
+
+        # 1. 触发机器狗动作
+        if action_id is not None and self._dog is not None:
+            try:
+                self._dog.action(action_id)
+                print(f"[gesture] dog.action({action_id}) for {gesture_result}", flush=True)
+            except Exception as e:
+                print(f"[gesture] dog.action error: {e}", flush=True)
+
+        # 2. 播放音频（拄 ai 程序的成功写法：os.system + aplay + & 后台；
+        #    需要提前将 mp3 转为 wav，aplay 不支持 mp3 解码）
+        if audio_key:
+            audio_path = os.path.join(MUSIC_DIR, f"{audio_key}.wav")
+            if os.path.exists(audio_path):
+                try:
+                    os.system(f"aplay -D default -q '{audio_path}' 2>/dev/null &")
+                    print(f"[gesture] play audio: {audio_key}.wav", flush=True)
+                except Exception as e:
+                    print(f"[gesture] aplay error: {e}", flush=True)
+            else:
+                print(f"[gesture] audio file not found: {audio_path}", flush=True)
 
     # ---- 帧处理 ----
     def _process_frame(self):
@@ -401,7 +511,7 @@ class GesturePage(QWidget):
             self._prev_gesture = current_gesture
             self._stable_count = 1
 
-        # 在帧上绘制已确认的手势文字
+        # 在帧上绘制已确认的手势文字，并触发动作/声音
         if self._prev_gesture is not None and self._stable_count >= self.MIN_STABLE_FRAMES:
             display_name = GESTURE_NAMES.get(self._prev_gesture, self._prev_gesture)
             cv2.putText(
@@ -413,6 +523,8 @@ class GesturePage(QWidget):
                 (0, 255, 0),
                 2,
             )
+            # 触发手势动作 & 播放声音
+            self._process_gesture(self._prev_gesture)
 
         # 转换为 QPixmap 显示
         frame_rgb = cv2.cvtColor(frame_display, cv2.COLOR_BGR2RGB)

@@ -25,11 +25,11 @@ def mark(name: str):
 mark("python entry")
 
 # ===================== 重载导入 =====================
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QKeyEvent, QColor, QPalette
+from PySide6.QtCore import Qt, QTimer, QPointF, QRectF
+from PySide6.QtGui import QFont, QKeyEvent, QColor, QPalette, QPainter, QPen, QBrush
 from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QGridLayout, QProgressBar, QFrame,
+    QGridLayout, QFrame,
 )
 
 mark("PySide6 import done")
@@ -341,186 +341,340 @@ class DogController:
         return self._height
 
 
+# ===================== 自绘小控件 =====================
+COLOR_BG = "#0b1124"
+COLOR_PANEL = "#161c38"
+COLOR_PANEL_BORDER = "#232a4a"
+COLOR_GRID = "#22284a"
+COLOR_TEXT = "#e6ecff"
+COLOR_TEXT_DIM = "#8892c9"
+COLOR_TEXT_FAINT = "#5c6a9c"
+COLOR_ACCENT = "#18df6b"
+COLOR_ACCENT2 = "#3a7bd5"
+COLOR_DANGER = "#ff6b6b"
+
+
+class StickIndicator(QWidget):
+    """圆形摇杆指示器：外圈 + 十字 + 当前位置圆点。"""
+
+    def __init__(self, label: str, size: int = 70, parent=None):
+        super().__init__(parent)
+        self._label = label
+        self._x = 0.0
+        self._y = 0.0
+        self.setFixedSize(size, size + 14)
+
+    def set_position(self, x: float, y: float):
+        nx = max(-1.0, min(1.0, x))
+        ny = max(-1.0, min(1.0, y))
+        if abs(nx - self._x) > 0.01 or abs(ny - self._y) > 0.01:
+            self._x, self._y = nx, ny
+            self.update()
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w = self.width()
+        circle_h = self.height() - 14
+        cx, cy = w / 2, circle_h / 2
+        r = min(w, circle_h) / 2 - 3
+
+        # 外圈背景
+        p.setPen(QPen(QColor(COLOR_PANEL_BORDER), 1))
+        p.setBrush(QBrush(QColor(COLOR_PANEL)))
+        p.drawEllipse(QPointF(cx, cy), r, r)
+        # 十字参考线
+        p.setPen(QPen(QColor(COLOR_GRID), 1))
+        p.drawLine(int(cx - r + 3), int(cy), int(cx + r - 3), int(cy))
+        p.drawLine(int(cx), int(cy - r + 3), int(cx), int(cy + r - 3))
+
+        # 点
+        active = abs(self._x) > 0.05 or abs(self._y) > 0.05
+        dot_r = 6
+        px = cx + self._x * (r - dot_r)
+        py = cy - self._y * (r - dot_r)
+        if active:
+            # 轨迹线
+            p.setPen(QPen(QColor(COLOR_ACCENT), 1.5))
+            p.drawLine(QPointF(cx, cy), QPointF(px, py))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(QColor(COLOR_ACCENT) if active else QColor(COLOR_TEXT_FAINT)))
+        p.drawEllipse(QPointF(px, py), dot_r, dot_r)
+
+        # 标签
+        p.setPen(QColor(COLOR_TEXT_DIM if active else COLOR_TEXT_FAINT))
+        f = QFont()
+        f.setPointSize(8)
+        f.setBold(True)
+        p.setFont(f)
+        p.drawText(0, circle_h, w, 14, Qt.AlignmentFlag.AlignCenter, self._label)
+
+
+class TriggerBar(QWidget):
+    """扫机扬机型竖直进度条（用于 L2 / R2）。"""
+
+    def __init__(self, label: str, parent=None):
+        super().__init__(parent)
+        self._label = label
+        self._value = 0.0  # 0 ~ 1
+        self.setFixedSize(22, 70)
+
+    def set_value(self, v: float):
+        nv = max(0.0, min(1.0, v))
+        if abs(nv - self._value) > 0.01:
+            self._value = nv
+            self.update()
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+        label_h = 12
+        bar_y, bar_h = label_h + 2, h - label_h - 2
+
+        # 背景槽
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(COLOR_PANEL))
+        p.drawRoundedRect(0, bar_y, w, bar_h, 4, 4)
+        # 填充
+        fill_h = int(bar_h * self._value)
+        if fill_h > 0:
+            color = QColor(COLOR_ACCENT) if self._value > 0.95 else QColor(COLOR_ACCENT2)
+            p.setBrush(color)
+            p.drawRoundedRect(0, bar_y + bar_h - fill_h, w, fill_h, 4, 4)
+        # 标签
+        p.setPen(QColor(COLOR_TEXT_DIM))
+        f = QFont()
+        f.setPointSize(8)
+        f.setBold(True)
+        p.setFont(f)
+        p.drawText(0, 0, w, label_h, Qt.AlignmentFlag.AlignCenter, self._label)
+
+
+def _make_panel(border_radius: int = 8) -> QFrame:
+    f = QFrame()
+    f.setStyleSheet(
+        f"QFrame {{ background-color: {COLOR_PANEL}; border: 1px solid {COLOR_PANEL_BORDER};"
+        f" border-radius: {border_radius}px; }}"
+    )
+    return f
+
+
 # ===================== PySide6 页面 =====================
 class JoystickPage(QWidget):
-    """手柄控制 LCD 界面。"""
+    """手柄控制 LCD 界面 (320x240)。"""
 
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #0f1530;")
+        self.setStyleSheet(f"background-color: {COLOR_BG};")
         self._first_paint_logged = False
 
-        # ---- 手柄读取器 ----
         self._js = JoystickReader(js_id=0)
-
-        # ---- 机器狗控制器 ----
         self._controller = DogController()
 
-        # ---- 标题 ----
+        # ---- 顶部状态栏 ----
+        self.js_dot = QLabel("●")
+        self.js_dot.setStyleSheet(f"color: {COLOR_DANGER}; font-size: 14px;")
+        self.js_text = QLabel("手柄")
+        self.js_text.setStyleSheet(f"color: {COLOR_TEXT_DIM}; font-size: 11px;")
+
         self.title = QLabel("🎮 手柄控制")
-        f1 = QFont()
-        f1.setPointSize(18)
-        f1.setBold(True)
-        self.title.setFont(f1)
-        self.title.setStyleSheet("color: white;")
+        tf = QFont(); tf.setPointSize(13); tf.setBold(True)
+        self.title.setFont(tf)
+        self.title.setStyleSheet(f"color: {COLOR_TEXT};")
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # ---- 连接状态 ----
-        self.status_label = QLabel("手柄未连接")
-        self.status_label.setStyleSheet("color: #ff6b6b; font-size: 14px;")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.dog_text = QLabel("机器狗")
+        self.dog_text.setStyleSheet(f"color: {COLOR_TEXT_DIM}; font-size: 11px;")
+        self.dog_dot = QLabel("●")
+        self.dog_dot.setStyleSheet(f"color: {COLOR_DANGER}; font-size: 14px;")
 
-        self.dog_label = QLabel("机器狗: --")
-        self.dog_label.setStyleSheet("color: #8892c9; font-size: 12px;")
-        self.dog_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(0, 0, 0, 0)
+        top_bar.setSpacing(4)
+        top_bar.addWidget(self.js_dot)
+        top_bar.addWidget(self.js_text)
+        top_bar.addStretch(1)
+        top_bar.addWidget(self.title)
+        top_bar.addStretch(1)
+        top_bar.addWidget(self.dog_text)
+        top_bar.addWidget(self.dog_dot)
 
-        # ---- 分隔线 ----
-        self.separator = QFrame()
-        self.separator.setFrameShape(QFrame.Shape.HLine)
-        self.separator.setStyleSheet("color: #2a3050;")
+        # ---- 左侧：摇杆区 ----
+        self.stick_rk1 = StickIndicator("RK1", size=64)
+        self.stick_rk2 = StickIndicator("RK2", size=64)
+        self.stick_wsad = StickIndicator("WSAD", size=52)
+        self.bar_l2 = TriggerBar("L2")
+        self.bar_r2 = TriggerBar("R2")
 
-        # ---- 摇杆状态显示 ----
-        self.axis_grid_title = QLabel("— 摇杆轴状态 —")
-        self.axis_grid_title.setStyleSheet("color: #5c6a9c; font-size: 11px;")
-        self.axis_grid_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sticks_row = QHBoxLayout()
+        sticks_row.setSpacing(6)
+        sticks_row.setContentsMargins(0, 0, 0, 0)
+        sticks_row.addWidget(self.bar_l2, 0, Qt.AlignmentFlag.AlignVCenter)
+        sticks_row.addWidget(self.stick_rk1, 0, Qt.AlignmentFlag.AlignVCenter)
+        sticks_row.addWidget(self.stick_rk2, 0, Qt.AlignmentFlag.AlignVCenter)
+        sticks_row.addWidget(self.bar_r2, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        self.axis_labels = {}
-        axis_grid = QGridLayout()
-        axis_grid.setSpacing(4)
-        axis_names_display = [
-            ("RK1 ←→", "RK1_LEFT_RIGHT"),
-            ("RK1 ↑↓", "RK1_UP_DOWN"),
-            ("RK2 ←→", "RK2_LEFT_RIGHT"),
-            ("RK2 ↑↓", "RK2_UP_DOWN"),
-            ("L2", "L2"),
-            ("R2", "R2"),
-            ("WSAD ←→", "WSAD_LEFT_RIGHT"),
-            ("WSAD ↑↓", "WSAD_UP_DOWN"),
-        ]
-        for i, (display_name, key) in enumerate(axis_names_display):
-            name_lbl = QLabel(display_name)
-            name_lbl.setStyleSheet("color: #8892c9; font-size: 10px;")
-            bar = QProgressBar()
-            bar.setRange(-100, 100)
-            bar.setValue(0)
-            bar.setTextVisible(False)
-            bar.setFixedHeight(10)
-            bar.setStyleSheet("""
-                QProgressBar {
-                    background-color: #1a1f3a; border: none; border-radius: 3px;
-                }
-                QProgressBar::chunk {
-                    background-color: #18df6b; border-radius: 3px;
-                }
-            """)
-            self.axis_labels[key] = bar
-            row = i // 2
-            col = (i % 2) * 2
-            axis_grid.addWidget(name_lbl, row, col)
-            axis_grid.addWidget(bar, row, col + 1)
+        wsad_wrap = QHBoxLayout()
+        wsad_wrap.setContentsMargins(0, 0, 0, 0)
+        wsad_wrap.addStretch(1)
+        wsad_wrap.addWidget(self.stick_wsad)
+        wsad_wrap.addStretch(1)
 
-        # ---- 按钮状态显示 ----
-        self.btn_grid_title = QLabel("— 按钮状态 —")
-        self.btn_grid_title.setStyleSheet("color: #5c6a9c; font-size: 11px;")
-        self.btn_grid_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_panel = _make_panel()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(6, 4, 6, 4)
+        left_layout.setSpacing(2)
+        left_layout.addLayout(sticks_row)
+        left_layout.addLayout(wsad_wrap)
 
+        # ---- 右侧：按钮区 + 参数 ----
         self.btn_labels = {}
         btn_grid = QGridLayout()
-        btn_grid.setSpacing(4)
-        btn_names = ["A", "B", "X", "Y", "L1", "R1", "SELECT", "START", "MODE", "RK1", "RK2"]
-        for i, name in enumerate(btn_names):
+        btn_grid.setSpacing(3)
+        btn_grid.setContentsMargins(0, 0, 0, 0)
+        # ABXY 采用颜色区分
+        abxy_colors = {
+            "A": "#2fbf71", "B": "#e74c3c",
+            "X": "#3498db", "Y": "#f1c40f",
+        }
+        layout_def = [
+            ("L1", 0, 0), ("R1", 0, 1), ("SELECT", 0, 2), ("START", 0, 3),
+            ("X", 1, 0), ("Y", 1, 1), ("RK1", 1, 2), ("RK2", 1, 3),
+            ("A", 2, 0), ("B", 2, 1), ("MODE", 2, 2),
+        ]
+        for name, r, c in layout_def:
             lbl = QLabel(name)
-            lbl.setFixedSize(36, 20)
+            lbl.setFixedSize(36, 18)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setStyleSheet(
-                "color: #5c6a9c; background-color: #1a1f3a; border-radius: 4px; font-size: 10px;"
-            )
+            color = abxy_colors.get(name)
+            lbl.setProperty("_color", color)
+            lbl.setStyleSheet(self._btn_style(False, color))
             self.btn_labels[name] = lbl
-            row = i // 6
-            col = i % 6
-            btn_grid.addWidget(lbl, row, col)
+            btn_grid.addWidget(lbl, r, c)
 
-        # ---- 参数显示 ----
-        self.param_label = QLabel("步幅: 70  步频: 2  高度: 105")
-        self.param_label.setStyleSheet("color: #18df6b; font-size: 12px;")
-        self.param_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # 参数卡片
+        self.lbl_step = QLabel("70")
+        self.lbl_pace = QLabel("中")
+        self.lbl_height = QLabel("105")
+        params_row = QHBoxLayout()
+        params_row.setSpacing(3)
+        params_row.setContentsMargins(0, 0, 0, 0)
+        for tag, val in (("步幅", self.lbl_step), ("步频", self.lbl_pace), ("高度", self.lbl_height)):
+            cell = QFrame()
+            cell.setStyleSheet(
+                f"QFrame {{ background-color: {COLOR_PANEL_BORDER}; border-radius: 4px; }}"
+            )
+            cl = QVBoxLayout(cell)
+            cl.setContentsMargins(2, 1, 2, 1)
+            cl.setSpacing(0)
+            t = QLabel(tag)
+            t.setStyleSheet(f"color: {COLOR_TEXT_FAINT}; font-size: 9px; background: transparent;")
+            t.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            val.setStyleSheet(f"color: {COLOR_ACCENT}; font-size: 12px; font-weight: bold; background: transparent;")
+            val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cl.addWidget(t)
+            cl.addWidget(val)
+            params_row.addWidget(cell)
 
-        # ---- 操作提示 ----
-        hint_style = "color: #5c6a9c; font-size: 10px; background: transparent;"
-        self.hint_bl = QLabel("C: 退出", self)
+        right_panel = _make_panel()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(6, 4, 6, 4)
+        right_layout.setSpacing(4)
+        right_layout.addLayout(btn_grid)
+        right_layout.addLayout(params_row)
+
+        body = QHBoxLayout()
+        body.setSpacing(6)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.addWidget(left_panel, 5)
+        body.addWidget(right_panel, 4)
+
+        # ---- 底部提示 ----
+        hint_style = f"color: {COLOR_TEXT_FAINT}; font-size: 10px; background: transparent;"
+        self.hint_bl = QLabel("C: 退出")
         self.hint_bl.setStyleSheet(hint_style)
-        self.hint_br = QLabel("SELECT: 复位", self)
+        self.hint_br = QLabel("START: 复位   SELECT: 跨障")
         self.hint_br.setStyleSheet(hint_style)
         self.hint_br.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        # ---- 布局 ----
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 16, 20, 16)
-        main_layout.setSpacing(6)
-        main_layout.addWidget(self.title)
-        main_layout.addWidget(self.status_label)
-        main_layout.addWidget(self.dog_label)
-        main_layout.addWidget(self.separator)
-        main_layout.addWidget(self.axis_grid_title)
-        main_layout.addLayout(axis_grid)
-        main_layout.addWidget(self.btn_grid_title)
-        main_layout.addLayout(btn_grid)
-        main_layout.addWidget(self.param_label)
+        bottom = QHBoxLayout()
+        bottom.setContentsMargins(0, 0, 0, 0)
+        bottom.addWidget(self.hint_bl)
+        bottom.addStretch(1)
+        bottom.addWidget(self.hint_br)
 
-        # ---- 定时刷新 ----
+        # ---- 主布局 ----
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(8, 6, 8, 6)
+        main_layout.setSpacing(5)
+        main_layout.addLayout(top_bar)
+        main_layout.addLayout(body, 1)
+        main_layout.addLayout(bottom)
+
+        # ---- 定时器 ----
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._refresh_ui)
-        self._refresh_timer.start(80)  # ~12fps
+        self._refresh_timer.start(60)  # ~16fps
 
-        # ---- 手柄轮询定时器（同时处理事件和重连） ----
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_joystick)
-        self._poll_timer.start(20)  # ~50Hz 轮询
+        self._poll_timer.start(20)
 
-        # ---- 自动退出兜底 ----
         QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
-
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
-        # ---- 启动手柄读取 ----
         self._js.start()
 
+    @staticmethod
+    def _btn_style(pressed: bool, color: str | None) -> str:
+        if pressed:
+            bg = color if color else COLOR_ACCENT
+            return (
+                f"color: #fff; background-color: {bg}; border-radius: 4px;"
+                f" font-size: 10px; font-weight: bold;"
+            )
+        accent = color if color else COLOR_TEXT_FAINT
+        return (
+            f"color: {accent}; background-color: {COLOR_PANEL_BORDER};"
+            f" border-radius: 4px; font-size: 10px; font-weight: bold;"
+        )
+
     def _poll_joystick(self):
-        """轮询手柄状态并控制机器狗。"""
         if not self._js.connected:
             self._js.try_reconnect()
             return
-
-        # 处理按钮事件（只处理变化）
         for name, value in self._js.button_states.items():
-            if value != 0:  # 有按下或持续按住
+            if value != 0:
                 self._controller.process_event(name, value)
-
-        # 处理轴事件
         for name, value in self._js.axis_states.items():
             self._controller.process_event(name, value)
 
     def _refresh_ui(self):
-        """刷新界面显示。"""
-        connected = self._js.connected
-        if connected:
-            self.status_label.setText("🟢 手柄已连接")
-            self.status_label.setStyleSheet("color: #18df6b; font-size: 14px;")
+        # 状态点
+        if self._js.connected:
+            self.js_dot.setStyleSheet(f"color: {COLOR_ACCENT}; font-size: 14px;")
+            self.js_text.setText("手柄 已连接")
         else:
-            self.status_label.setText("🔴 手柄未连接")
-            self.status_label.setStyleSheet("color: #ff6b6b; font-size: 14px;")
+            self.js_dot.setStyleSheet(f"color: {COLOR_DANGER}; font-size: 14px;")
+            self.js_text.setText("手柄 未连接")
 
         if self._controller.dog_available:
-            self.dog_label.setText("🟢 机器狗已就绪")
+            self.dog_dot.setStyleSheet(f"color: {COLOR_ACCENT}; font-size: 14px;")
+            self.dog_text.setText("机器狗 就绪")
         else:
-            self.dog_label.setText("🔴 机器狗未连接")
+            self.dog_dot.setStyleSheet(f"color: {COLOR_DANGER}; font-size: 14px;")
+            self.dog_text.setText("机器狗 离线")
 
-        # 更新轴进度条
-        for name, bar in self.axis_labels.items():
-            val = self._js.axis_states.get(name, 0)
-            bar.setValue(int(val * 100))
+        # 摇杆位置
+        ax = self._js.axis_states
+        self.stick_rk1.set_position(ax.get("RK1_LEFT_RIGHT", 0), -ax.get("RK1_UP_DOWN", 0))
+        self.stick_rk2.set_position(ax.get("RK2_LEFT_RIGHT", 0), -ax.get("RK2_UP_DOWN", 0))
+        self.stick_wsad.set_position(ax.get("WSAD_LEFT_RIGHT", 0), -ax.get("WSAD_UP_DOWN", 0))
+        # 扬机：L2 / R2 原始值范围 -1~1，转为 0~1
+        self.bar_l2.set_value((ax.get("L2", -1.0) + 1) / 2)
+        self.bar_r2.set_value((ax.get("R2", -1.0) + 1) / 2)
 
-        # 更新按钮高亮
+        # 按钮高亮
         btn_key_map = {
             "A": "A", "B": "B", "X": "X", "Y": "Y",
             "L1": "L1", "R1": "R1",
@@ -528,35 +682,18 @@ class JoystickPage(QWidget):
             "RK1": "BTN_RK1", "RK2": "BTN_RK2",
         }
         for display_name, internal_name in btn_key_map.items():
-            if display_name in self.btn_labels:
-                lbl = self.btn_labels[display_name]
-                pressed = self._js.button_states.get(internal_name, 0)
-                if pressed:
-                    lbl.setStyleSheet(
-                        "color: #fff; background-color: #18df6b; border-radius: 4px; font-size: 10px;"
-                    )
-                else:
-                    lbl.setStyleSheet(
-                        "color: #5c6a9c; background-color: #1a1f3a; border-radius: 4px; font-size: 10px;"
-                    )
+            lbl = self.btn_labels.get(display_name)
+            if not lbl:
+                continue
+            pressed = bool(self._js.button_states.get(internal_name, 0))
+            color = lbl.property("_color")
+            lbl.setStyleSheet(self._btn_style(pressed, color))
 
-        # 更新参数
+        # 参数卡片
         pace_names = {1: "慢", 2: "中", 3: "快"}
-        self.param_label.setText(
-            f"步幅: {self._controller.step_control}  "
-            f"步频: {pace_names.get(self._controller.pace_freq, '中')}  "
-            f"高度: {self._controller.height}"
-        )
-
-    # ---- 布局事件 ----
-    def resizeEvent(self, ev):
-        super().resizeEvent(ev)
-        w, h = self.width(), self.height()
-        pad = 16
-        self.hint_bl.adjustSize()
-        self.hint_bl.move(pad, h - self.hint_bl.height() - pad)
-        self.hint_br.adjustSize()
-        self.hint_br.move(w - self.hint_br.width() - pad, h - self.hint_br.height() - pad)
+        self.lbl_step.setText(str(self._controller.step_control))
+        self.lbl_pace.setText(pace_names.get(self._controller.pace_freq, "中"))
+        self.lbl_height.setText(str(self._controller.height))
 
     # ---- 首帧日志 ----
     def paintEvent(self, ev):
@@ -575,10 +712,8 @@ class JoystickPage(QWidget):
             prev = ms
         return " | ".join(lines)
 
-    # ---- 按键 ----
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Back:
-            # 左下 C 键 → 退出
             print("[joystick] KEY_BACK -> exit", flush=True)
             self.close()
 

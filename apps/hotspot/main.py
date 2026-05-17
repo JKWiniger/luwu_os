@@ -88,6 +88,7 @@ class HotspotPage(QWidget):
         self.password = ""
         self.ip_address = ""
         self.hotspot_active = False
+        self._keep_hotspot_on_close = False  # True 表示关闭页面但保留热点运行
 
         # ---- 标题 ----
         self.title = QLabel("热点模式")
@@ -139,14 +140,16 @@ class HotspotPage(QWidget):
         self.ip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # ---- 提示 ----
-        self.hint = QLabel("C键: 关闭热点并退出")
+        self.hint = QLabel("C键: 关闭页面（保留热点）  D键: 关闭热点")
         self.hint.setStyleSheet("color: #5c6a9c; font-size: 11px;")
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # ---- 四角按键提示 ----
         corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
-        self.corner_bl = QLabel("C: 关闭热点", self)
+        self.corner_bl = QLabel("C: 关闭页面", self)
         self.corner_bl.setStyleSheet(corner_style)
+        self.corner_br = QLabel("D: 关闭热点", self)
+        self.corner_br.setStyleSheet(corner_style)
 
         # ---- 布局 ----
         layout = QVBoxLayout(self)
@@ -179,6 +182,8 @@ class HotspotPage(QWidget):
         pad = 16
         self.corner_bl.adjustSize()
         self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        self.corner_br.adjustSize()
+        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -187,9 +192,15 @@ class HotspotPage(QWidget):
             mark("first paintEvent")
 
     def keyPressEvent(self, ev: QKeyEvent):
-        # 任意按键退出
-        if ev.key() in (Qt.Key.Key_Left, Qt.Key.Key_Back, Qt.Key.Key_Return):
-            print("[hotspot] key pressed -> closing hotspot", flush=True)
+        key = ev.key()
+        if key == Qt.Key.Key_Back:
+            # C 键：关闭页面但保留热点
+            print("[hotspot] KEY_BACK (C) -> close page, keep hotspot", flush=True)
+            self._keep_hotspot_on_close = True
+            self.close()
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            # D 键：关闭热点并退出
+            print("[hotspot] KEY_RETURN (D) -> stop hotspot and exit", flush=True)
             self._stop_hotspot()
             self.close()
 
@@ -264,8 +275,8 @@ class HotspotPage(QWidget):
         print("[hotspot] hotspot stopped", flush=True)
 
     def closeEvent(self, ev):
-        print("[hotspot] closing", flush=True)
-        if self.hotspot_active:
+        print(f"[hotspot] closing (keep_hotspot={self._keep_hotspot_on_close})", flush=True)
+        if self.hotspot_active and not self._keep_hotspot_on_close:
             self._stop_hotspot()
         super().closeEvent(ev)
 

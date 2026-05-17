@@ -10,14 +10,14 @@ static constexpr const char *ASSET_DIR = "/home/pi/luwu-os/launcher/assets/";
 
 // 示例程序列表：名字 + 颜色 + appPath + iconFile
 static const DemoItem DEMOS[] = {
+    {"\u8868\u6f14\u6a21\u5f0f", "#3498DB", "apps/perform/main.py", "demo_perform.png"},
     {"\u56fe\u4f20\u6a21\u5f0f", "#E74C3C", "apps/rc_mode/main.py", "demo_rc.png"},
-    {"\u4eba\u8138\u8ddf\u968f", "#4A90D9", "apps/face_follow/main.py", "demo_face_track.png"},
-    {"小球跟随", "#50C878", "apps/ball_catch/main.py", "demo_ball_track.png"},
-    {"\u624b\u52bf\u8bc6\u522b", "#FF6B6B", "apps/gesture/main.py", "demo_gesture.png"},
-    {"\u624b\u67c4\u63a7\u5236", "#FFD93D", "apps/joystick/main.py", "demo_gamepad.png"},
     {"\u70ed\u70b9\u6a21\u5f0f", "#9B59B6", "apps/hotspot/main.py", "demo_hotspot.png"},
     {"\u7fa4\u7ec4\u8868\u6f14", "#E67E22", "apps/group_perform/main.py", "demo_group.png"},
-    {"\u8868\u6f14\u6a21\u5f0f", "#3498DB", "apps/perform/main.py", "demo_perform.png"},
+    {"\u624b\u52bf\u8bc6\u522b", "#FF6B6B", "apps/gesture/main.py", "demo_gesture.png"},
+    {"\u4eba\u8138\u8ddf\u968f", "#4A90D9", "apps/face_follow/main.py", "demo_face_track.png"},
+    {"小球抓取", "#50C878", "apps/ball_catch/main.py", "demo_ball_track.png"},
+    {"\u624b\u67c4\u63a7\u5236", "#FFD93D", "apps/joystick/main.py", "demo_gamepad.png"},
     {"\u96f7\u8fbe\u626b\u63cf", "#2ECC71", "apps/radar/main.py", "demo_radar.png"},
 };
 static constexpr int DEMO_COUNT = sizeof(DEMOS) / sizeof(DEMOS[0]);
