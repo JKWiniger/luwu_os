@@ -173,7 +173,7 @@ void DemoGridView::updateCornerPositions() {
     if (w == 0 || h == 0) return;
 
     int iconSize = 28;
-    int margin = 4;
+    int margin = 0;
 
     cornerTL->setGeometry(margin, margin, iconSize, iconSize);
     cornerTR->setGeometry(w - iconSize - margin, margin, iconSize, iconSize);
