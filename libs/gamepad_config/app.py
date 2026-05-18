@@ -19,7 +19,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "mappings.json")
 
 # ── 手柄识别关键词 ─────────────────────────────────────────────────
-GAMEPAD_KEYWORDS = ["xbox", "microsoft", "wireless controller", "gamepad", "controller"]
+GAMEPAD_KEYWORDS = ["xbox", "microsoft", "wireless controller", "gamepad", "controller", "tl_", "8bitdo", "ipega"]
 
 # ── evdev → 标准按钮索引 (对齐浏览器 Gamepad API 标准布局) ───────────
 # BTN_SOUTH=304(A) BTN_EAST=305(B) BTN_WEST=308(X) BTN_NORTH=307(Y)

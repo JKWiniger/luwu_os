@@ -2785,6 +2785,7 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: /home/pi/luwu-os/launcher/main.cpp \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/qversiontagging.h \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/qxptype_traits.h \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/qyieldcpu.h \
+  /usr/include/aarch64-linux-gnu/qt6/QtGui/QFont \
   /usr/include/aarch64-linux-gnu/qt6/QtGui/QKeyEvent \
   /usr/include/aarch64-linux-gnu/qt6/QtGui/QPainter \
   /usr/include/aarch64-linux-gnu/qt6/QtGui/QPixmap \

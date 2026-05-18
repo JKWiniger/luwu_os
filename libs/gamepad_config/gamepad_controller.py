@@ -19,18 +19,20 @@ import threading
 import logging
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [gamepad] %(levelname)s %(message)s",
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
 
 # ── 路径 ──────────────────────────────────────────────────────────
 ROOT = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(ROOT, "Luwu-OS", "libs", "gamepad_config", "mappings.json")
+# mappings.json 与本脚本同目录
+CONFIG_FILE = os.path.join(ROOT, "mappings.json")
 
 # ── 手柄识别 ──────────────────────────────────────────────────────
-GAMEPAD_KEYWORDS = ["xbox", "microsoft", "wireless controller", "controller"]
+GAMEPAD_KEYWORDS = ["xbox", "microsoft", "wireless controller", "controller", "tl_", "8bitdo", "ipega", "gamepad"]
 
 # evdev 按键码 → 按钮索引（同 app.py 定义）
 BUTTON_MAP = {
@@ -117,12 +119,17 @@ class XGOController:
             log.error(f"xgolib 初始化失败: {e}")
 
     def _load_mapping(self):
+        log.info(f">>> 加载配置文件: {CONFIG_FILE}")
         try:
             with open(CONFIG_FILE) as f:
                 all_cfg = json.load(f)
+            log.info(f"  JSON 顶层 keys: {list(all_cfg.keys())}")
             self.mapping = all_cfg.get(self.device_type or "xgorider", {})
             self._config_mtime = os.path.getmtime(CONFIG_FILE)
-            log.info(f"已加载映射 ({self.device_type}): {len(self.mapping)} 项")
+            log.info(f"  设备类型={self.device_type}, 映射项数={len(self.mapping)}")
+            for k, v in self.mapping.items():
+                if v != "none":
+                    log.info(f"    {k} → {v}")
         except FileNotFoundError:
             self._config_mtime = 0
             log.warning(f"配置文件不存在: {CONFIG_FILE}，使用空映射")
@@ -146,14 +153,19 @@ class XGOController:
 
     def _find_gamepad(self):
         import evdev
-        for path in evdev.list_devices():
+        all_devs = evdev.list_devices()
+        log.debug(f"evdev 扫描到 {len(all_devs)} 个输入设备:")
+        for path in all_devs:
             try:
                 dev = evdev.InputDevice(path)
-                if any(kw in dev.name.lower() for kw in GAMEPAD_KEYWORDS):
+                name_low = dev.name.lower()
+                matched = any(kw in name_low for kw in GAMEPAD_KEYWORDS)
+                log.debug(f"  {path}: '{dev.name}' → {'✓ 匹配' if matched else '✗ 跳过'}")
+                if matched:
                     log.info(f"找到手柄: {dev.name} ({path})")
                     return dev
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"  {path}: 打开失败 {e}")
         return None
 
     # ── 震动反馈 ──────────────────────────────────────────────────
@@ -197,6 +209,9 @@ class XGOController:
 
         xgo = self.xgo
         is_rider = (self.device_type == "xgorider")
+        log.info(f"CALL func={func_id}, axis_val={axis_val}, xgo={'✓' if xgo else '✗ None'}, type={self.device_type}")
+        if not xgo:
+            log.warning(f"  xgo=None, 无法执行 {func_id}（仅日志输出）")
 
         # ── 移动 ──
         if func_id == "stop":
@@ -360,24 +375,29 @@ class XGOController:
     def _on_button(self, btn_idx, pressed):
         key = f"button_{btn_idx}"
         func = self.mapping.get(key, "none")
+        log.info(f"BTN  {key} {'按下' if pressed else '松开'} → func={func}")
         if func == "none":
             return
 
         if pressed:
             if func in ONE_SHOT:
+                log.info(f"  → ONE_SHOT 执行: {func}")
                 self._call(func)
             elif func in HOLD:
                 self._held.add(btn_idx)
+                log.info(f"  → HOLD 开始: {func}")
                 self._call(func)
+            else:
+                log.warning(f"  → 未归类的 func={func}，不在 ONE_SHOT/HOLD 中")
         else:
             if btn_idx in self._held:
                 self._held.discard(btn_idx)
-                # 如果没有其他移动按键还在按，则停止
                 still_moving = any(
                     self.mapping.get(f"button_{i}", "none") in HOLD
                     for i in self._held
                 )
                 if not still_moving:
+                    log.info(f"  → HOLD 释放，停止移动")
                     self._stop_movement()
 
     def _on_axis(self, axis_idx, value):
@@ -389,12 +409,21 @@ class XGOController:
             v = value if abs(value) > DEADZONE else 0.0
             if self.mapping.get(f"{key}_reversed", False):
                 v = -v
+            # 只在超出死区时打日志，避免刷屏
+            if abs(value) > DEADZONE:
+                log.info(f"AXIS {key}={value:+.3f} → func={func}, v={v:+.3f}")
             self._call(func, axis_val=v)
 
     # ── 主循环 ────────────────────────────────────────────────────
 
     def run(self):
+        log.info("=" * 60)
+        log.info("XGOController.run() 启动")
+        log.info(f"  CONFIG_FILE = {CONFIG_FILE}")
+        log.info(f"  GAMEPAD_KEYWORDS = {GAMEPAD_KEYWORDS}")
+        log.info("=" * 60)
         self._init_xgo()
+        log.info(f"xgo 初始化完成: xgo={'✓' if self.xgo else '✗ None'}, device_type={self.device_type}")
         self._load_mapping()
         self._running = True
         self._start_config_watcher()
@@ -407,19 +436,28 @@ class XGOController:
                 time.sleep(2)
                 continue
 
-            log.info(f"开始监听: {dev.name}")
+            log.info(f"开始监听: {dev.name} ({', '.join(f'ABS {c}' for c in abs_info)})")
             self._gamepad_dev = dev
             try:
                 abs_info = {code: dev.absinfo(code) for code in AXIS_MAP if hasattr(dev, "absinfo")}
 
+                ev_count = 0
                 for event in dev.read_loop():
                     if not self._running:
                         break
 
+                    ev_count += 1
+                    # 每 50 个事件打一次心跳，确保知道线程还活着
+                    if ev_count % 50 == 1:
+                        log.debug(f"[事件循环 alive] 已处理 {ev_count} 个事件")
+
                     if event.type == evdev.ecodes.EV_KEY:
                         idx = BUTTON_MAP.get(event.code)
                         if idx is not None:
+                            log.debug(f"EV_KEY code={event.code} idx={idx} value={event.value}")
                             self._on_button(idx, event.value == 1)
+                        else:
+                            log.debug(f"EV_KEY code={event.code} → 不在 BUTTON_MAP 中，忽略")
 
                     elif event.type == evdev.ecodes.EV_ABS:
                         code = event.code
