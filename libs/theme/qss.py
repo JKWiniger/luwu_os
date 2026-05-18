@@ -55,7 +55,9 @@ def text(role: str = "body", color: str = None) -> str:
         "caption":  (Font.caption,  False, Color.text_muted),
     }
     size, bold, default_color = role_map.get(role, role_map["body"])
-    weight = "bold" if bold else "normal"
+    # 半粗（Medium=500），需要真字重的字体（如 Noto Sans CJK SC Medium）
+    # 系统中文字体为单字重时 Qt 会回退到 Normal，避免伪粗体糙感
+    weight = "500" if bold else "normal"
     return (
         f"color: {color or default_color};"
         f"font-size: {size}px;"
@@ -117,7 +119,7 @@ def overlay_pill(role: str = "body", color: str = None, strong: bool = False) ->
         "caption":  (Font.caption,  False),
     }
     size, bold = role_map.get(role, role_map["body"])
-    weight = "bold" if bold else "normal"
+    weight = "500" if bold else "normal"
     bg = Color.overlay_pill_bg_strong if strong else Color.overlay_pill_bg
     fg = color or Color.text_invert
     return (

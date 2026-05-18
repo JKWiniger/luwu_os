@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QPixmap>
 #include <QPainter>
+#include <QFont>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "keyfilter.h"
@@ -33,6 +34,13 @@ static constexpr const char *KEYS_FIFO = "/tmp/luwu_keys.fifo";
 // ========================================================================
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
+
+    // 全局默认字体：Noto Sans CJK SC（供真 Medium/Regular 多字重，避免 Qt 伪粗体描边）
+    {
+        QFont appFont("Noto Sans CJK SC");
+        appFont.setStyleStrategy(QFont::PreferAntialias);
+        QApplication::setFont(appFont);
+    }
 
     // --- 页面栈 ---
     QStackedWidget stack;

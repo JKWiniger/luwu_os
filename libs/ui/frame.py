@@ -56,9 +56,9 @@ class CornerHint(QWidget):
         self._icon.hide()
 
         self._text = HintLabel("", self)
-        # 角标文字加重为主深蓝 + bold，以保证在桌面渐变背景上的对比度
+        # 角标文字用主深蓝 + 半粗 (Medium=500)，避免伪粗体糙感
         self._text.setStyleSheet(
-            qss.text("hint", color=Color.text_primary) + "font-weight: bold;"
+            qss.text("hint", color=Color.text_primary) + "font-weight: 500;"
         )
         self._text.hide()
 

@@ -18,6 +18,43 @@ DEFAULT_CONFIG_PATH = os.path.join(APP_DIR, "config_default.json")
 FONT_PATH = os.path.join(APP_DIR, "msyh.ttc")
 PORT = 5000
 
+# ===== i18n =====
+import sys as _sys
+if "/home/pi/luwu-os" not in _sys.path:
+    _sys.path.insert(0, "/home/pi/luwu-os")
+try:
+    from libs.i18n import Translator as _Translator
+    _T = _Translator({
+        "cn": {
+            "idle_title": "AI 聊天",
+            "idle_scan": "扫码配置",
+            "idle_web": "通过网页配置 →",
+        },
+        "en": {
+            "idle_title": "AI Chat",
+            "idle_scan": "Scan to configure",
+            "idle_web": "Configure via web →",
+        },
+    })
+except Exception:
+    _T = lambda k, *a: k
+
+# 全屏背景底图（与启动页一致）
+_APP_BG_IMAGE_PATH = "/home/pi/luwu-os/assets/images/app_bg.png"
+_APP_BG_PIL = None
+try:
+    if os.path.exists(_APP_BG_IMAGE_PATH):
+        _APP_BG_PIL = Image.open(_APP_BG_IMAGE_PATH).convert("RGB").resize((320, 240))
+except Exception as _e:
+    print(f"[WebServer] bg image load error: {_e}")
+
+
+def _new_canvas():
+    """返回一份启动页背景的副本，背景图缺失时回落原深色。"""
+    if _APP_BG_PIL is not None:
+        return _APP_BG_PIL.copy()
+    return Image.new("RGB", (320, 240), (15, 21, 46))
+
 
 def load_config():
     """加载配置文件"""
@@ -313,7 +350,7 @@ class ConfigWebServer:
         config_ready = is_config_complete() if show_start_button else False
         url = self.get_url()
         try:
-            img = Image.new("RGB", (320, 240), (15, 21, 46))
+            img = _new_canvas()
             draw = ImageDraw.Draw(img)
 
             # Try loading font, fallback to default
@@ -330,26 +367,26 @@ class ConfigWebServer:
             qr_y = 25
             img.paste(qr_img, (qr_x, qr_y))
 
-            # Title
-            draw.text((160, 6), "AI Chat", font=font_title, fill=(102, 178, 255), anchor="mt")
+            # Title（深蓝，适应浅色背景）
+            draw.text((160, 6), _T("idle_title"), font=font_title, fill=(30, 64, 175), anchor="mt")
 
-            # Hint text
+            # Hint text（深色文字）
             label_y = qr_y + 120 + 6
-            draw.text((160, label_y), "Scan to configure",
-                       font=font_text, fill=(200, 200, 200), anchor="mt")
+            draw.text((160, label_y), _T("idle_scan"),
+                       font=font_text, fill=(40, 50, 80), anchor="mt")
             draw.text((160, label_y + 20), url,
-                       font=font_text, fill=(128, 128, 128), anchor="mt")
+                       font=font_text, fill=(80, 90, 120), anchor="mt")
 
             # Bottom hint: only show when not configured (left/right已由系统状态栏显示 C:退出 / D:开始)
             if show_start_button and not config_ready:
                 hint_y = 240 - 16
-                draw.text((160, hint_y), "Configure via web →",
-                           font=font_text, fill=(150, 150, 150), anchor="mb")
+                draw.text((160, hint_y), _T("idle_web"),
+                           font=font_text, fill=(70, 80, 110), anchor="mb")
 
             return img
         except Exception as e:
             print(f"[WebServer] generate_idle_image error: {e}")
-            return Image.new("RGB", (320, 240), (15, 21, 46))
+            return _new_canvas()
 
     def generate_status_image(self, text, color=(102, 178, 255)):
         """Generate a status text image - returns PIL Image"""

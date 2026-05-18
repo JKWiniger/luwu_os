@@ -9,7 +9,6 @@ import os
 import time
 import signal
 import math
-import threading
 
 # ---- 阶段计时 ----
 T0 = time.monotonic()
@@ -26,14 +25,17 @@ mark("python entry")
 sys.path.insert(0, '/home/pi/luwu-os/libs/ydlidar_sdk')
 import ydlidar
 
-# ---- PySide6 导入 ----
-from PySide6.QtCore import Qt, QTimer, QThread, Signal
-from PySide6.QtGui import QFont, QKeyEvent, QPainter, QColor, QPen, QBrush, QPixmap, QPaintEvent
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
+# ---- PySide6 ----
+from PySide6.QtCore import Qt, QTimer, QThread, Signal, QRectF, QPointF
+from PySide6.QtGui import (
+    QFont, QKeyEvent, QPainter, QColor, QPen, QBrush, QPixmap, QPaintEvent,
+    QPainterPath, QRadialGradient,
+)
+from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout
 
 mark("imports done")
 
-# ===================== i18n =====================
+# ===================== i18n + 主题 =====================
 if "/home/pi/luwu-os" not in sys.path:
     sys.path.insert(0, "/home/pi/luwu-os")
 try:
@@ -42,20 +44,28 @@ try:
         "cn": {
             "title": "雷达扫描",
             "init": "正在初始化雷达...",
-            "corner_exit": "C:退出",
+            "corner_exit": "退出",
             "radar_disconnected": "雷达未连接",
             "radar_connected": "雷达已连接",
         },
         "en": {
             "title": "Lidar Scan",
             "init": "Initializing lidar...",
-            "corner_exit": "C: Exit",
+            "corner_exit": "Exit",
             "radar_disconnected": "Lidar not connected",
             "radar_connected": "Lidar connected",
         },
     })
 except Exception:
     _T = lambda k, *a: k
+
+from libs.theme import (  # noqa: E402
+    apply_app_palette, Asset as T_Asset, Color as T_Color,
+    Spacing, Radius, qss as T_qss,
+)
+from libs.ui import AppFrame  # noqa: E402
+
+_APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
 
 # ===================== 常量 =====================
 AUTO_EXIT_SEC = 120
@@ -77,21 +87,21 @@ class RadarReaderThread(QThread):
 
     def run(self):
         self._running = True
-        # 初始化雷达
         self._init_radar()
 
         if not self.radar_connected:
             self.radar_status.emit(False, _T("radar_disconnected"))
-            # 仍然循环，尝试重连
             while self._running:
                 time.sleep(2)
                 self._init_radar()
-            return
+                if self.radar_connected:
+                    break
+            if not self._running:
+                return
 
         self.radar_status.emit(True, _T("radar_connected"))
         print("[radar] reader thread started")
 
-        # 主读取循环
         while self._running and ydlidar.os_isOk():
             try:
                 scan = ydlidar.LaserScan()
@@ -112,7 +122,6 @@ class RadarReaderThread(QThread):
                 print(f"[radar] read error: {e}")
                 time.sleep(0.1)
 
-        # 清理雷达
         self._cleanup_radar()
         print("[radar] reader thread ended")
 
@@ -175,7 +184,7 @@ class RadarReaderThread(QThread):
             if self.laser:
                 try:
                     self.laser.disconnecting()
-                except:
+                except Exception:
                     pass
             self.laser = None
             self.radar_connected = False
@@ -193,175 +202,222 @@ class RadarReaderThread(QThread):
         self._running = False
 
 
-# ===================== PySide6 雷达绘制组件 =====================
+# ===================== 雷达画布（深色雷达屏，圆角 + 径向渐变） =====================
 class RadarCanvas(QWidget):
-    """自定义 QWidget，用 QPainter 绘制雷达扫描画面"""
+    """自定义 QWidget — 用 QPainter 绘制一台仿真雷达屏。"""
+
+    # 色板（与全局浅色主题协调，但屏内保持夜间雷达深色调）
+    SCREEN_BG_INNER = QColor(12, 24, 56)        # 屏中心
+    SCREEN_BG_OUTER = QColor(2, 6, 18)          # 屏边缘
+    SCREEN_BORDER = QColor(58, 141, 255, 200)   # accent
+    GRID_RING = QColor(58, 141, 255, 90)        # accent 半透明同心圆
+    GRID_CROSS = QColor(58, 141, 255, 55)       # 十字线
+    GRID_RAY = QColor(58, 141, 255, 35)         # 角度射线
+    DIST_LABEL = QColor(140, 200, 255, 200)
+    CENTER_DOT = QColor(58, 141, 255)
+    INFO_TEXT = QColor(220, 232, 255)
+
+    PT_NEAR = QColor(255, 90, 90)
+    PT_MID = QColor(255, 215, 80)
+    PT_FAR = QColor(120, 255, 160)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(320, 320)
+        self.setMinimumSize(280, 220)
         self.radar_points = []
         self.radar_connected = False
         self.status_text = ""
+        # 透明背景，AppFrame 桌面图透过来
+        self.setStyleSheet("background: transparent;")
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
     def update_points(self, points, connected, status):
         self.radar_points = points
         self.radar_connected = connected
         self.status_text = status
-        self.update()  # 触发重绘
+        self.update()
 
-    def _polar_to_xy(self, distance, angle_deg):
-        """极坐标转画布坐标"""
-        w = self.width()
-        h = self.height()
-        cx = w // 2
-        cy = h // 2
-        max_radius = min(w, h) // 2 - 20
-
+    def _polar_to_xy(self, distance, angle_deg, cx, cy, max_radius):
         angle_rad = math.radians(angle_deg)
         r = (distance / MAX_DISPLAY_RANGE) * max_radius
-        x = int(cx + r * math.cos(angle_rad))
-        y = int(cy - r * math.sin(angle_rad))
+        x = cx + r * math.cos(angle_rad)
+        y = cy - r * math.sin(angle_rad)
         return x, y
 
-    def _get_dist_color(self, distance):
-        """根据距离返回颜色"""
+    def _pt_color(self, distance):
         if distance < 1.5:
-            return QColor(255, 0, 0)     # 红色 - 近
+            return self.PT_NEAR
         elif distance < 3.0:
-            return QColor(255, 255, 0)   # 黄色 - 中
-        else:
-            return QColor(0, 255, 0)     # 绿色 - 远
+            return self.PT_MID
+        return self.PT_FAR
 
     def paintEvent(self, event: QPaintEvent):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        w = self.width()
-        h = self.height()
-        cx = w // 2
-        cy = h // 2
-        max_radius = min(w, h) // 2 - 20
-
-        # 背景
-        painter.fillRect(0, 0, w, h, QColor(0, 0, 0))
-
-        if not self.radar_connected:
-            # 未连接状态
-            painter.setPen(QColor(255, 255, 255))
-            font = QFont()
-            font.setPointSize(18)
-            painter.setFont(font)
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.status_text)
+        w, h = self.width(), self.height()
+        if w <= 0 or h <= 0:
             painter.end()
             return
 
-        # ---- 绘制坐标系统 ----
-        # 同心圆
+        # ---- 屏体外形（圆角矩形） ----
+        radius = 18
+        screen_rect = QRectF(1, 1, w - 2, h - 2)
+        path = QPainterPath()
+        path.addRoundedRect(screen_rect, radius, radius)
+        painter.setClipPath(path)
+
+        # 屏内径向渐变背景
+        cx_f = w / 2.0
+        cy_f = h / 2.0
+        grad = QRadialGradient(cx_f, cy_f, max(w, h) / 1.4)
+        grad.setColorAt(0.0, self.SCREEN_BG_INNER)
+        grad.setColorAt(1.0, self.SCREEN_BG_OUTER)
+        painter.fillRect(screen_rect, QBrush(grad))
+
+        # 未连接状态
+        if not self.radar_connected:
+            painter.setPen(self.INFO_TEXT)
+            font = QFont()
+            font.setPointSize(14)
+            font.setBold(True)
+            painter.setFont(font)
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.status_text)
+            # 屏体描边
+            painter.setClipping(False)
+            pen = QPen(self.SCREEN_BORDER, 1.4)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(screen_rect, radius, radius)
+            painter.end()
+            return
+
+        # ---- 坐标系 ----
+        cx = int(cx_f)
+        cy = int(cy_f)
+        max_radius = max(40, min(w, h) // 2 - 16)
+
+        # 同心圆 + 距离标签
         for i in range(1, 6):
             r = int(i * max_radius / 5)
-            painter.setPen(QPen(QColor(64, 64, 64), 1))
+            painter.setPen(QPen(self.GRID_RING, 1))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(cx - r, cy - r, r * 2, r * 2)
-
-            # 距离标签
-            painter.setPen(QColor(180, 180, 180))
+            # 距离数字
+            painter.setPen(self.DIST_LABEL)
             font = QFont()
-            font.setPointSize(8)
+            font.setPointSize(7)
             painter.setFont(font)
-            painter.drawText(cx + r - 12, cy - 4, f"{i}m")
+            painter.drawText(cx + r - 14, cy - 3, f"{i}m")
 
         # 十字线
-        painter.setPen(QPen(QColor(80, 80, 80), 1))
+        painter.setPen(QPen(self.GRID_CROSS, 1))
         painter.drawLine(0, cy, w, cy)
         painter.drawLine(cx, 0, cx, h)
 
-        # 角度射线
-        painter.setPen(QPen(QColor(50, 50, 50), 1))
+        # 角度射线（每 30°）
+        painter.setPen(QPen(self.GRID_RAY, 1))
         for angle in range(0, 360, 30):
             rad = math.radians(angle)
             ex = int(cx + max_radius * math.cos(rad))
             ey = int(cy - max_radius * math.sin(rad))
             painter.drawLine(cx, cy, ex, ey)
 
-        # 中心点
-        painter.setPen(QPen(QColor(255, 0, 0), 2))
-        painter.setBrush(QBrush(QColor(255, 0, 0)))
-        painter.drawEllipse(cx - 3, cy - 3, 6, 6)
+        # 中心点（带光晕）
+        center_glow = QRadialGradient(cx, cy, 8)
+        center_glow.setColorAt(0.0, QColor(58, 141, 255, 220))
+        center_glow.setColorAt(1.0, QColor(58, 141, 255, 0))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(center_glow))
+        painter.drawEllipse(cx - 8, cy - 8, 16, 16)
+        painter.setBrush(QBrush(self.CENTER_DOT))
+        painter.drawEllipse(cx - 2, cy - 2, 4, 4)
 
-        # ---- 绘制雷达点 ----
+        # ---- 雷达点（带光晕） ----
+        painter.setPen(Qt.PenStyle.NoPen)
         for dist, angle in self.radar_points:
             if dist > MAX_DISPLAY_RANGE:
                 continue
-            px, py = self._polar_to_xy(dist, angle)
-            if 0 <= px < w and 0 <= py < h:
-                color = self._get_dist_color(dist)
-                painter.setPen(QPen(color, 2))
-                painter.setBrush(QBrush(color))
-                painter.drawEllipse(px - 1, py - 1, 2, 2)
+            px, py = self._polar_to_xy(dist, angle, cx_f, cy_f, max_radius)
+            color = self._pt_color(dist)
+            # 外层光晕
+            halo = QColor(color)
+            halo.setAlpha(70)
+            painter.setBrush(QBrush(halo))
+            painter.drawEllipse(QPointF(px, py), 3.2, 3.2)
+            # 实心核
+            painter.setBrush(QBrush(color))
+            painter.drawEllipse(QPointF(px, py), 1.4, 1.4)
 
-        # ---- 信息文字 ----
-        painter.setPen(QColor(200, 200, 200))
-        font = QFont()
-        font.setPointSize(9)
-        painter.setFont(font)
-        info = f"Points: {len(self.radar_points)}  Range: {MAX_DISPLAY_RANGE}m"
-        painter.drawText(8, 16, info)
+        # ---- 屏体描边 ----
+        painter.setClipping(False)
+        painter.setPen(QPen(self.SCREEN_BORDER, 1.4))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(screen_rect, radius, radius)
 
         painter.end()
 
 
 # ===================== PySide6 主页面 =====================
-class RadarPage(QWidget):
+class RadarPage(AppFrame):
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #0a0a1a;")
+        # 覆盖背景为 app_bg.png（与 settings/AI/rc_mode/hotspot 同款）
+        _pix = QPixmap(_APP_BG_IMAGE)
+        if not _pix.isNull():
+            self._bg_pix = _pix
+            self.update()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._first_paint_logged = False
 
         # ---- 标题 ----
-        self.title = QLabel(_T("title"))
-        f1 = QFont()
-        f1.setPointSize(18)
-        f1.setBold(True)
-        self.title.setFont(f1)
-        self.title.setStyleSheet("color: white;")
-        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setTitle(_T("title"))
+
+        # ---- 顶部信息 chip 行：Points / Range / 状态 ----
+        self.points_chip = QLabel("Points: 0", self)
+        self.points_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.points_chip.setStyleSheet(T_qss.chip("muted"))
+
+        self.range_chip = QLabel(f"Range: {MAX_DISPLAY_RANGE:.1f}m", self)
+        self.range_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.range_chip.setStyleSheet(T_qss.chip("info"))
+
+        self.status_chip = QLabel(_T("init"), self)
+        self.status_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_chip.setStyleSheet(T_qss.chip("warning"))
 
         # ---- 雷达画布 ----
         self.radar_canvas = RadarCanvas(self)
 
-        # ---- 状态行 ----
-        self.status_label = QLabel(_T("init"))
-        self.status_label.setStyleSheet("color: #8892c9; font-size: 12px;")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setWordWrap(True)
+        # ---- 中心容器 ----
+        center = QWidget(self)
+        center.setStyleSheet(T_qss.transparent())
+        v = QVBoxLayout(center)
+        v.setContentsMargins(Spacing.md, 0, Spacing.md, 0)
+        v.setSpacing(Spacing.sm)
 
-        # ---- 提示 ----
-        self.hint = QLabel(_T("corner_exit"))
-        self.hint.setStyleSheet("color: #5c6a9c; font-size: 11px;")
-        self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # chip 行
+        chip_row = QHBoxLayout()
+        chip_row.setSpacing(Spacing.sm)
+        chip_row.setContentsMargins(0, 0, 0, 0)
+        chip_row.addStretch(1)
+        chip_row.addWidget(self.points_chip)
+        chip_row.addWidget(self.range_chip)
+        chip_row.addWidget(self.status_chip)
+        chip_row.addStretch(1)
+        v.addLayout(chip_row)
+        v.addWidget(self.radar_canvas, 1)
+        self._center = center
 
-        # ---- 四角按键说明 ----
-        corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
-        self.corner_bl = QLabel(_T("corner_exit"), self)
-        self.corner_bl.setStyleSheet(corner_style)
-
-        # ---- 布局 ----
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.title)
-        layout.addSpacing(4)
-        layout.addWidget(self.radar_canvas, 1)
-        layout.addSpacing(4)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.hint)
+        # ---- 角标（修正按键：launcher 中 C = Key_Back）----
+        self.setCornerHints(
+            bl=(_T("corner_exit"), T_Asset.icon_back),
+        )
 
         # ---- 自动退出 ----
         self._auto_exit_timer = QTimer(self)
         self._auto_exit_timer.timeout.connect(self.close)
         self._auto_exit_timer.start(AUTO_EXIT_SEC * 1000)
-
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # ---- 启动雷达读取线程 ----
         self._radar_thread = RadarReaderThread()
@@ -371,20 +427,15 @@ class RadarPage(QWidget):
 
         print("[radar] page initialized")
 
-    def _on_points_ready(self, points):
-        self.radar_canvas.update_points(points, True, "")
-
-    def _on_radar_status(self, connected, message):
-        if connected:
-            self.status_label.setText(f"✅ {message}")
-        else:
-            self.status_label.setText(f"⚠️ {message}")
-
+    # ---- 布局 ----
     def resizeEvent(self, ev):
-        super().resizeEvent(ev)
+        super().resizeEvent(ev)  # AppFrame 负责背景与 4 角
         w, h = self.width(), self.height()
-        pad = 16
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        if w <= 0 or h <= 0:
+            return
+        top = max(30, h * 14 // 100)
+        bottom = max(20, h * 8 // 100)
+        self._center.setGeometry(0, top, w, h - top - bottom)
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -392,10 +443,27 @@ class RadarPage(QWidget):
             self._first_paint_logged = True
             mark("first paintEvent")
 
+    # ---- 数据回调 ----
+    def _on_points_ready(self, points):
+        self.radar_canvas.update_points(points, True, "")
+        self.points_chip.setText(f"Points: {len(points)}")
+
+    def _on_radar_status(self, connected, message):
+        if connected:
+            self.status_chip.setText(message)
+            self.status_chip.setStyleSheet(T_qss.chip("success"))
+            self.radar_canvas.update_points(self.radar_canvas.radar_points, True, "")
+        else:
+            self.status_chip.setText(message)
+            self.status_chip.setStyleSheet(T_qss.chip("danger"))
+            self.radar_canvas.update_points([], False, message)
+
+    # ---- 按键 ----
     def keyPressEvent(self, ev: QKeyEvent):
-        # C 键 (KEY_UP) 退出
-        if ev.key() == Qt.Key.Key_Up:
-            print("[radar] KEY_UP (C) -> exit", flush=True)
+        key = ev.key()
+        # launcher 中 C 键映射为 Key_Back；保留 Key_Up / Esc 作为兼容
+        if key in (Qt.Key.Key_Back, Qt.Key.Key_Up, Qt.Key.Key_Escape):
+            print(f"[radar] key={key} -> exit", flush=True)
             self.close()
 
     def closeEvent(self, ev):
@@ -413,6 +481,7 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: QApplication.instance().quit())
 
     app = QApplication(sys.argv)
+    apply_app_palette(app)
     mark("QApplication created")
 
     w = RadarPage()

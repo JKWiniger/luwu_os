@@ -484,6 +484,8 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qpainter.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qtextoption.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qpen.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QFont \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qfont.h \
  /usr/include/aarch64-linux-gnu/sys/stat.h \
  /usr/include/aarch64-linux-gnu/bits/statx.h /usr/include/linux/stat.h \
  /usr/include/aarch64-linux-gnu/bits/statx-generic.h \

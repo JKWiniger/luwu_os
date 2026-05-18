@@ -56,7 +56,22 @@ from libs.theme import (
     ColorRGB as T_RGB,
     Asset as T_Asset,
 )
-from libs.ui import AppFrame
+from libs.ui import AppFrame as _BaseAppFrame
+
+# coding 专属背景：覆盖 launcher 默认背景
+_CODING_BG_IMAGE = LUWU_ROOT + "/assets/images/app_bg.png"
+
+
+class AppFrame(_BaseAppFrame):
+    """coding 子应用根容器：使用专属背景图。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from PySide6.QtGui import QPixmap as _QPixmap
+        _pix = _QPixmap(_CODING_BG_IMAGE)
+        if not _pix.isNull():
+            self._bg_pix = _pix
+            self.update()
 
 LANGUAGE_INI = "/home/pi/luwu-os/configs/language.ini"
 FONT_PATH = T_Asset.font_path or _I18N_FONT_PATH or "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"
@@ -462,16 +477,19 @@ class CodingPage(AppFrame):
         self._setup_keys_fifo()
 
         # --- 字体加载（用于 PIL 渲染） ---
+        self._font22 = None
         self._font16 = None
         self._font14 = None
         self._font12 = None
         self._font10 = None
         try:
+            self._font22 = ImageFont.truetype(FONT_PATH, 22)
             self._font16 = ImageFont.truetype(FONT_PATH, 16)
             self._font14 = ImageFont.truetype(FONT_PATH, 14)
             self._font12 = ImageFont.truetype(FONT_PATH, 12)
             self._font10 = ImageFont.truetype(FONT_PATH, 10)
         except Exception:
+            self._font22 = ImageFont.load_default()
             self._font16 = ImageFont.load_default()
             self._font14 = ImageFont.load_default()
             self._font12 = ImageFont.load_default()
@@ -482,10 +500,12 @@ class CodingPage(AppFrame):
         self._icon_blockly = None
         self._load_icons()
 
-        # --- launcher 同款桌面背景图（PIL 画布底） ---
+        # --- coding 专属桌面背景图（PIL 画布底） ---
         self._bg_pil = None
         try:
-            if os.path.exists(T_Asset.bg_image):
+            if os.path.exists(_CODING_BG_IMAGE):
+                self._bg_pil = Image.open(_CODING_BG_IMAGE).convert("RGB").resize((320, 240))
+            elif os.path.exists(T_Asset.bg_image):
                 self._bg_pil = Image.open(T_Asset.bg_image).convert("RGB").resize((320, 240))
         except Exception as e:
             print(f"[coding] bg image load error: {e}", flush=True)
@@ -806,10 +826,10 @@ class CodingPage(AppFrame):
         )
         # IP:port
         ip_text = f"{self.local_ip}:{BLOCKLY_PORT}"
-        tw = draw.textbbox((0, 0), ip_text, font=self._font14)[2]
+        tw = draw.textbbox((0, 0), ip_text, font=self._font22)[2]
         draw.text(
-            (card_x + (card_w - tw) // 2, card_y + (card_h - 16) // 2),
-            ip_text, font=self._font14, fill=T_RGB.accent,
+            (card_x + (card_w - tw) // 2, card_y + (card_h - 22) // 2),
+            ip_text, font=self._font22, fill=T_RGB.accent,
         )
 
         # 服务运行中提示

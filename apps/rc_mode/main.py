@@ -30,9 +30,9 @@ mark("python entry")
 
 # ===================== 重载导入 =====================
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QKeyEvent, QPixmap, QPainter, QColor
+from PySide6.QtGui import QKeyEvent, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
+    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame,
 )
 
 from flask import Flask, render_template, Response
@@ -43,6 +43,17 @@ from concurrent.futures import ThreadPoolExecutor
 # ---- 狗库 ----
 sys.path.insert(0, "/home/pi/lib")
 from xgolib import XGO  # noqa: E402
+
+# ---- 主题层 ----
+if "/home/pi/luwu-os" not in sys.path:
+    sys.path.insert(0, "/home/pi/luwu-os")
+from libs.theme import (  # noqa: E402
+    apply_app_palette, Asset as T_Asset, Color as T_Color,
+    Spacing, Radius, qss as T_qss,
+)
+from libs.ui import (  # noqa: E402
+    AppFrame, BodyLabel, CaptionLabel, SubtitleLabel,
+)
 
 mark("imports done")
 
@@ -61,13 +72,13 @@ try:
             "title": "图传模式",
             "connected": "已连接 ({} 客户端)",
             "waiting": "等待连接...",
-            "corner_exit": "C: 退出",
+            "corner_exit": "",
         },
         "en": {
             "title": "RC Mode",
             "connected": "Connected ({} clients)",
             "waiting": "Waiting for connection...",
-            "corner_exit": "C: Exit",
+            "corner_exit": "",
         },
     })
 except Exception:
@@ -325,51 +336,80 @@ def run_flask():
     )
 
 
+# ===================== 资源路径 =====================
+_LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
+DEMO_RC_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_rc.png")
+_RC_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
+
+
 # ===================== PySide6 页面 =====================
-class RCModePage(QWidget):
-    """图传模式 LCD 界面。"""
+class RCModePage(AppFrame):
+    """图传模式 LCD 界面（与 launcher / settings 同源浅色主题）。"""
 
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #0f1530;")
+        # 覆盖背景为 app_bg.png（与 settings / AI 同款）
+        _pix = QPixmap(_RC_BG_IMAGE)
+        if not _pix.isNull():
+            self._bg_pix = _pix
+            self.update()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._first_paint_logged = False
 
-        # ---- 标题 ----
-        self.title = QLabel(_T("title"))
-        f1 = QFont()
-        f1.setPointSize(18)
-        f1.setBold(True)
-        self.title.setFont(f1)
-        self.title.setStyleSheet("color: white;")
-        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ---- 顶部标题（AppFrame 提供） ----
+        self.setTitle(_T("title"))
 
-        # ---- IP 显示 ----
-        self.ip_label = QLabel("...")
-        f2 = QFont()
-        f2.setPointSize(13)
-        self.ip_label.setFont(f2)
-        self.ip_label.setStyleSheet("color: #18df6b;")
-        self.ip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ---- 中间主体：图标 + accent 装饰线 + URL 卡片 + 状态 chip ----
+        # 图标
+        self.icon_label = QLabel(self)
+        pix = QPixmap(DEMO_RC_ICON)
+        if not pix.isNull():
+            self.icon_label.setPixmap(pix.scaled(
+                88, 88,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_label.setStyleSheet(T_qss.transparent())
 
-        # ---- 状态 ----
-        self.status_label = QLabel(_T("waiting"))
-        self.status_label.setStyleSheet("color: #8892c9; font-size: 12px;")
+        # accent 装饰线
+        self.accent_line = QFrame(self)
+        self.accent_line.setFixedSize(60, 2)
+        self.accent_line.setStyleSheet(
+            f"background-color: {T_Color.accent}; border: none;"
+        )
+
+        # URL 文本（透明底 accent 蓝 subtitle，不加白色卡片以保证长链接完整显示）
+        self.url_label = QLabel("http://...", self)
+        self.url_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.url_label.setStyleSheet(
+            T_qss.text("subtitle", color=T_Color.accent)
+        )
+
+        # 状态 chip
+        self.status_label = QLabel(_T("waiting"), self)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setStyleSheet(T_qss.chip("muted"))
 
-        # ---- 四角按键提示 ----
-        corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
-        self.corner_bl = QLabel(_T("corner_exit"), self)
-        self.corner_bl.setStyleSheet(corner_style)
+        # ---- 主布局（垂直居中）----
+        center = QWidget(self)
+        center.setStyleSheet(T_qss.transparent())
+        v = QVBoxLayout(center)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(self.icon_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.sm)
+        v.addWidget(self.accent_line, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.md)
+        v.addWidget(self.url_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.md)
+        v.addWidget(self.status_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._center = center
 
-        # ---- 布局 ----
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(30)
-        layout.addWidget(self.title)
-        layout.addSpacing(15)
-        layout.addWidget(self.ip_label)
-        layout.addSpacing(10)
-        layout.addWidget(self.status_label)
+        # ---- 角标 ----
+        self.setCornerHints(
+            bl=(_T("corner_exit"), T_Asset.icon_back),
+        )
 
         # ---- 定时刷新 ----
         self.timer = QTimer(self)
@@ -382,15 +422,17 @@ class RCModePage(QWidget):
         # ---- 自动退出兜底 ----
         QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
 
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
     # ---- 布局事件 ----
     def resizeEvent(self, ev):
-        super().resizeEvent(ev)
+        super().resizeEvent(ev)  # AppFrame 负责背景与 4 角
         w, h = self.width(), self.height()
-        pad = 16
-        self.corner_bl.adjustSize()
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
+        if w <= 0 or h <= 0:
+            return
+        # 中央区域避让顶部标题与底部角标
+        top = max(28, h * 14 // 100)
+        bottom = max(20, h * 8 // 100)
+        self._center.setGeometry(0, top, w, h - top - bottom)
+
 
     # ---- 首帧日志 ----
     def paintEvent(self, ev):
@@ -412,7 +454,6 @@ class RCModePage(QWidget):
     # ---- 按键 ----
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Back:
-            # Key_Back = 物理左下 C 键 → 退出
             print("[rc_mode] KEY_Key_Back -> exit", flush=True)
             self.close()
 
@@ -424,8 +465,16 @@ class RCModePage(QWidget):
     # ---- 定时刷新 ----
     def _update_display(self):
         ip_addr = get_ip("wlan0")
-        self.ip_label.setText(f"http://{ip_addr}:{HTTP_PORT}")
-        self.status_label.setText(get_connection_status())
+        self.url_label.setText(f"http://{ip_addr}:{HTTP_PORT}")
+        with _conn_lock:
+            connected = _connected_clients > 0
+            count = _connected_clients
+        if connected:
+            self.status_label.setText(_T("connected", count))
+            self.status_label.setStyleSheet(T_qss.chip("success"))
+        else:
+            self.status_label.setText(_T("waiting"))
+            self.status_label.setStyleSheet(T_qss.chip("muted"))
 
 
 # ===================== 入口 =====================
@@ -434,6 +483,7 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: QApplication.instance().quit())
 
     app = QApplication(sys.argv)
+    apply_app_palette(app)
     mark("QApplication created")
 
     w = RCModePage()

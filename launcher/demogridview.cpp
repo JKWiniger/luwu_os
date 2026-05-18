@@ -395,7 +395,7 @@ void DemoGridView::updateSelectionStyle() {
             {
                 QFont f = itemLabels[i]->font();
                 f.setPixelSize(14);
-                f.setWeight(QFont::DemiBold);
+                f.setWeight(QFont::Medium);
                 itemLabels[i]->setFont(f);
             }
             // 图标阴影

@@ -19,6 +19,8 @@ import signal
 import threading
 from io import BytesIO
 
+from PIL import Image, ImageDraw, ImageFont
+
 # ===== 路径配置 =====
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, APP_DIR)
@@ -45,14 +47,35 @@ BG_COLOR = (15, 21, 46)
 DING_WAV = "/home/pi/luwu-os/assets/music/ding.wav"  # 资源已迁移，解耦 XGO-PI-CM5
 AUTO_EXIT_SEC = 600  # 10 minutes auto exit
 
+# Loading 页 PIL 绘制使用的字体路径（优先 app 本地 msyh.ttc，后退系统字体）
+_AI_FONT_CANDIDATES = [
+    os.path.join(APP_DIR, "msyh.ttc"),
+    "/home/pi/luwu-os/assets/fonts/msyh.ttc",
+    "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+]
+_LOADING_FONT_PATH = next((p for p in _AI_FONT_CANDIDATES if os.path.exists(p)), "")
+
+# Loading / 启动页背景图（全屏底图）
+_APP_BG_IMAGE_PATH = "/home/pi/luwu-os/assets/images/app_bg.png"
+
 # ===== i18n =====
 if "/home/pi/luwu-os" not in sys.path:
     sys.path.insert(0, "/home/pi/luwu-os")
 try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({
-        "cn": {"corner_exit": "C: 退出", "corner_start": "D: 开始"},
-        "en": {"corner_exit": "C: Exit",  "corner_start": "D: Start"},
+        "cn": {
+            "corner_exit": "C: 退出",
+            "corner_start": "D: 开始",
+            "loading_title": "AI 启动中",
+            "loading_hint": "正在加载服务···",
+        },
+        "en": {
+            "corner_exit": "C: Exit",
+            "corner_start": "D: Start",
+            "loading_title": "AI starting",
+            "loading_hint": "Loading services···",
+        },
     })
 except Exception:
     _T = lambda k, *a: k
@@ -97,12 +120,19 @@ class AIChatPage(QWidget):
     _corner_visible_signal = Signal(bool)
     # Signal: request idle screen refresh from non-GUI thread
     _refresh_idle_signal = Signal()
+    # Signal: backend init done (emitted from worker thread)
+    _init_done_signal = Signal()
 
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background-color: #0f1530;")
         self._first_paint_logged = False
         self.running = True
+        # 启动阶段标识：在后端初始化完成前为 True，期间只响应 C 退出键
+        self._is_loading = True
+        self._loading_frame = 0
+        # 后端就绪标志（由 worker 线程设置，主线程轮询）
+        self._backend_ready = False
 
         # ---- Display label (acts as LCD, fills entire widget) ----
         self.display = QLabel(self)
@@ -120,6 +150,28 @@ class AIChatPage(QWidget):
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_label.hide()
 
+        # ---- Loading字体（PIL 绘制整张 pixmap 到 display，避免子控件层叠问题） ----
+        try:
+            self._loading_font_title = ImageFont.truetype(_LOADING_FONT_PATH, 20) if _LOADING_FONT_PATH else ImageFont.load_default()
+            self._loading_font_hint = ImageFont.truetype(_LOADING_FONT_PATH, 12) if _LOADING_FONT_PATH else ImageFont.load_default()
+        except Exception:
+            self._loading_font_title = ImageFont.load_default()
+            self._loading_font_hint = ImageFont.load_default()
+
+        # ---- 启动页背景底图（PIL 缓存，每帧 .copy() 后再添加进度动画） ----
+        self._bg_pil = None
+        try:
+            if os.path.exists(_APP_BG_IMAGE_PATH):
+                self._bg_pil = Image.open(_APP_BG_IMAGE_PATH).convert("RGB").resize((SCREEN_W, SCREEN_H))
+        except Exception as e:
+            print(f"[ai_chat] bg image load error: {e}", flush=True)
+
+        # ---- Loading overlay（启动期间快速可见，避免黑屏） ----
+        # 采用 Coding 同样的 PIL→QPixmap→QLabel 整张贴图方案，
+        # 上一版用独立 QLabel 子控件 + hide() 在 linuxfb 上不生效、导致 loading 不能被覆盖
+        # 立刻贴上首帧 loading，让用户启动后第一眼就看到内容不是黑屏
+        self._render_loading()
+
         # ---- Corner hints ----
         corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
         self.corner_bl = QLabel(_T("corner_exit"), self)     # KEY_BACK
@@ -127,6 +179,8 @@ class AIChatPage(QWidget):
         self.corner_br = QLabel(_T("corner_start"), self)     # KEY_ENTER
         self.corner_br.setStyleSheet(corner_style)
         self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+        # 启动期间 D 不可用，隐藏右下提示
+        self.corner_br.hide()
 
         # ---- Focus for key events ----
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -138,12 +192,64 @@ class AIChatPage(QWidget):
         self._display_signal.connect(self._on_display_update)
         self._corner_visible_signal.connect(self._on_corner_visible)
         self._refresh_idle_signal.connect(self._on_refresh_idle)
+        self._init_done_signal.connect(self._on_init_done)
 
-        # ---- Initialize backend ----
-        self._init_backend()
+        # ---- Loading动画定时器（动态小点） ----
+        self._loading_timer = QTimer(self)
+        self._loading_timer.timeout.connect(self._on_loading_tick)
+        self._loading_timer.start(400)
 
-        # ---- Show idle screen ----
-        self._show_idle()
+        # ---- 主线程轮询后端就绪标志（比跨线程 signal 更可靠） ----
+        # 上一版用 Signal.emit 跨线程招手 GUI slot，实际环境下 slot 未被调度导致 loading 永不退出
+        self._ready_poll_timer = QTimer(self)
+        self._ready_poll_timer.timeout.connect(self._poll_backend_ready)
+        self._ready_poll_timer.start(150)
+
+        # 后端初始化：以 Coding 同样的方式，用 QTimer.singleShot 在首帧上屏后起后台线程
+        # 不在 __init__ 同步走重初始化，避免主线程被 time.sleep / SDK 导入阻塞导致黑屏与按键不响应
+        self._init_thread = None
+        QTimer.singleShot(200, self._kick_init_worker)
+
+    def _kick_init_worker(self):
+        """在 GUI 事件循环跑起来之后启动后台 worker。"""
+        if self._init_thread is not None:
+            return
+        # 关键修复：在 GUI 主线程预热 XGOEDU 单例。
+        # XGOEDU.__init__ 会创建 QApplication / QPixmap / QLabel 并 .show()，
+        # 这些 Qt GUI 类不能在后台线程创建（在 worker 里创建会死锁卡住）。
+        # 预热后 singleton 生效，worker 后续 import tools / robot_tools 时会直接拿到缓存实例。
+        self._preheat_xgoedu_on_gui_thread()
+        print("[ai_chat] kick init worker", flush=True)
+        self._init_thread = threading.Thread(
+            target=self._init_backend_worker,
+            name="ai_init_worker",
+            daemon=True,
+        )
+        self._init_thread.start()
+
+    def _preheat_xgoedu_on_gui_thread(self):
+        """主线程预创建 XGOEDU 单例，并隐藏其顶层 QLabel、重新将 ai 窗口提到最上层。"""
+        try:
+            from edulib import XGOEDU
+            edu = XGOEDU()
+            try:
+                if getattr(edu, "_label", None) is not None:
+                    edu._label.hide()
+            except Exception:
+                pass
+            print("[ai_chat] XGOEDU pre-warmed on GUI thread", flush=True)
+        except Exception as e:
+            print(f"[ai_chat] XGOEDU preheat error: {e}", flush=True)
+        # ai 主窗口提到最上层，并重新贴 loading 首帧（避免被 XGOEDU 顶层 QLabel 瞬间遮住后不刷新）
+        try:
+            self.raise_()
+            self.activateWindow()
+        except Exception:
+            pass
+        try:
+            self._render_loading()
+        except Exception:
+            pass
 
     # ===== Layout Events =====
 
@@ -165,20 +271,31 @@ class AIChatPage(QWidget):
         self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
         self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
+        # 尺寸变化后重画 loading（避免先小后大闪烁）
+        if self._is_loading:
+            self._render_loading()
+
     def paintEvent(self, ev):
         super().paintEvent(ev)
         if not self._first_paint_logged:
             self._first_paint_logged = True
             print("[ai_chat] first paintEvent", flush=True)
+        # 双保险：若 QTimer.singleShot 未起作用，首帧也会拉起 worker
+        if self._init_thread is None:
+            self._kick_init_worker()
 
     # ===== Key Events =====
 
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Back:
-            # C key (bottom-left, KEY_BACK) → 退出
+            # C key (bottom-left, KEY_BACK) → 退出（启动期间也可用）
             print("[ai_chat] KEY_BACK (C) -> exit", flush=True)
             self.close()
-        elif ev.key() == Qt.Key.Key_Enter or ev.key() == Qt.Key.Key_Return:
+            return
+        # 启动未完成时忽略其他按键，避免误触发对话流程
+        if self._is_loading:
+            return
+        if ev.key() == Qt.Key.Key_Enter or ev.key() == Qt.Key.Key_Return:
             # D key (bottom-right, KEY_ENTER) → 开始聊天
             print("[ai_chat] KEY_ENTER (D) -> start chat", flush=True)
             self._start_conversation()
@@ -240,6 +357,104 @@ class AIChatPage(QWidget):
             print(f"[UI] _show_listening_text error: {e}")
 
     # ===== Backend Initialization =====
+
+    def _on_loading_tick(self):
+        """动态小点动画，让用户感知不是卡死。"""
+        self._loading_frame = (self._loading_frame + 1) % 4
+        self._render_loading()
+
+    def _render_loading(self):
+        """用 PIL 画出 loading 页并整张贴到 self.display。不依赖子控件可见性/层叠。"""
+        try:
+            # 背景：优先用 app_bg 背景图，缺失时回落纯色
+            if self._bg_pil is not None:
+                img = self._bg_pil.copy()
+            else:
+                img = Image.new("RGB", (SCREEN_W, SCREEN_H), BG_COLOR)
+            draw = ImageDraw.Draw(img)
+
+            # 标题（启动中 ·/··/···/····）
+            dots = "·" * (self._loading_frame + 1)
+            title = _T("loading_title") + dots
+            try:
+                bbox = draw.textbbox((0, 0), title, font=self._loading_font_title)
+                tw = bbox[2] - bbox[0]
+            except Exception:
+                tw = len(title) * 16
+            draw.text(((SCREEN_W - tw) // 2, 95), title, font=self._loading_font_title, fill=(230, 236, 255))
+
+            # 进度条
+            bar_y = 138
+            bar_w = 200
+            bar_x = (SCREEN_W - bar_w) // 2
+            draw.rectangle([(bar_x, bar_y), (bar_x + bar_w, bar_y + 4)], fill=(34, 40, 74))
+            progress = (self._loading_frame + 1) * (bar_w // 4)
+            if progress > 0:
+                draw.rectangle([(bar_x, bar_y), (bar_x + progress, bar_y + 4)], fill=(24, 223, 107))
+
+            # 副标题
+            hint = _T("loading_hint")
+            try:
+                hbox = draw.textbbox((0, 0), hint, font=self._loading_font_hint)
+                hw = hbox[2] - hbox[0]
+            except Exception:
+                hw = len(hint) * 8
+            draw.text(((SCREEN_W - hw) // 2, 158), hint, font=self._loading_font_hint, fill=(136, 146, 201))
+
+            self._on_display_update(img)
+        except Exception as e:
+            print(f"[Main] _render_loading error: {e}", flush=True)
+
+    def _deferred_init(self):
+        """已废弃：保留名字只为向后兼容，实际入口在 _init_backend_worker。"""
+        self._init_backend_worker()
+
+    def _init_backend_worker(self):
+        """后台线程调用：走耗时后端初始化，完成后由主线程轮询标志切页。"""
+        try:
+            self._init_backend()
+        except Exception as e:
+            print(f"[Main] backend init error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+        finally:
+            print("[Main] backend worker finished, set ready flag", flush=True)
+            self._backend_ready = True
+            # 双保险：同时 emit 信号（若 Signal 可用则更快）
+            try:
+                self._init_done_signal.emit()
+            except Exception:
+                pass
+
+    def _poll_backend_ready(self):
+        """主线程轮询：后端就绪后切到待机页面。"""
+        if self._backend_ready and self._is_loading:
+            try:
+                self._ready_poll_timer.stop()
+            except Exception:
+                pass
+            self._on_init_done()
+
+    def _on_init_done(self):
+        """GUI 线程：后端就绪后关闭 loading 动画并切到待机页面。"""
+        if not self._is_loading:
+            return  # 已被轮询/信号其中一路调过
+        print("[Main] _on_init_done -> switch to idle", flush=True)
+        self._is_loading = False
+        try:
+            if self._loading_timer.isActive():
+                self._loading_timer.stop()
+        except Exception:
+            pass
+        try:
+            if self._ready_poll_timer.isActive():
+                self._ready_poll_timer.stop()
+        except Exception:
+            pass
+        try:
+            self._show_idle()
+        except Exception as e:
+            print(f"[Main] _show_idle after init error: {e}", flush=True)
 
     def _init_backend(self):
         """Initialize config, web server, and services"""

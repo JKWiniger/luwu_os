@@ -602,6 +602,7 @@ luwu_launcher_autogen/timestamp: /home/pi/luwu-os/launcher/CMakeLists.txt \
 
 CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: /home/pi/luwu-os/launcher/demogridview.cpp \
   /home/pi/luwu-os/launcher/demogridview.h \
+  /home/pi/luwu-os/launcher/devicetable.h \
   /home/pi/luwu-os/launcher/i18n.h \
   /usr/include/aarch64-linux-gnu/bits/atomic_wide_counter.h \
   /usr/include/aarch64-linux-gnu/bits/byteswap.h \
@@ -698,6 +699,7 @@ CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: /home/pi/luwu-os/launcher/demog
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QSize \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QSizeF \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QString \
+  /usr/include/aarch64-linux-gnu/qt6/QtCore/QStringList \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QTimer \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QVector \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/q20functional.h \
@@ -3863,6 +3865,8 @@ luwu_launcher_autogen/mocs_compilation.cpp:
 /usr/include/aarch64-linux-gnu/qt6/QtCore/qcoreevent.h:
 
 /usr/include/aarch64-linux-gnu/qt6/QtCore/qcoreapplication.h:
+
+/usr/include/aarch64-linux-gnu/qt6/QtCore/QStringList:
 
 /usr/include/aarch64-linux-gnu/qt6/QtCore/QString:
 

@@ -32,7 +32,7 @@ void StatusBar::paintEvent(QPaintEvent *) {
 
     QFont font = painter.font();
     font.setPixelSize(12);
-    font.setBold(true);
+    font.setWeight(QFont::Medium);
     painter.setFont(font);
     painter.setPen(QColor(0x5a, 0x64, 0x99));
 

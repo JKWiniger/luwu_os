@@ -32,10 +32,9 @@ mark("python entry")
 
 # ===================== PySide6 导入 =====================
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QKeyEvent
+from PySide6.QtGui import QKeyEvent, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QFrame, QScrollArea,
+    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame,
 )
 
 mark("PySide6 import done")
@@ -77,9 +76,9 @@ try:
             "status_blocked": "等待时间同步",
             "action_list_title": "动作列表",
             "corner_switch": "◀▶ 切换",
-            "corner_start": "D 开始",
-            "corner_stop": "D 停止",
-            "corner_exit": "C 退出",
+            "corner_start": "开始",
+            "corner_stop": "停止",
+            "corner_exit": "退出",
         },
         "en": {
             "title": "Group Performance",
@@ -98,13 +97,24 @@ try:
             "status_blocked": "Waiting time sync",
             "action_list_title": "Action List",
             "corner_switch": "◀▶ Switch",
-            "corner_start": "D Start",
-            "corner_stop": "D Stop",
-            "corner_exit": "C Exit",
+            "corner_start": "Start",
+            "corner_stop": "Stop",
+            "corner_exit": "Exit",
         },
     })
 except Exception:
     _T = lambda k, *a: k
+
+# ---- 主题层 ----
+from libs.theme import (  # noqa: E402
+    apply_app_palette, Asset as T_Asset, Color as T_Color,
+    Spacing, Radius, qss as T_qss,
+)
+from libs.ui import AppFrame  # noqa: E402
+
+_LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
+DEMO_GROUP_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_group.png")
+_APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
 
 # ===================== 常量 =====================
 MQTT_BROKER = "broker.emqx.io"
@@ -658,74 +668,115 @@ def action_executor():
 # ===================== PySide6 页面 =====================
 
 
-class GroupPerformPage(QWidget):
+class GroupPerformPage(AppFrame):
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #0f1530;")
+        # 覆盖背景为 app_bg.png（与 settings / AI / rc_mode / hotspot 同款）
+        _pix = QPixmap(_APP_BG_IMAGE)
+        if not _pix.isNull():
+            self._bg_pix = _pix
+            self.update()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._first_paint_logged = False
 
-        # ---- 标题 ----
-        self.title = QLabel(_T("title"))
-        f1 = QFont()
-        f1.setPointSize(16)
-        f1.setBold(True)
-        self.title.setFont(f1)
-        self.title.setStyleSheet("color: white;")
-        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ---- 顶部标题 ----
+        self.setTitle(_T("title"))
 
-        # ---- 分隔线 ----
-        self.sep1 = QFrame()
-        self.sep1.setFrameShape(QFrame.Shape.HLine)
-        self.sep1.setStyleSheet("color: #2a3050;")
+        # ---- 图标（demo_group.png）----
+        self.icon_label = QLabel(self)
+        pix = QPixmap(DEMO_GROUP_ICON)
+        if not pix.isNull():
+            self.icon_label.setPixmap(pix.scaled(
+                64, 64,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_label.setStyleSheet(T_qss.transparent())
 
-        # ---- 信息行：房间 / 设备数 / 型号 ----
-        self.info_label = QLabel(_T("room_wait"))
-        self.info_label.setStyleSheet("color: #8892c9; font-size: 12px;")
-        self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ---- 房间卡片：白底圆角 + 房间号 + 设备数/型号副信息 ----
+        self.info_card = QFrame(self)
+        self.info_card.setObjectName("infoCard")
+        # 严格限定选择器到外层 QFrame#infoCard，避免子 QLabel 被描边/背景串扰
+        self.info_card.setStyleSheet(
+            "QFrame#infoCard {"
+            f"  background-color: rgba(255,255,255,235);"
+            f"  border: 1px solid {T_Color.card_border};"
+            f"  border-radius: {Radius.md}px;"
+            "}"
+        )
+        self.room_label = QLabel(_T("room_wait"), self.info_card)
+        self.room_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.room_label.setStyleSheet(T_qss.text("subtitle", color=T_Color.accent))
+        self.meta_label = QLabel("", self.info_card)
+        self.meta_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # 副信息用 text_primary 深蓝，浮在白卡上对比度足够
+        self.meta_label.setStyleSheet(T_qss.text("hint", color=T_Color.text_primary))
+        card_v = QVBoxLayout(self.info_card)
+        card_v.setContentsMargins(Spacing.lg, Spacing.sm, Spacing.lg, Spacing.sm)
+        card_v.setSpacing(2)
+        card_v.addWidget(self.room_label)
+        card_v.addWidget(self.meta_label)
 
-        # ---- 状态行：MQTT 连接 + 时间同步 + 网络异常 ----
-        self.health_label = QLabel("")
-        self.health_label.setStyleSheet("color: #8892c9; font-size: 11px;")
-        self.health_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ---- accent 装饰线 ----
+        self.accent_line = QFrame(self)
+        self.accent_line.setFixedSize(60, 2)
+        self.accent_line.setStyleSheet(
+            f"background-color: {T_Color.accent}; border: none;"
+        )
 
-        # ---- 大状态 ----
-        self.status_label = QLabel(_T("status_idle"))
-        f2 = QFont()
-        f2.setPointSize(13)
-        f2.setBold(True)
-        self.status_label.setFont(f2)
-        self.status_label.setStyleSheet("color: #18df6b;")
+        # ---- 健康 chip 行：MQTT / 同步 / 网络 ----
+        self.mqtt_chip = QLabel("", self)
+        self.mqtt_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.mqtt_chip.setStyleSheet(T_qss.chip("muted"))
+        self.sync_chip = QLabel("", self)
+        self.sync_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.sync_chip.setStyleSheet(T_qss.chip("muted"))
+        self.net_chip = QLabel("", self)
+        self.net_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.net_chip.setStyleSheet(T_qss.chip("success"))
+
+        chip_row = QWidget(self)
+        chip_row.setStyleSheet(T_qss.transparent())
+        h = QHBoxLayout(chip_row)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(Spacing.sm)
+        h.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h.addWidget(self.mqtt_chip)
+        h.addWidget(self.sync_chip)
+        h.addWidget(self.net_chip)
+
+        # ---- 大状态 chip ----
+        self.status_label = QLabel(_T("status_idle"), self)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setStyleSheet(self._status_qss(T_Color.success))
 
-        # ---- 动作列表占位（仅保留数据，UI 不展示）----
+        # 保留原限占位
         self._action_items = []
 
-        # ---- 角标：仅底部两个，对应硬件 C(左下)/D(右下) ----
-        hint_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
-        self.corner_tl = QLabel("", self)
-        self.corner_tl.setStyleSheet(hint_style)
-        self.corner_tr = QLabel("", self)
-        self.corner_tr.setStyleSheet(hint_style)
-        self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.corner_bl = QLabel(_T("corner_exit"), self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel(_T("corner_start"), self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+        # ---- 主布局（垂直居中）----
+        center = QWidget(self)
+        center.setStyleSheet(T_qss.transparent())
+        v = QVBoxLayout(center)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        v.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(self.icon_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.xs)
+        v.addWidget(self.info_card, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.sm)
+        v.addWidget(self.accent_line, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.sm)
+        v.addWidget(chip_row, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.md)
+        v.addWidget(self.status_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._center = center
 
-        # ---- 主布局 ----
-        # 底部预留 24px 给角标使用
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 28, 16, 28)
-        main_layout.setSpacing(6)
-        main_layout.addWidget(self.title)
-        main_layout.addWidget(self.sep1)
-        main_layout.addSpacing(4)
-        main_layout.addWidget(self.info_label)
-        main_layout.addWidget(self.health_label)
-        main_layout.addStretch()
-        main_layout.addWidget(self.status_label)
-        main_layout.addStretch()
+        # ---- 角标 ----
+        self.setCornerHints(
+            bl=(_T("corner_exit"), T_Asset.icon_back),
+            br=(_T("corner_start"), T_Asset.icon_enter),
+        )
 
         # ---- 刷新定时器 ----
         self._refresh_timer = QTimer(self)
@@ -740,71 +791,75 @@ class GroupPerformPage(QWidget):
         # ---- 自动退出 ----
         QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
 
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
-        # 确保角标在最上层，不被布局中的 widget 遮挡
-        for c in (self.corner_tl, self.corner_tr, self.corner_bl, self.corner_br):
-            c.raise_()
+    # ---- 大状态 chip 样式（深色描边 + 白底 + 大字 bold）----
+    @staticmethod
+    def _status_qss(color: str) -> str:
+        return (
+            "background-color: rgba(255,255,255,220);"
+            f"color: {color};"
+            f"border: 2px solid {color};"
+            "border-radius: 12px;"
+            "padding: 6px 18px;"
+            "font-size: 15px;"
+            "font-weight: bold;"
+        )
 
     def _build_action_list(self):
-        """保留空实现：UI 不再展示动作列表，仅后端使用 actions_to_perform。"""
         self._action_items.clear()
 
     def _refresh_ui(self):
         """刷新UI显示"""
-        # 信息行：房间 + 设备数 + 型号
+        # 房间卡片
         with known_devices_lock:
             count = len(known_devices)
         if room_id:
-            room_text = _T("room", room_id)
+            self.room_label.setText(_T("room", room_id))
         else:
-            room_text = _T("room_wait")
-        self.info_label.setText(
-            f"{room_text}    {_T('devices', count)}    {_T('dog_type', dog_type)}"
+            self.room_label.setText(_T("room_wait"))
+        self.meta_label.setText(
+            f"{_T('devices', count)}  ·  {_T('dog_type', dog_type)}"
         )
 
-        # 状态行：MQTT / 网络 / 时间同步
-        parts = []
-        bad = False
-
-        if not check_network():
-            parts.append(_T("net_bad"))
-            bad = True
-        elif mqtt_client and mqtt_client.is_connected():
-            parts.append("● " + _T("mqtt_ok"))
+        # MQTT chip
+        if mqtt_client and mqtt_client.is_connected():
+            self.mqtt_chip.setText(_T("mqtt_ok"))
+            self.mqtt_chip.setStyleSheet(T_qss.chip("success"))
         else:
-            parts.append(_T("mqtt_bad"))
-            bad = True
+            self.mqtt_chip.setText(_T("mqtt_bad"))
+            self.mqtt_chip.setStyleSheet(T_qss.chip("danger"))
 
+        # 同步 chip
         if _sync_status == SYNC_OK:
-            parts.append("✓ " + _T("sync_ok"))
+            self.sync_chip.setText(_T("sync_ok"))
+            self.sync_chip.setStyleSheet(T_qss.chip("success"))
         elif _sync_status == SYNC_WAIT:
-            parts.append("· " + _T("sync_wait"))
+            self.sync_chip.setText(_T("sync_wait"))
+            self.sync_chip.setStyleSheet(T_qss.chip("muted"))
         else:
-            parts.append("✗ " + _T("sync_fail"))
-            bad = True
+            self.sync_chip.setText(_T("sync_fail"))
+            self.sync_chip.setStyleSheet(T_qss.chip("danger"))
 
-        self.health_label.setText("    ".join(parts))
-        if bad:
-            self.health_label.setStyleSheet("color: #ff8a65; font-size: 11px;")
-        elif _sync_status == SYNC_OK:
-            self.health_label.setStyleSheet("color: #18df6b; font-size: 11px;")
+        # 网络 chip——正常不显示，异常时红字提示
+        if not check_network():
+            self.net_chip.setText(_T("net_bad"))
+            self.net_chip.setStyleSheet(T_qss.chip("danger"))
+            self.net_chip.show()
         else:
-            self.health_label.setStyleSheet("color: #ffa726; font-size: 11px;")
+            self.net_chip.hide()
 
-        # 表演状态
+        # 表演状态 + D 角标文案
         if group_perform:
             self.status_label.setText(_T("status_perform"))
-            self.status_label.setStyleSheet("color: #ff9800;")
-            self.corner_br.setText(_T("corner_stop"))
+            self.status_label.setStyleSheet(self._status_qss(T_Color.warning))
+            self.setCornerHint("br", _T("corner_stop"), T_Asset.icon_enter)
         elif _sync_status != SYNC_OK:
             self.status_label.setText(_T("status_blocked"))
-            self.status_label.setStyleSheet("color: #ffa726;")
-            self.corner_br.setText(_T("corner_start"))
+            self.status_label.setStyleSheet(self._status_qss(T_Color.warning))
+            self.setCornerHint("br", _T("corner_start"), T_Asset.icon_enter)
         else:
             self.status_label.setText(_T("status_idle"))
-            self.status_label.setStyleSheet("color: #18df6b;")
-            self.corner_br.setText(_T("corner_start"))
+            self.status_label.setStyleSheet(self._status_qss(T_Color.success))
+            self.setCornerHint("br", _T("corner_start"), T_Asset.icon_enter)
 
     def _check_performance(self):
         """监控表演状态，触发动作执行"""
@@ -815,20 +870,15 @@ class GroupPerformPage(QWidget):
             t.start()
 
     def resizeEvent(self, ev):
-        super().resizeEvent(ev)
+        super().resizeEvent(ev)  # AppFrame 负责背景与 4 角
         w, h = self.width(), self.height()
-        pad = 8
-        self.corner_tl.adjustSize()
-        self.corner_tr.adjustSize()
-        self.corner_bl.adjustSize()
-        self.corner_br.adjustSize()
-        self.corner_tl.move(pad, pad)
-        self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
-        # 重新提升到顶层
-        for c in (self.corner_tl, self.corner_tr, self.corner_bl, self.corner_br):
-            c.raise_()
+        if w <= 0 or h <= 0:
+            return
+        top = max(28, h * 12 // 100)
+        bottom = max(20, h * 8 // 100)
+        self._center.setGeometry(0, top, w, h - top - bottom)
+        # 房间卡片宽度随屏伸缩
+        self.info_card.setFixedWidth(min(int(w * 0.78), 320))
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -933,6 +983,7 @@ def main():
     mark("dog init done")
 
     app = QApplication(sys.argv)
+    apply_app_palette(app)
     mark("QApplication created")
 
     w = GroupPerformPage()

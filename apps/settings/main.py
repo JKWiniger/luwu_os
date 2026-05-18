@@ -36,9 +36,24 @@ if str(LUWU_ROOT) not in sys.path:
     sys.path.insert(0, str(LUWU_ROOT))
 from libs.theme import apply_app_palette, Asset, Color as T_Color, Spacing, qss as T_qss
 from libs.ui import (
-    AppFrame, CardPanel, InfoRow, TitleLabel, SubtitleLabel,
+    AppFrame as _BaseAppFrame, CardPanel, InfoRow, TitleLabel, SubtitleLabel,
     BodyLabel, HintLabel, CaptionLabel, CornerKey,
 )
+
+# settings 专属背景：覆盖 launcher 默认背景
+_SETTINGS_BG_IMAGE = str(LUWU_ROOT / "assets" / "images" / "app_bg.png")
+
+
+class AppFrame(_BaseAppFrame):
+    """settings 子应用根容器：使用专属背景图。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from PySide6.QtGui import QPixmap as _QPixmap
+        _pix = _QPixmap(_SETTINGS_BG_IMAGE)
+        if not _pix.isNull():
+            self._bg_pix = _pix
+            self.update()
 
 LANGUAGE_INI = LUWU_ROOT / "configs" / "language.ini"
 VOLUME_INI = APP_DIR / "volume.ini"

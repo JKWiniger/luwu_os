@@ -30,8 +30,17 @@ mark("python entry")
 
 # ===================== PySide6 =====================
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QKeyEvent
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
+from PySide6.QtGui import QKeyEvent, QPixmap
+from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QFrame
+
+# ---- 主题层 ----
+if "/home/pi/luwu-os" not in sys.path:
+    sys.path.insert(0, "/home/pi/luwu-os")
+from libs.theme import (  # noqa: E402
+    apply_app_palette, Asset as T_Asset, Color as T_Color,
+    Spacing, qss as T_qss,
+)
+from libs.ui import AppFrame  # noqa: E402
 
 mark("PySide6 imports done")
 
@@ -40,6 +49,9 @@ AUTO_EXIT_SEC = 300                       # 5 分钟自动退出页面（保留�
 HOTSPOT_CONN_NAME = "LuwuHotspot"         # 固定连接名，便于复用
 SSID_FILE = Path("/home/pi/luwu-os/configs/hotspot_ssid.txt")
 WLAN_IFACE = "wlan0"
+_LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
+DEMO_HOTSPOT_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_hotspot.png")
+_APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
 
 
 # ===================== 工具函数 =====================
@@ -97,81 +109,95 @@ def hotspot_conn_exists() -> bool:
 
 
 # ===================== UI =====================
-class HotspotPage(QWidget):
+class HotspotPage(AppFrame):
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #0a0a1a;")
+        # 覆盖背景为 app_bg.png（与 settings / AI / rc_mode 同款）
+        _pix = QPixmap(_APP_BG_IMAGE)
+        if not _pix.isNull():
+            self._bg_pix = _pix
+            self.update()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._first_paint_logged = False
 
         self.ssid = ""
         self.ip_address = ""
         self.hotspot_active = False
-        self._keep_hotspot_on_close = False  # C 退出时保留热点
+        self._keep_hotspot_on_close = False
 
-        # 标题
-        self.title = QLabel("热点模式")
-        f1 = QFont(); f1.setPointSize(20); f1.setBold(True)
-        self.title.setFont(f1)
-        self.title.setStyleSheet("color: white;")
-        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ---- 标题（AppFrame 提供） ----
+        self.setTitle("热点模式")
+
+        # ---- 中间主体：图标 + 装饰线 + SSID + IP + 状态 chip ----
+        # 图标
+        self.icon_label = QLabel(self)
+        pix = QPixmap(DEMO_HOTSPOT_ICON)
+        if not pix.isNull():
+            self.icon_label.setPixmap(pix.scaled(
+                88, 88,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_label.setStyleSheet(T_qss.transparent())
+
+        # accent 装饰线
+        self.accent_line = QFrame(self)
+        self.accent_line.setFixedSize(60, 2)
+        self.accent_line.setStyleSheet(
+            f"background-color: {T_Color.accent}; border: none;"
+        )
 
         # SSID
-        self.ssid_label = QLabel("")
-        f2 = QFont(); f2.setPointSize(16); f2.setBold(True)
-        self.ssid_label.setFont(f2)
-        self.ssid_label.setStyleSheet("color: #FFD93D;")
+        self.ssid_label = QLabel("", self)
         self.ssid_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.ssid_label.setStyleSheet(T_qss.text("subtitle"))
 
         # IP
-        self.ip_label = QLabel("")
-        f3 = QFont(); f3.setPointSize(13)
-        self.ip_label.setFont(f3)
-        self.ip_label.setStyleSheet("color: #4A90D9;")
+        self.ip_label = QLabel("", self)
         self.ip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.ip_label.setStyleSheet(T_qss.text("body", color=T_Color.accent))
 
-        # 状态（单行，简短）
-        self.status_label = QLabel("正在启动...")
-        f4 = QFont(); f4.setPointSize(12)
-        self.status_label.setFont(f4)
-        self.status_label.setStyleSheet("color: #18df6b;")
+        # 状态 chip
+        self.status_label = QLabel("正在启动...", self)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setStyleSheet(T_qss.chip("muted"))
 
-        # 角落按键提示（仅左下/右下两处）
-        corner_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_bl = QLabel("C: 退出", self)
-        self.corner_bl.setStyleSheet(corner_style)
-        self.corner_br = QLabel("D: 关闭热点", self)
-        self.corner_br.setStyleSheet(corner_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+        # ---- 主布局（垂直居中）----
+        center = QWidget(self)
+        center.setStyleSheet(T_qss.transparent())
+        v = QVBoxLayout(center)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(self.icon_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.sm)
+        v.addWidget(self.accent_line, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.md)
+        v.addWidget(self.ssid_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.xs)
+        v.addWidget(self.ip_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(Spacing.md)
+        v.addWidget(self.status_label, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._center = center
 
-        # 布局
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addStretch()
-        layout.addWidget(self.title)
-        layout.addSpacing(22)
-        layout.addWidget(self.ssid_label)
-        layout.addSpacing(10)
-        layout.addWidget(self.ip_label)
-        layout.addSpacing(18)
-        layout.addWidget(self.status_label)
-        layout.addStretch()
+        # ---- 角标 ----
+        self.setCornerHints(
+            bl=("退出", T_Asset.icon_back),
+            br=("关闭热点", T_Asset.icon_enter),
+        )
 
         QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         QTimer.singleShot(200, self._init_hotspot)
 
-    # ---- 角落定位 ----
+    # ---- 布局事件 ----
     def resizeEvent(self, ev):
-        super().resizeEvent(ev)
+        super().resizeEvent(ev)  # AppFrame 负责背景与 4 角
         w, h = self.width(), self.height()
-        # 小屏幕物理可视区域比逻辑分辨率小，留足底部安全距离避免遮挡
-        pad_x = 10
-        pad_y_bottom = 28
-        self.corner_bl.adjustSize()
-        self.corner_bl.move(pad_x, h - self.corner_bl.height() - pad_y_bottom)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad_x, h - self.corner_br.height() - pad_y_bottom)
+        if w <= 0 or h <= 0:
+            return
+        top = max(28, h * 14 // 100)
+        bottom = max(20, h * 8 // 100)
+        self._center.setGeometry(0, top, w, h - top - bottom)
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -263,6 +289,7 @@ class HotspotPage(QWidget):
         self.ssid_label.setText(f"SSID: {self.ssid}")
         self.ip_label.setText(f"IP: {self.ip_address}")
         self.status_label.setText(status_text)
+        self.status_label.setStyleSheet(T_qss.chip("success"))
 
     def _stop_hotspot(self):
         print("[hotspot] stopping hotspot...", flush=True)
@@ -281,6 +308,7 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: QApplication.instance().quit())
 
     app = QApplication(sys.argv)
+    apply_app_palette(app)
     mark("QApplication created")
 
     w = HotspotPage()
