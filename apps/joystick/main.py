@@ -234,6 +234,7 @@ class DogController:
         return (out_max - out_min) * (x - in_min) / (in_max - in_min) + out_min
 
     def reset(self):
+        self._play_ball = 0  # 中断 play_ball 序列
         if self._dog:
             try:
                 self._dog.reset()
@@ -244,9 +245,50 @@ class DogController:
         self._height = 105
         self._crossing_state = False
 
+    def _play_ball_task(self, leg_id):
+        """二号腿玩球动作序列（移植自老版 dog_Joystick.__play_ball_task）。"""
+        if leg_id != 2 or not self._dog:
+            self._play_ball = 0
+            return
+        motor_id = [11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43]
+        angle_down = [-16, 66, 1, -17, 66, 1, -14, 74, 1, -14, 72, 1]
+        motor_2 = [21, 22, 23]
+        angle_hand = [-15, 51, 2, -13, 33, -1, -15, 64, 3, -19, 59, 0]
+        angle_play_2 = [10, 0, 0]
+        try:
+            if self._play_ball:
+                self._dog.motor_speed(100)
+                self._dog.motor(motor_id, angle_down)
+                time.sleep(0.3)
+            if self._play_ball:
+                self._dog.motor(motor_id, angle_hand)
+                time.sleep(0.2)
+            if self._play_ball:
+                self._dog.motor_speed(255)
+                time.sleep(0.01)
+            if self._play_ball:
+                self._dog.motor(motor_2, angle_play_2)
+                time.sleep(0.3)
+            if self._play_ball:
+                self._dog.motor(motor_id, angle_hand)
+                time.sleep(0.3)
+            if self._play_ball:
+                self._dog.motor_speed(100)
+                self._dog.motor(motor_id, angle_down)
+                time.sleep(0.3)
+            if self._play_ball:
+                self._dog.action(0xFF)
+        except Exception as e:
+            print(f"[joystick] play_ball 异常: {e}", flush=True)
+        self._height = 105
+        self._play_ball = 0
+
     def process_event(self, name, value):
         """处理单个手柄事件。"""
         if not self._dog:
+            return
+        # 跨障模式下只响应 SELECT/START，与老版 __crossing_handle 行为一致
+        if self._crossing_state and name not in ("SELECT", "START"):
             return
 
         try:
@@ -310,8 +352,16 @@ class DogController:
                     self._dog.action(10)
 
             elif name == "R1":
-                if value == 1 and not self._crossing_state:
-                    self._dog.action(11)
+                # 老版行为：触发二号腿 play_ball 序列（电机分步动作）
+                if value == 1 and not self._crossing_state and self._play_ball == 0:
+                    self._play_ball = 2
+                    t = threading.Thread(
+                        target=self._play_ball_task,
+                        args=(self._play_ball,),
+                        name="play_ball_task",
+                        daemon=True,
+                    )
+                    t.start()
 
             elif name == "SELECT":
                 if value == 1:
@@ -516,6 +566,11 @@ class JoystickPage(QWidget):
         self._js = JoystickReader(js_id=0)
         self._controller = DogController()
 
+        # 上一次轮询的状态，用于边沿触发，避免每 20ms 重复写串口堵塞主线程
+        self._last_btn_states = {}
+        self._last_axis_states = {}
+        self._exiting = False
+
         # ---- 顶部状态栏 ----
         self.js_dot = QLabel("●")
         self.js_dot.setStyleSheet(f"color: {COLOR_DANGER}; font-size: 14px;")
@@ -687,11 +742,18 @@ class JoystickPage(QWidget):
         if not self._js.connected:
             self._js.try_reconnect()
             return
+        # 按钮：边沿触发，按下/松开变化时才处理，避免长按时高频写串口
         for name, value in self._js.button_states.items():
-            if value != 0:
+            last = self._last_btn_states.get(name, 0)
+            if value != last:
+                self._last_btn_states[name] = value
                 self._controller.process_event(name, value)
+        # 摇杆：仅当变化超过死区，或从非零回到零时才发指令，避免堵塞主线程
         for name, value in self._js.axis_states.items():
-            self._controller.process_event(name, value)
+            last = self._last_axis_states.get(name, 0.0)
+            if abs(value - last) > 0.05 or (abs(last) > 0.05 and abs(value) <= 0.05):
+                self._last_axis_states[name] = value
+                self._controller.process_event(name, value)
 
     def _refresh_ui(self):
         # 状态点
@@ -757,9 +819,15 @@ class JoystickPage(QWidget):
         return " | ".join(lines)
 
     def keyPressEvent(self, ev: QKeyEvent):
-        if ev.key() == Qt.Key.Key_Back:
+        key = ev.key()
+        if key in (Qt.Key.Key_Back, Qt.Key.Key_Escape, Qt.Key.Key_Q):
+            if self._exiting:
+                return
+            self._exiting = True
             print("[joystick] KEY_BACK -> exit", flush=True)
+            # 双保险：close() 触发 closeEvent 清理，quit() 兜底退出事件循环
             self.close()
+            QApplication.instance().quit()
 
     def closeEvent(self, ev):
         print("[joystick] closing", flush=True)

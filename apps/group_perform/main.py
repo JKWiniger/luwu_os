@@ -12,6 +12,7 @@ import signal
 import json
 import socket
 import re
+import struct
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from subprocess import Popen, DEVNULL
@@ -60,44 +61,46 @@ try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({
         "cn": {
-            "title": "🎭 群组表演",
-            "room_connecting": "房间: 连接中...",
-            "room": "🏠 房间: {}",
-            "devices": "📡 在线设备: {}",
-            "devices_init": "在线设备: 0",
-            "mqtt_connecting": "MQTT: 连接中...",
-            "mqtt_connected": "🟢 MQTT 已连接",
-            "mqtt_disconnected": "🔴 MQTT 未连接",
-            "network_warn": "⚠ 网络未连接",
-            "dog_type": "设备型号: {}",
+            "title": "群组表演",
+            "room": "房间 {}",
+            "room_wait": "房间 ---",
+            "devices": "设备 {}",
+            "dog_type": "型号 {}",
+            "mqtt_ok": "MQTT",
+            "mqtt_bad": "MQTT断开",
+            "net_bad": "无网络",
+            "sync_wait": "时间同步中",
+            "sync_ok": "时间已同步",
+            "sync_fail": "时间同步失败",
             "status_idle": "就绪 - 等待开始",
-            "status_idle2": "⏸ 就绪 - 等待开始",
-            "status_perform": "🎬 表演中...",
-            "action_list_title": "— 动作列表 —",
-            "corner_switch": "◀ ▶ : 切换",
-            "corner_start": "D: 开始表演",
-            "corner_stop": "D: 停止表演",
-            "corner_exit": "C: 退出",
+            "status_perform": "表演中",
+            "status_blocked": "等待时间同步",
+            "action_list_title": "动作列表",
+            "corner_switch": "◀▶ 切换",
+            "corner_start": "D 开始",
+            "corner_stop": "D 停止",
+            "corner_exit": "C 退出",
         },
         "en": {
-            "title": "🎭 Group Performance",
-            "room_connecting": "Room: connecting...",
-            "room": "🏠 Room: {}",
-            "devices": "📡 Online devices: {}",
-            "devices_init": "Online devices: 0",
-            "mqtt_connecting": "MQTT: connecting...",
-            "mqtt_connected": "🟢 MQTT connected",
-            "mqtt_disconnected": "🔴 MQTT disconnected",
-            "network_warn": "⚠ No network",
-            "dog_type": "Device: {}",
+            "title": "Group Performance",
+            "room": "Room {}",
+            "room_wait": "Room ---",
+            "devices": "Devices {}",
+            "dog_type": "Type {}",
+            "mqtt_ok": "MQTT",
+            "mqtt_bad": "MQTT off",
+            "net_bad": "No net",
+            "sync_wait": "Time syncing",
+            "sync_ok": "Time synced",
+            "sync_fail": "Sync failed",
             "status_idle": "Ready - Waiting",
-            "status_idle2": "⏸ Ready - Waiting",
-            "status_perform": "🎬 Performing...",
-            "action_list_title": "— Action List —",
-            "corner_switch": "◀ ▶ : Switch",
-            "corner_start": "D: Start",
-            "corner_stop": "D: Stop",
-            "corner_exit": "C: Exit",
+            "status_perform": "Performing",
+            "status_blocked": "Waiting time sync",
+            "action_list_title": "Action List",
+            "corner_switch": "◀▶ Switch",
+            "corner_start": "D Start",
+            "corner_stop": "D Stop",
+            "corner_exit": "C Exit",
         },
     })
 except Exception:
@@ -110,6 +113,15 @@ HEARTBEAT_INTERVAL = 5.0
 DEVICE_TIMEOUT = 15.0
 ACTION_PREP_DELAY = 3.0
 AUTO_EXIT_SEC = 600
+
+# NTP 同步配置
+NTP_SERVERS = ["ntp.aliyun.com", "ntp1.aliyun.com", "cn.pool.ntp.org", "pool.ntp.org"]
+NTP_TIMEOUT = 3.0
+
+# 时间同步状态
+SYNC_WAIT = 0    # 同步中
+SYNC_OK = 1      # 已同步
+SYNC_FAIL = 2    # 同步失败
 
 # ===================== 全局状态 =====================
 exitmark = False
@@ -125,6 +137,16 @@ room_id = None
 local_ip = None
 dog = None
 dog_type = "R"
+
+# 时间同步
+_time_offset = 0.0          # 软偏移：synced_time() = time.time() + _time_offset
+_sync_status = SYNC_WAIT    # 当前同步状态
+_sync_server = ""           # 成功同步使用的服务器
+
+
+def synced_time():
+    """用于群控调度的统一时间，已加 NTP 软偏移。"""
+    return time.time() + _time_offset
 
 # ===================== 动作组配置（按 dog_type 区分）=====================
 ACTION_GROUPS = {
@@ -298,6 +320,62 @@ def force_kill_all_mplayer():
         print(f"[ERROR] 强制 kill mplayer 失败: {e}")
 
 
+# ===================== NTP 时间同步 =====================
+
+
+def _sntp_query(host, timeout=NTP_TIMEOUT):
+    """向单个 NTP 服务器发 SNTP 请求，返回偏移（服务器时间 - 本地时间）。"""
+    addr = (host, 123)
+    pkt = b'\x1b' + 47 * b'\0'  # LI=0, VN=3, Mode=3 (client)
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(timeout)
+    try:
+        t1 = time.time()
+        s.sendto(pkt, addr)
+        data, _ = s.recvfrom(48)
+        t4 = time.time()
+    finally:
+        s.close()
+    if len(data) < 48:
+        raise ValueError("short ntp packet")
+    # 服务器接收时间戳 offset 32；服务器发送时间戳 offset 40
+    rx_int, rx_frac = struct.unpack('!II', data[32:40])
+    tx_int, tx_frac = struct.unpack('!II', data[40:48])
+    NTP_EPOCH = 2208988800  # 1900 -> 1970
+    t2 = (rx_int - NTP_EPOCH) + rx_frac / 2 ** 32
+    t3 = (tx_int - NTP_EPOCH) + tx_frac / 2 ** 32
+    # 标准 NTP offset 公式
+    offset = ((t2 - t1) + (t3 - t4)) / 2.0
+    return offset
+
+
+def sync_time_thread():
+    """后台线程：依次尝试多个 NTP 服务器，成功后设置 _time_offset。"""
+    global _time_offset, _sync_status, _sync_server
+    for srv in NTP_SERVERS:
+        if exitmark:
+            return
+        try:
+            offset = _sntp_query(srv)
+            _time_offset = offset
+            _sync_server = srv
+            _sync_status = SYNC_OK
+            print(f"[NTP] 同步成功 via {srv}, offset={offset*1000:.1f}ms")
+            return
+        except Exception as e:
+            print(f"[NTP] {srv} 失败: {e}")
+            continue
+    _sync_status = SYNC_FAIL
+    print("[NTP] 所有服务器同步失败")
+
+
+def start_time_sync():
+    """启动后台时间同步。可多次调用重试。"""
+    global _sync_status
+    _sync_status = SYNC_WAIT
+    threading.Thread(target=sync_time_thread, daemon=True).start()
+
+
 # ===================== MQTT 群组通信 =====================
 
 
@@ -423,7 +501,8 @@ def publish_start():
     if not mqtt_client:
         return
     topics = get_topics()
-    base_time = time.time() + ACTION_PREP_DELAY
+    # 使用 synced_time() 以保证各设备时间基准一致
+    base_time = synced_time() + ACTION_PREP_DELAY
     scheduled_actions = []
     current_time = base_time
     for act in actions_to_perform:
@@ -514,11 +593,11 @@ def action_executor():
     actions = plan["actions"]
     music_start = plan["music_start"]
 
-    wait = music_start - time.time()
+    wait = music_start - synced_time()
     if wait > 0:
         print(f"[EXEC] 等待 {wait:.1f}s 后开始...")
-        end_wait = time.time() + wait
-        while time.time() < end_wait:
+        end_wait = synced_time() + wait
+        while synced_time() < end_wait:
             if not group_perform or exitmark:
                 return
             time.sleep(0.05)
@@ -538,10 +617,10 @@ def action_executor():
             if not group_perform or exitmark:
                 break
             target_time = act["start_at"]
-            wait = target_time - time.time()
+            wait = target_time - synced_time()
             if wait > 0:
-                end_wait = time.time() + wait
-                while time.time() < end_wait:
+                end_wait = synced_time() + wait
+                while synced_time() < end_wait:
                     if not group_perform or exitmark:
                         break
                     time.sleep(0.05)
@@ -588,7 +667,7 @@ class GroupPerformPage(QWidget):
         # ---- 标题 ----
         self.title = QLabel(_T("title"))
         f1 = QFont()
-        f1.setPointSize(18)
+        f1.setPointSize(16)
         f1.setBold(True)
         self.title.setFont(f1)
         self.title.setStyleSheet("color: white;")
@@ -599,98 +678,59 @@ class GroupPerformPage(QWidget):
         self.sep1.setFrameShape(QFrame.Shape.HLine)
         self.sep1.setStyleSheet("color: #2a3050;")
 
-        # ---- 房间信息 ----
-        self.room_label = QLabel(_T("room_connecting"))
-        self.room_label.setStyleSheet("color: #64b5f6; font-size: 14px;")
-        self.room_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ---- 信息行：房间 / 设备数 / 型号 ----
+        self.info_label = QLabel(_T("room_wait"))
+        self.info_label.setStyleSheet("color: #8892c9; font-size: 12px;")
+        self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.device_label = QLabel(_T("devices_init"))
-        self.device_label.setStyleSheet("color: #8892c9; font-size: 13px;")
-        self.device_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ---- 状态行：MQTT 连接 + 时间同步 + 网络异常 ----
+        self.health_label = QLabel("")
+        self.health_label.setStyleSheet("color: #8892c9; font-size: 11px;")
+        self.health_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # ---- 连接状态 ----
-        self.conn_label = QLabel(_T("mqtt_connecting"))
-        self.conn_label.setStyleSheet("color: #ffa726; font-size: 12px;")
-        self.conn_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.network_label = QLabel("")
-        self.network_label.setStyleSheet("color: #ef5350; font-size: 11px;")
-        self.network_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 狗类型 ----
-        self.dog_label = QLabel(_T("dog_type", dog_type))
-        self.dog_label.setStyleSheet("color: #5c6a9c; font-size: 11px;")
-        self.dog_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # ---- 状态 ----
+        # ---- 大状态 ----
         self.status_label = QLabel(_T("status_idle"))
-        self.status_label.setStyleSheet("color: #18df6b; font-size: 14px;")
+        f2 = QFont()
+        f2.setPointSize(13)
+        f2.setBold(True)
+        self.status_label.setFont(f2)
+        self.status_label.setStyleSheet("color: #18df6b;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # ---- 动作列表标题 ----
-        self.action_title = QLabel(_T("action_list_title"))
-        self.action_title.setStyleSheet("color: #5c6a9c; font-size: 11px;")
-        self.action_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ---- 动作列表占位（仅保留数据，UI 不展示）----
+        self._action_items = []
 
-        # ---- 动作列表滚动区域 ----
-        self.action_list_widget = QWidget()
-        self.action_list_widget.setStyleSheet("background-color: #1a1f3a; border-radius: 8px;")
-        self.action_list_layout = QVBoxLayout(self.action_list_widget)
-        self.action_list_layout.setContentsMargins(10, 8, 10, 8)
-        self.action_list_layout.setSpacing(3)
-
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }"
-                                        "QScrollBar:vertical { width: 6px; background: #1a1f3a; }"
-                                        "QScrollBar::handle:vertical { background: #2a3050; border-radius: 3px; }"
-                                        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        self.scroll_area.setWidget(self.action_list_widget)
-        self.scroll_area.setFixedHeight(140)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        self._action_items = []  # 存储动作Label引用
-
-        # ---- 分隔线 ----
-        self.sep2 = QFrame()
-        self.sep2.setFrameShape(QFrame.Shape.HLine)
-        self.sep2.setStyleSheet("color: #2a3050;")
-
-        # ---- 提示 ----
+        # ---- 角标：仅底部两个，对应硬件 C(左下)/D(右下) ----
         hint_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
-        self.corner_tl = QLabel(_T("corner_switch"), self)
+        self.corner_tl = QLabel("", self)
         self.corner_tl.setStyleSheet(hint_style)
-        self.corner_tr = QLabel(_T("corner_start"), self)
+        self.corner_tr = QLabel("", self)
         self.corner_tr.setStyleSheet(hint_style)
         self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.corner_bl = QLabel(_T("corner_exit"), self)
         self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel("", self)
+        self.corner_br = QLabel(_T("corner_start"), self)
         self.corner_br.setStyleSheet(hint_style)
         self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        # ---- 布局 ----
+        # ---- 主布局 ----
+        # 底部预留 24px 给角标使用
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 16, 20, 16)
+        main_layout.setContentsMargins(16, 28, 16, 28)
         main_layout.setSpacing(6)
         main_layout.addWidget(self.title)
         main_layout.addWidget(self.sep1)
-        main_layout.addWidget(self.room_label)
-        main_layout.addWidget(self.device_label)
-        main_layout.addWidget(self.conn_label)
-        main_layout.addWidget(self.network_label)
-        main_layout.addWidget(self.dog_label)
         main_layout.addSpacing(4)
+        main_layout.addWidget(self.info_label)
+        main_layout.addWidget(self.health_label)
+        main_layout.addStretch()
         main_layout.addWidget(self.status_label)
-        main_layout.addWidget(self.action_title)
-        main_layout.addWidget(self.scroll_area)
-        main_layout.addWidget(self.sep2)
         main_layout.addStretch()
 
         # ---- 刷新定时器 ----
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._refresh_ui)
-        self._refresh_timer.start(500)  # 2fps
+        self._refresh_timer.start(500)
 
         # ---- 表演状态监控定时器 ----
         self._perf_monitor = QTimer(self)
@@ -702,63 +742,69 @@ class GroupPerformPage(QWidget):
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        # 构建动作列表UI
-        self._build_action_list()
+        # 确保角标在最上层，不被布局中的 widget 遮挡
+        for c in (self.corner_tl, self.corner_tr, self.corner_bl, self.corner_br):
+            c.raise_()
 
     def _build_action_list(self):
-        """构建动作列表UI"""
-        # 清除旧项目
-        for item in self._action_items:
-            self.action_list_layout.removeWidget(item)
-            item.deleteLater()
+        """保留空实现：UI 不再展示动作列表，仅后端使用 actions_to_perform。"""
         self._action_items.clear()
-
-        for act in actions_to_perform:
-            lbl = QLabel(f"  #{act['id']:>3}  {act['name']}  ({act['duration']}s)")
-            lbl.setStyleSheet(
-                "color: #8892c9; font-size: 11px; background: transparent; padding: 2px 4px;"
-            )
-            self._action_items.append(lbl)
-            self.action_list_layout.addWidget(lbl)
-
-        # 添加弹簧
-        self.action_list_layout.addStretch()
 
     def _refresh_ui(self):
         """刷新UI显示"""
-        # 连接状态
-        if mqtt_client and mqtt_client.is_connected():
-            self.conn_label.setText(_T("mqtt_connected"))
-            self.conn_label.setStyleSheet("color: #18df6b; font-size: 12px;")
-        else:
-            self.conn_label.setText(_T("mqtt_disconnected"))
-            self.conn_label.setStyleSheet("color: #ff5252; font-size: 12px;")
-
-        # 网络状态
-        if check_network():
-            self.network_label.setText("")
-        else:
-            self.network_label.setText(_T("network_warn"))
-            self.network_label.setStyleSheet("color: #ffa726; font-size: 11px;")
-
-        # 房间号
-        if room_id:
-            self.room_label.setText(_T("room", room_id))
-
-        # 在线设备数
+        # 信息行：房间 + 设备数 + 型号
         with known_devices_lock:
             count = len(known_devices)
-        self.device_label.setText(_T("devices", count))
+        if room_id:
+            room_text = _T("room", room_id)
+        else:
+            room_text = _T("room_wait")
+        self.info_label.setText(
+            f"{room_text}    {_T('devices', count)}    {_T('dog_type', dog_type)}"
+        )
+
+        # 状态行：MQTT / 网络 / 时间同步
+        parts = []
+        bad = False
+
+        if not check_network():
+            parts.append(_T("net_bad"))
+            bad = True
+        elif mqtt_client and mqtt_client.is_connected():
+            parts.append("● " + _T("mqtt_ok"))
+        else:
+            parts.append(_T("mqtt_bad"))
+            bad = True
+
+        if _sync_status == SYNC_OK:
+            parts.append("✓ " + _T("sync_ok"))
+        elif _sync_status == SYNC_WAIT:
+            parts.append("· " + _T("sync_wait"))
+        else:
+            parts.append("✗ " + _T("sync_fail"))
+            bad = True
+
+        self.health_label.setText("    ".join(parts))
+        if bad:
+            self.health_label.setStyleSheet("color: #ff8a65; font-size: 11px;")
+        elif _sync_status == SYNC_OK:
+            self.health_label.setStyleSheet("color: #18df6b; font-size: 11px;")
+        else:
+            self.health_label.setStyleSheet("color: #ffa726; font-size: 11px;")
 
         # 表演状态
         if group_perform:
             self.status_label.setText(_T("status_perform"))
-            self.status_label.setStyleSheet("color: #ff9800; font-size: 14px;")
-            self.corner_tr.setText(_T("corner_stop"))
+            self.status_label.setStyleSheet("color: #ff9800;")
+            self.corner_br.setText(_T("corner_stop"))
+        elif _sync_status != SYNC_OK:
+            self.status_label.setText(_T("status_blocked"))
+            self.status_label.setStyleSheet("color: #ffa726;")
+            self.corner_br.setText(_T("corner_start"))
         else:
-            self.status_label.setText(_T("status_idle2"))
-            self.status_label.setStyleSheet("color: #18df6b; font-size: 14px;")
-            self.corner_tr.setText(_T("corner_start"))
+            self.status_label.setText(_T("status_idle"))
+            self.status_label.setStyleSheet("color: #18df6b;")
+            self.corner_br.setText(_T("corner_start"))
 
     def _check_performance(self):
         """监控表演状态，触发动作执行"""
@@ -771,14 +817,18 @@ class GroupPerformPage(QWidget):
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         w, h = self.width(), self.height()
-        pad = 16
-        self.corner_tl.move(pad, pad)
+        pad = 8
+        self.corner_tl.adjustSize()
         self.corner_tr.adjustSize()
         self.corner_bl.adjustSize()
         self.corner_br.adjustSize()
+        self.corner_tl.move(pad, pad)
         self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
         self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
         self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
+        # 重新提升到顶层
+        for c in (self.corner_tl, self.corner_tr, self.corner_bl, self.corner_br):
+            c.raise_()
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -808,6 +858,12 @@ class GroupPerformPage(QWidget):
                 print("[group] KEY_RETURN -> stop", flush=True)
                 publish_stop()
             else:
+                # 未同步时不允许开始，同时触发一次重试
+                if _sync_status != SYNC_OK:
+                    print("[group] KEY_RETURN -> blocked: time not synced, retry sync", flush=True)
+                    if _sync_status == SYNC_FAIL:
+                        start_time_sync()
+                    return
                 print("[group] KEY_RETURN -> start", flush=True)
                 publish_start()
 
@@ -881,6 +937,10 @@ def main():
 
     w = GroupPerformPage()
     mark("widget constructed")
+
+    # 启动 NTP 同步（后台线程，不阻塞 UI）
+    QTimer.singleShot(100, start_time_sync)
+    mark("time sync scheduled")
 
     # 启动MQTT
     QTimer.singleShot(200, lambda: _start_mqtt(w))

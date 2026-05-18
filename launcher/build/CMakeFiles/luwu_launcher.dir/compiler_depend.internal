@@ -8,6 +8,7 @@
  /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/moc_predefs.h
  /home/pi/luwu-os/launcher/demogridview.cpp
  /home/pi/luwu-os/launcher/demogridview.h
+ /home/pi/luwu-os/launcher/devicetable.h
  /home/pi/luwu-os/launcher/galleryview.cpp
  /home/pi/luwu-os/launcher/galleryview.h
  /home/pi/luwu-os/launcher/i18n.cpp
@@ -2639,6 +2640,7 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QDebug
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QElapsedTimer
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QFile
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QFileSystemWatcher
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QList
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QObject
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QProcess
@@ -2694,6 +2696,7 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qexceptionhandling.h
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfile.h
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfiledevice.h
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qfilesystemwatcher.h
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qflags.h
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfloat16.h
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qforeach.h

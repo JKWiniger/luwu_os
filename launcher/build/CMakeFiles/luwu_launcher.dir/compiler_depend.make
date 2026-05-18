@@ -7,6 +7,7 @@ luwu_launcher_autogen/timestamp: /home/pi/luwu-os/launcher/CMakeLists.txt \
   luwu_launcher_autogen/moc_predefs.h \
   /home/pi/luwu-os/launcher/demogridview.cpp \
   /home/pi/luwu-os/launcher/demogridview.h \
+  /home/pi/luwu-os/launcher/devicetable.h \
   /home/pi/luwu-os/launcher/galleryview.cpp \
   /home/pi/luwu-os/launcher/galleryview.h \
   /home/pi/luwu-os/launcher/i18n.cpp \
@@ -2633,6 +2634,7 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: /home/pi/luwu-os/launcher/main.cpp \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QDebug \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QElapsedTimer \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QFile \
+  /usr/include/aarch64-linux-gnu/qt6/QtCore/QFileSystemWatcher \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QList \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QObject \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/QProcess \
@@ -2688,6 +2690,7 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: /home/pi/luwu-os/launcher/main.cpp \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/qexceptionhandling.h \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/qfile.h \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/qfiledevice.h \
+  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfilesystemwatcher.h \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/qflags.h \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/qfloat16.h \
   /usr/include/aarch64-linux-gnu/qt6/QtCore/qforeach.h \
@@ -3735,6 +3738,8 @@ CMakeFiles/luwu_launcher.dir/galleryview.cpp.o:
 
 /usr/include/aarch64-linux-gnu/qt6/QtCore/qprocess.h:
 
+/usr/include/aarch64-linux-gnu/qt6/QtCore/qfilesystemwatcher.h:
+
 /lib/aarch64-linux-gnu/libpcre2-16.so.0:
 
 /usr/include/aarch64-linux-gnu/qt6/QtCore/qcalendar.h:
@@ -3951,7 +3956,7 @@ luwu_launcher_autogen/mocs_compilation.cpp:
 
 /usr/lib/aarch64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsVersionlessAliasTargets.cmake:
 
-/usr/include/aarch64-linux-gnu/sys/select.h:
+/usr/lib/aarch64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsTargets.cmake:
 
 /usr/lib/gcc/aarch64-linux-gnu/14/include/stdbool.h:
 
@@ -4223,11 +4228,15 @@ luwu_launcher_autogen/mocs_compilation.cpp:
 
 /usr/include/c++/14/bits/streambuf.tcc:
 
-/usr/include/aarch64-linux-gnu/qt6/QtCore/qtversionchecks.h:
+/usr/include/aarch64-linux-gnu/qt6/QtGui/qbitmap.h:
 
-/usr/lib/gcc/aarch64-linux-gnu/14/libgcc_s.so:
+/usr/include/c++/14/bits/fs_ops.h:
 
-/usr/include/c++/14/bits/std_abs.h:
+/usr/include/aarch64-linux-gnu/qt6/QtCore/qdatastream.h:
+
+/usr/include/c++/14/bits/requires_hosted.h:
+
+/usr/lib/aarch64-linux-gnu/cmake/Qt6/QtPublicFinalizerHelpers.cmake:
 
 /usr/include/aarch64-linux-gnu/qt6/QtCore/qbytearrayview.h:
 
@@ -4261,16 +4270,6 @@ luwu_launcher_autogen/mocs_compilation.cpp:
 
 /usr/include/c++/14/ext/atomicity.h:
 
-/usr/include/aarch64-linux-gnu/qt6/QtGui/qbitmap.h:
-
-/usr/include/c++/14/bits/fs_ops.h:
-
-/usr/include/aarch64-linux-gnu/qt6/QtCore/qdatastream.h:
-
-/usr/include/c++/14/bits/requires_hosted.h:
-
-/usr/lib/aarch64-linux-gnu/cmake/Qt6/QtPublicFinalizerHelpers.cmake:
-
 /usr/include/aarch64-linux-gnu/qt6/QtGui/qtgui-config.h:
 
 /usr/include/aarch64-linux-gnu/bits/flt-eval-method.h:
@@ -4300,6 +4299,8 @@ luwu_launcher_autogen/mocs_compilation.cpp:
 /usr/lib/aarch64-linux-gnu/cmake/Qt6/Qt6ConfigVersionImpl.cmake:
 
 /usr/include/c++/14/bit:
+
+/usr/include/aarch64-linux-gnu/qt6/QtCore/QFileSystemWatcher:
 
 /usr/include/c++/14/bits/locale_facets.tcc:
 
@@ -4349,6 +4350,8 @@ CMakeFiles/luwu_launcher.dir/i18n.cpp.o:
 
 /usr/include/aarch64-linux-gnu/qt6/QtCore/qmalloc.h:
 
+/home/pi/luwu-os/launcher/devicetable.h:
+
 /usr/include/aarch64-linux-gnu/bits/types.h:
 
 /usr/include/aarch64-linux-gnu/bits/types/__mbstate_t.h:
@@ -4362,6 +4365,44 @@ luwu_launcher_autogen/moc_predefs.h:
 /usr/lib/aarch64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsConfig.cmake:
 
 /usr/include/aarch64-linux-gnu/bits/types/sigset_t.h:
+
+/usr/include/aarch64-linux-gnu/qt6/QtCore/q20memory.h:
+
+/usr/include/aarch64-linux-gnu/qt6/QtGui/qtguiexports.h:
+
+/usr/include/aarch64-linux-gnu/qt6/QtCore/QSize:
+
+/usr/include/aarch64-linux-gnu/qt6/QtCore/QList:
+
+/usr/include/aarch64-linux-gnu/bits/uio_lim.h:
+
+/usr/include/c++/14/climits:
+
+/usr/include/aarch64-linux-gnu/bits/struct_rwlock.h:
+
+/usr/include/aarch64-linux-gnu/c++/14/bits/atomic_word.h:
+
+/usr/include/c++/14/clocale:
+
+/usr/include/aarch64-linux-gnu/bits/pthread_stack_min-dynamic.h:
+
+/usr/lib/aarch64-linux-gnu/cmake/Qt6Gui/Qt6GuiTargets-none.cmake:
+
+/usr/include/aarch64-linux-gnu/qt6/QtGui/qcolor.h:
+
+/lib/aarch64-linux-gnu/libatomic.so.1:
+
+/usr/include/aarch64-linux-gnu/qt6/QtGui/qguiapplication_platform.h:
+
+/usr/include/c++/14/bits/stl_map.h:
+
+/home/pi/luwu-os/launcher/statusbar.cpp:
+
+/usr/share/cmake-3.31/Modules/FeatureSummary.cmake:
+
+/usr/include/aarch64-linux-gnu/bits/endian.h:
+
+/usr/lib/aarch64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsDependencies.cmake:
 
 /usr/include/aarch64-linux-gnu/qt6/QtGui/qpicture.h:
 
@@ -4479,43 +4520,11 @@ luwu_launcher_autogen/EWIEGA46WW/moc_galleryview.cpp:
 
 /usr/include/aarch64-linux-gnu/qt6/QtCore/qcompilerdetection.h:
 
-/lib/aarch64-linux-gnu/libatomic.so.1:
+/usr/include/aarch64-linux-gnu/qt6/QtCore/qtversionchecks.h:
 
-/usr/include/aarch64-linux-gnu/qt6/QtGui/qguiapplication_platform.h:
+/usr/lib/gcc/aarch64-linux-gnu/14/libgcc_s.so:
 
-/usr/include/c++/14/bits/stl_map.h:
-
-/usr/include/aarch64-linux-gnu/qt6/QtCore/q20memory.h:
-
-/usr/include/aarch64-linux-gnu/qt6/QtGui/qtguiexports.h:
-
-/usr/include/aarch64-linux-gnu/qt6/QtCore/QSize:
-
-/usr/include/aarch64-linux-gnu/qt6/QtCore/QList:
-
-/usr/include/aarch64-linux-gnu/bits/uio_lim.h:
-
-/usr/include/c++/14/climits:
-
-/usr/include/aarch64-linux-gnu/bits/struct_rwlock.h:
-
-/usr/include/aarch64-linux-gnu/c++/14/bits/atomic_word.h:
-
-/usr/include/c++/14/clocale:
-
-/usr/include/aarch64-linux-gnu/bits/pthread_stack_min-dynamic.h:
-
-/usr/lib/aarch64-linux-gnu/cmake/Qt6Gui/Qt6GuiTargets-none.cmake:
-
-/usr/include/aarch64-linux-gnu/qt6/QtGui/qcolor.h:
-
-/home/pi/luwu-os/launcher/statusbar.cpp:
-
-/usr/share/cmake-3.31/Modules/FeatureSummary.cmake:
-
-/usr/include/aarch64-linux-gnu/bits/endian.h:
-
-/usr/lib/aarch64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsDependencies.cmake:
+/usr/include/c++/14/bits/std_abs.h:
 
 /usr/include/aarch64-linux-gnu/bits/types/locale_t.h:
 
@@ -4532,8 +4541,6 @@ luwu_launcher_autogen/EWIEGA46WW/moc_galleryview.cpp:
 /usr/include/aarch64-linux-gnu/bits/types/struct_FILE.h:
 
 /usr/include/aarch64-linux-gnu/bits/types/struct_sched_param.h:
-
-/usr/lib/aarch64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsTargets.cmake:
 
 /usr/include/aarch64-linux-gnu/bits/types/struct_timeval.h:
 
@@ -4617,10 +4624,6 @@ CMakeFiles/luwu_launcher.dir/demogridview.cpp.o:
 
 /usr/include/c++/14/ratio:
 
-/usr/include/aarch64-linux-gnu/gnu/stubs-lp64.h:
-
-/usr/include/aarch64-linux-gnu/bits/wordsize.h:
-
 /usr/include/aarch64-linux-gnu/c++/14/bits/c++config.h:
 
 /usr/include/aarch64-linux-gnu/c++/14/bits/c++allocator.h:
@@ -4652,6 +4655,12 @@ CMakeFiles/luwu_launcher.dir/demogridview.cpp.o:
 /usr/include/c++/14/tr1/beta_function.tcc:
 
 /usr/include/c++/14/bits/stream_iterator.h:
+
+/usr/include/aarch64-linux-gnu/bits/wordsize.h:
+
+/usr/include/aarch64-linux-gnu/gnu/stubs-lp64.h:
+
+/usr/include/aarch64-linux-gnu/sys/select.h:
 
 /usr/include/aarch64-linux-gnu/qt6/QtCore/QRect:
 

@@ -399,7 +399,7 @@ CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qvector.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QRect \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qrect.h \
- /home/pi/luwu-os/launcher/i18n.h \
+ /home/pi/luwu-os/launcher/devicetable.h /home/pi/luwu-os/launcher/i18n.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QString \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qstring.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QPainter \
@@ -443,4 +443,6 @@ CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QDebug \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qdebug.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QGraphicsDropShadowEffect \
- /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qgraphicseffect.h
+ /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qgraphicseffect.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QStringList \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qstringlist.h

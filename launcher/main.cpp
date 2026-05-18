@@ -230,6 +230,40 @@ int main(int argc, char *argv[]) {
     stack.showFullScreen();
     gallery->setFocus();
 
+    // --- 设备型号探测：异步调 Python 脚本，不阻塞启动 ---
+    // 脚本 stdout 输出一行：xgomini / xgolite / xgomini2sw / xgorider / unknown
+    // 未探测完成前 demoGrid 默认 DEV_ALL，避免删项闪烁。
+    auto *detectProc = new QProcess(&stack);
+    detectProc->setProcessChannelMode(QProcess::SeparateChannels);
+    auto *detectTimeout = new QTimer(&stack);
+    detectTimeout->setSingleShot(true);
+    QObject::connect(detectTimeout, &QTimer::timeout, [detectProc]() {
+        if (detectProc->state() != QProcess::NotRunning) {
+            qWarning() << "[luwu-launcher] device detect timeout, killing...";
+            detectProc->kill();
+        }
+    });
+    QObject::connect(detectProc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+        [detectProc, detectTimeout, demoGrid](int code, QProcess::ExitStatus st) {
+            detectTimeout->stop();
+            QByteArray out = detectProc->readAllStandardOutput().trimmed();
+            QByteArray err = detectProc->readAllStandardError().trimmed();
+            qDebug().noquote() << QString("[luwu-launcher] device detect finished code=%1 status=%2 out=%3")
+                                      .arg(code).arg(int(st)).arg(QString::fromUtf8(out));
+            if (!err.isEmpty()) {
+                qDebug().noquote() << "[luwu-launcher] device detect stderr:" << QString::fromUtf8(err);
+            }
+            QString dev = QString::fromUtf8(out).split('\n').value(0).trimmed();
+            if (!dev.isEmpty() && demoGrid) {
+                demoGrid->setDeviceType(dev);
+            }
+            detectProc->deleteLater();
+        });
+    detectProc->setProgram("python3");
+    detectProc->setArguments({"/home/pi/luwu-os/configs/detect_device.py"});
+    detectProc->start();
+    detectTimeout->start(2500); // 脚本内部超时 1.5s，这里再留 1s 宽余
+
     // --- 语言配置文件监听：切换后自动刷新桌面/Demo 文字 ---
     auto *langWatcher = new QFileSystemWatcher(&stack);
     const QString langIniPath = QStringLiteral("/home/pi/luwu-os/configs/language.ini");
@@ -245,6 +279,29 @@ int main(int argc, char *argv[]) {
         }
         if (gallery) gallery->retranslate();
         if (demoGrid) demoGrid->retranslate();
+    });
+
+    // --- 设备配置文件监听：device.ini 变更后自动重建 demo 列表 ---
+    // 开源用户可手动 echo xgorider > configs/device.ini 即时验证 Rider 视图
+    auto *devWatcher = new QFileSystemWatcher(&stack);
+    const QString devIniPath = QStringLiteral("/home/pi/luwu-os/configs/device.ini");
+    if (QFile::exists(devIniPath)) {
+        devWatcher->addPath(devIniPath);
+    }
+    QObject::connect(devWatcher, &QFileSystemWatcher::fileChanged,
+                     [devWatcher, demoGrid, devIniPath]() {
+        qDebug() << "[luwu-launcher] device.ini changed, reloading device type...";
+        if (!devWatcher->files().contains(devIniPath) && QFile::exists(devIniPath)) {
+            devWatcher->addPath(devIniPath);
+        }
+        QFile f(devIniPath);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QString dev = QString::fromUtf8(f.readLine()).trimmed().toLower();
+            f.close();
+            if (demoGrid && !dev.isEmpty()) {
+                demoGrid->setDeviceType(dev);
+            }
+        }
     });
 
     // --- 顶部状态栏覆盖层（时间 + 电量）---

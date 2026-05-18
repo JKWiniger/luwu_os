@@ -5,6 +5,7 @@ luwu_launcher_autogen/timestamp: \
 	/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/moc_predefs.h \
 	/home/pi/luwu-os/launcher/demogridview.cpp \
 	/home/pi/luwu-os/launcher/demogridview.h \
+	/home/pi/luwu-os/launcher/devicetable.h \
 	/home/pi/luwu-os/launcher/galleryview.cpp \
 	/home/pi/luwu-os/launcher/galleryview.h \
 	/home/pi/luwu-os/launcher/i18n.cpp \

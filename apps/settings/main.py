@@ -30,6 +30,16 @@ APP_DIR = Path(__file__).resolve().parent
 PICS_DIR = APP_DIR / "pics"
 # 全局唯一语言配置（统一接入 libs/i18n）
 LUWU_ROOT = Path("/home/pi/luwu-os")
+
+# 主题层 & 组件层
+if str(LUWU_ROOT) not in sys.path:
+    sys.path.insert(0, str(LUWU_ROOT))
+from libs.theme import apply_app_palette, Asset, Color as T_Color, Spacing, qss as T_qss
+from libs.ui import (
+    AppFrame, CardPanel, InfoRow, TitleLabel, SubtitleLabel,
+    BodyLabel, HintLabel, CaptionLabel, CornerKey,
+)
+
 LANGUAGE_INI = LUWU_ROOT / "configs" / "language.ini"
 VOLUME_INI = APP_DIR / "volume.ini"
 CN_LA = APP_DIR / "cn.la"
@@ -195,14 +205,15 @@ def get_xgoedu_version():
     return _get_pkg_version("xgoedu-luwuos")
 
 # ---- Color constants ----
-COLOR_BG = QColor(15, 21, 48)
-COLOR_CARD = QColor(25, 32, 65)
-COLOR_SELECT = QColor(100, 80, 220)
-COLOR_WHITE = QColor(255, 255, 255)
-COLOR_GRAY = QColor(140, 145, 180)
-COLOR_PURPLE = QColor(120, 100, 240)
-COLOR_UNSELECT = QColor(50, 55, 80)
-COLOR_GREEN = QColor(0, 229, 255)
+# 保留主题化前的 QColor 常量供 paintEvent 使用，数值重新映射到主题 token
+COLOR_BG = QColor(T_Color.bg_solid)
+COLOR_CARD = QColor(255, 255, 255, 220)              # 卡片白底
+COLOR_SELECT = QColor(T_Color.card_selected_border)   # 选中紫→主题蓝 accent
+COLOR_WHITE = QColor(T_Color.text_invert)
+COLOR_GRAY = QColor(T_Color.text_muted)
+COLOR_PURPLE = QColor(T_Color.accent)                 # 原紫色动作色→主题 accent
+COLOR_UNSELECT = QColor(T_Color.card_border)          # 未选中卡片边框/进度条底色
+COLOR_GREEN = QColor(T_Color.success)
 
 # ============================================================================
 # Setting Item Data
@@ -222,7 +233,7 @@ SETTING_ITEMS = [
 # ============================================================================
 # SettingsListPage
 # ============================================================================
-class SettingsListPage(QWidget):
+class SettingsListPage(AppFrame):
     def __init__(self, stack: QStackedWidget):
         super().__init__()
         self.stack = stack
@@ -230,21 +241,10 @@ class SettingsListPage(QWidget):
         self.scroll_offset = 0
         self.la = load_language()
 
-        self.setStyleSheet("background-color: #0f1530;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        # Corner hints
-        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_tl = QLabel("A:上移", self)
-        self.corner_tl.setStyleSheet(hint_style)
-        self.corner_tr = QLabel("B:下移", self)
-        self.corner_tr.setStyleSheet(hint_style)
-        self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.corner_bl = QLabel("C:返回", self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel("D:进入", self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+        # 主题化角标（与 launcher 同款图标）
+        self._apply_corner_hints()
 
         # Item widgets
         self.item_widgets = []
@@ -254,13 +254,22 @@ class SettingsListPage(QWidget):
 
         self.update_selection()
 
+    def _apply_corner_hints(self):
+        t = self.la.get("DEMOEN", {})
+        self.setCornerHints(
+            tl=(t.get("UP", "上移"),    Asset.icon_left),
+            tr=(t.get("DOWN", "下移"),  Asset.icon_right),
+            bl=(t.get("BACK", "返回"),  Asset.icon_back),
+            br=(t.get("CONFIRM", "进入"), Asset.icon_enter),
+        )
+
     def _make_item_widget(self, item, index):
         """Create a container widget for a settings list item."""
         container = QWidget(self)
         container.setFixedSize(250, 26)
         layout = QHBoxLayout(container)
-        layout.setContentsMargins(6, 1, 6, 1)
-        layout.setSpacing(6)
+        layout.setContentsMargins(8, 1, 8, 1)
+        layout.setSpacing(8)
 
         # Icon
         icon_label = QLabel()
@@ -271,7 +280,7 @@ class SettingsListPage(QWidget):
             icon_label.setPixmap(pix)
         icon_label.setFixedSize(20, 20)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_label.setStyleSheet("background: transparent;")
+        icon_label.setStyleSheet(T_qss.transparent())
         icon_label.setObjectName(f"icon_{index}")
         layout.addWidget(icon_label)
 
@@ -279,10 +288,7 @@ class SettingsListPage(QWidget):
         label_key = item["label_key"]
         text = self.la.get("DEMOEN", {}).get(label_key, label_key)
         text_label = QLabel(text)
-        text_font = QFont()
-        text_font.setPointSize(11)
-        text_label.setFont(text_font)
-        text_label.setStyleSheet("color: #cccccc; background: transparent;")
+        text_label.setStyleSheet(T_qss.text("body"))
         text_label.setObjectName(f"text_{index}")
         layout.addWidget(text_label)
 
@@ -290,15 +296,12 @@ class SettingsListPage(QWidget):
 
         # Arrow indicator
         arrow = QLabel(">")
-        arrow_font = QFont()
-        arrow_font.setPointSize(11)
-        arrow.setFont(arrow_font)
-        arrow.setStyleSheet("color: #555; background: transparent;")
+        arrow.setStyleSheet(T_qss.text("caption"))
         arrow.setObjectName(f"arrow_{index}")
         layout.addWidget(arrow)
 
         container.setObjectName(f"item_{index}")
-        container.setStyleSheet(f"#item_{index} {{ background-color: {COLOR_CARD.name()}; border-radius: 6px; }}")
+        container.setStyleSheet(f"#item_{index} {{ {T_qss.card(False)} }}")
         return container
 
     def update_selection(self):
@@ -308,26 +311,19 @@ class SettingsListPage(QWidget):
             self._update_item_style(w, i, sel)
 
     def _update_item_style(self, container, idx, selected):
+        container.setStyleSheet(f"#item_{idx} {{ {T_qss.card(selected)} }}")
+        text_label = container.findChild(QLabel, f"text_{idx}")
+        arrow = container.findChild(QLabel, f"arrow_{idx}")
         if selected:
-            container.setStyleSheet(
-                f"#item_{idx} {{ background-color: {COLOR_SELECT.name()}; border-radius: 6px; }}"
-            )
-            text_label = container.findChild(QLabel, f"text_{idx}")
             if text_label:
-                text_label.setStyleSheet("color: #ffffff; font-size: 11px; font-weight: bold; background: transparent;")
-            arrow = container.findChild(QLabel, f"arrow_{idx}")
+                text_label.setStyleSheet(T_qss.text("body", color=T_Color.text_invert))
             if arrow:
-                arrow.setStyleSheet("color: #ffffff; font-size: 11px; background: transparent;")
+                arrow.setStyleSheet(T_qss.text("caption", color=T_Color.text_invert))
         else:
-            container.setStyleSheet(
-                f"#item_{idx} {{ background-color: {COLOR_CARD.name()}; border-radius: 6px; }}"
-            )
-            text_label = container.findChild(QLabel, f"text_{idx}")
             if text_label:
-                text_label.setStyleSheet("color: #cccccc; font-size: 11px; background: transparent;")
-            arrow = container.findChild(QLabel, f"arrow_{idx}")
+                text_label.setStyleSheet(T_qss.text("body"))
             if arrow:
-                arrow.setStyleSheet("color: #555555; font-size: 11px; background: transparent;")
+                arrow.setStyleSheet(T_qss.text("caption"))
 
     def move_selection(self, delta):
         new_idx = self.selected_idx + delta
@@ -397,15 +393,6 @@ class SettingsListPage(QWidget):
 
         self._relayout_items()
 
-        # Corner hints
-        pad = 12
-        self.corner_tl.move(pad, pad)
-        self.corner_tr.adjustSize()
-        self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
-
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Up or ev.key() == Qt.Key.Key_Left:
             self.move_selection(-1)
@@ -419,18 +406,24 @@ class SettingsListPage(QWidget):
 
     def refresh_language(self):
         self.la = load_language()
+        self._apply_corner_hints()
+        # 重建列表项文本
+        for i, item in enumerate(SETTING_ITEMS):
+            text_label = self.item_widgets[i].findChild(QLabel, f"text_{i}")
+            if text_label:
+                label_key = item["label_key"]
+                text_label.setText(self.la.get("DEMOEN", {}).get(label_key, label_key))
         self.update_selection()
 
 
 # ============================================================================
 # About Page (关于本机)
 # ============================================================================
-class AboutPage(QWidget):
+class AboutPage(AppFrame):
     def __init__(self, stack: QStackedWidget):
         super().__init__()
         self.stack = stack
         self.la = load_language()
-        self.setStyleSheet("background-color: #0f1530;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self.scroll_offset = 0
@@ -442,26 +435,20 @@ class AboutPage(QWidget):
         self.info_labels = []
         self._info_loaded = False
 
-        # Corner hints
-        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_tl = QLabel("A:上翻", self)
-        self.corner_tl.setStyleSheet(hint_style)
-        self.corner_tr = QLabel("B:下翻", self)
-        self.corner_tr.setStyleSheet(hint_style)
-        self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.corner_bl = QLabel("C:返回", self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel("D:退出", self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._apply_corner_hints()
 
         # 加载中占位
-        self.loading_label = QLabel("加载中…", self)
-        loading_font = QFont()
-        loading_font.setPointSize(11)
-        self.loading_label.setFont(loading_font)
-        self.loading_label.setStyleSheet("color: #8892c9; background: transparent;")
+        self.loading_label = HintLabel("加载中…", self)
         self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+    def _apply_corner_hints(self):
+        t = self.la.get("DEMOEN", {})
+        self.setCornerHints(
+            tl=(t.get("UP", "上翻"),    Asset.icon_left),
+            tr=(t.get("DOWN", "下翻"),  Asset.icon_right),
+            bl=(t.get("BACK", "返回"),  Asset.icon_back),
+            br=(t.get("EXIT", "退出"),  Asset.icon_enter),
+        )
 
     def _gather_info(self):
         items = []
@@ -486,11 +473,7 @@ class AboutPage(QWidget):
 
         self.info_items = self._gather_info()
         for key, value in self.info_items:
-            lbl = QLabel(f"{key}:  {value}", self)
-            lbl_font = QFont()
-            lbl_font.setPointSize(9)
-            lbl.setFont(lbl_font)
-            lbl.setStyleSheet("color: #c0c8e0; background: transparent; padding: 0px 6px;")
+            lbl = CaptionLabel(f"{key}:  {value}", self)
             lbl.setWordWrap(False)
             self.info_labels.append(lbl)
         self._info_loaded = True
@@ -509,9 +492,6 @@ class AboutPage(QWidget):
         self.loading_label.hide()
         self._relayout_items()
         self.update()
-
-    def refresh_language(self):
-        self.la = load_language()
 
     def _visible_count(self):
         h = self.height()
@@ -560,14 +540,6 @@ class AboutPage(QWidget):
         if hasattr(self, "loading_label"):
             self.loading_label.setGeometry(0, h // 2 - 15, w, 30)
 
-        pad = 12
-        self.corner_tl.move(pad, pad)
-        self.corner_tr.adjustSize()
-        self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
-
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Up or ev.key() == Qt.Key.Key_Left:
             if self.scroll_offset > 0:
@@ -582,15 +554,18 @@ class AboutPage(QWidget):
         elif ev.key() == Qt.Key.Key_Return:
             QApplication.instance().quit()
 
+    def refresh_language(self):
+        self.la = load_language()
+        self._apply_corner_hints()
+
 
 # ============================================================================
 # SN Page
 # ============================================================================
-class SNPage(QWidget):
+class SNPage(AppFrame):
     def __init__(self, stack: QStackedWidget):
         super().__init__()
         self.stack = stack
-        self.setStyleSheet("background-color: #0f1530;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self.la = load_language()
@@ -598,26 +573,20 @@ class SNPage(QWidget):
         # SN display
         self.sn_id = get_sn_short() + get_mac_address()
         full_sn = f"SN: {self.sn_id}"
-        self.sn_label = QLabel(full_sn, self)
-        sn_font = QFont()
-        sn_font.setPointSize(14)
-        self.sn_label.setFont(sn_font)
-        self.sn_label.setStyleSheet("color: #00E5FF; background: transparent;")
+        self.sn_label = SubtitleLabel(full_sn, self)
+        self.sn_label.setColor(T_Color.accent)
         self.sn_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Barcode display
         self.barcode_label = QLabel(self)
-        self.barcode_label.setStyleSheet("background: transparent;")
+        self.barcode_label.setStyleSheet(T_qss.transparent())
         self.barcode_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._generate_barcode()
 
-        # Corner hints
-        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_bl = QLabel("Back", self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel("Exit", self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.setCornerHints(
+            bl=(self.la.get("DEMOEN", {}).get("BACK", "返回"), Asset.icon_back),
+            br=(self.la.get("DEMOEN", {}).get("EXIT", "退出"), Asset.icon_enter),
+        )
 
     def _generate_barcode(self):
         try:
@@ -638,7 +607,7 @@ class SNPage(QWidget):
             self.barcode_label.setFixedSize(img.width, img.height)
         except Exception as e:
             self.barcode_label.setText(f"[Barcode Error: {e}]")
-            self.barcode_label.setStyleSheet("color: #ff5555; background: transparent;")
+            self.barcode_label.setStyleSheet(T_qss.text("body", color=T_Color.danger))
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -655,10 +624,6 @@ class SNPage(QWidget):
             self.barcode_label.setFixedSize(scaled_w, scaled_h)
             self.barcode_label.setScaledContents(True)
         self.barcode_label.move((w - self.barcode_label.width()) // 2, h // 2 - self.barcode_label.height() // 2)
-        pad = 12
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Back or ev.key() == Qt.Key.Key_Left:
@@ -670,54 +635,35 @@ class SNPage(QWidget):
 # ============================================================================
 # Volume Page
 # ============================================================================
-class VolumePage(QWidget):
+class VolumePage(AppFrame):
     def __init__(self, stack: QStackedWidget):
         super().__init__()
         self.stack = stack
         self.volume = read_volume()
         self.la = load_language()
-        self.setStyleSheet("background-color: #0f1530;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # Title
-        self.title_label = QLabel("Volume", self)
-        title_font = QFont()
-        title_font.setPointSize(18)
-        title_font.setBold(True)
-        self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet("color: #ffffff; background: transparent;")
+        self.title_label = TitleLabel("Volume", self)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Volume percent label
-        self.percent_label = QLabel(f"{self.volume}%", self)
-        pct_font = QFont()
-        pct_font.setPointSize(20)
-        pct_font.setBold(True)
-        self.percent_label.setFont(pct_font)
-        self.percent_label.setStyleSheet("color: #00E5FF; background: transparent;")
+        self.percent_label = TitleLabel(f"{self.volume}%", self)
+        self.percent_label.setColor(T_Color.accent)
         self.percent_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Saved hint (hidden by default)
-        self.saved_label = QLabel("", self)
-        saved_font = QFont()
-        saved_font.setPointSize(12)
-        self.saved_label.setFont(saved_font)
-        self.saved_label.setStyleSheet("color: #00E5FF; background: transparent;")
+        self.saved_label = HintLabel("", self)
+        self.saved_label.setColor(T_Color.success)
         self.saved_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.saved_label.hide()
 
-        # Corner hints
-        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_tl = QLabel("-5%", self)
-        self.corner_tl.setStyleSheet(hint_style)
-        self.corner_tr = QLabel("+5%", self)
-        self.corner_tr.setStyleSheet(hint_style)
-        self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.corner_bl = QLabel("Save", self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel("Exit", self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.setCornerHints(
+            tl="-5%",
+            tr="+5%",
+            bl=(self.la.get("DEMOEN", {}).get("EXIT", "退出"), Asset.icon_back),
+            br=(self.la.get("DEMOEN", {}).get("SAVE", "保存"), Asset.icon_enter),
+        )
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -752,13 +698,6 @@ class VolumePage(QWidget):
         self.title_label.setGeometry(0, 30, w, 30)
         self.percent_label.setGeometry(0, h // 2 - 40, w, 30)
         self.saved_label.setGeometry(0, h - 60, w, 25)
-        pad = 12
-        self.corner_tl.move(pad, pad)
-        self.corner_tr.adjustSize()
-        self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def update_volume_display(self):
         self.percent_label.setText(f"{self.volume}%")
@@ -774,35 +713,30 @@ class VolumePage(QWidget):
                 self.volume = min(100, self.volume + 5)
                 self.update_volume_display()
         elif ev.key() == Qt.Key.Key_Back:
-            # Save and go back
+            # Exit app (左下角）
+            QApplication.instance().quit()
+        elif ev.key() == Qt.Key.Key_Return:
+            # Save and go back (右下角）
             write_volume(self.volume)
             saved_text = self.la.get("VOLUME", {}).get("SAVED", "Saved!")
             self.saved_label.setText(saved_text)
             self.saved_label.show()
             QTimer.singleShot(800, lambda: self.stack.navigate_to("list"))
-        elif ev.key() == Qt.Key.Key_Return:
-            QApplication.instance().quit()
 
 
 # ============================================================================
 # Language Page
 # ============================================================================
-class LanguagePage(QWidget):
+class LanguagePage(AppFrame):
     def __init__(self, stack: QStackedWidget):
         super().__init__()
         self.stack = stack
         self.content = get_lang_code()
         self.la = load_language()
-        self.setStyleSheet("background-color: #0f1530;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # Title
-        self.title_label = QLabel("Language", self)
-        title_font = QFont()
-        title_font.setPointSize(18)
-        title_font.setBold(True)
-        self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet("color: #ffffff; background: transparent;")
+        self.title_label = TitleLabel("Language", self)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Option buttons (drawn manually)
@@ -810,26 +744,17 @@ class LanguagePage(QWidget):
         self.en_selected = (self.content == "en")
 
         # Saved hint
-        self.saved_label = QLabel("", self)
-        saved_font = QFont()
-        saved_font.setPointSize(12)
-        self.saved_label.setFont(saved_font)
-        self.saved_label.setStyleSheet("color: #00E5FF; background: transparent;")
+        self.saved_label = HintLabel("", self)
+        self.saved_label.setColor(T_Color.success)
         self.saved_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.saved_label.hide()
 
-        # Corner hints
-        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_tl = QLabel("CN", self)
-        self.corner_tl.setStyleSheet(hint_style)
-        self.corner_tr = QLabel("EN", self)
-        self.corner_tr.setStyleSheet(hint_style)
-        self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.corner_bl = QLabel("Save", self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel("Exit", self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.setCornerHints(
+            tl="CN",
+            tr="EN",
+            bl=(self.la.get("DEMOEN", {}).get("SAVE", "保存"), Asset.icon_back),
+            br=(self.la.get("DEMOEN", {}).get("EXIT", "退出"), Asset.icon_enter),
+        )
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -879,13 +804,6 @@ class LanguagePage(QWidget):
         w, h = self.width(), self.height()
         self.title_label.setGeometry(0, 30, w, 30)
         self.saved_label.setGeometry(0, h - 60, w, 25)
-        pad = 12
-        self.corner_tl.move(pad, pad)
-        self.corner_tr.adjustSize()
-        self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Left:
@@ -916,7 +834,7 @@ class LanguagePage(QWidget):
 # ============================================================================
 # QR Code Page (Contact Us / App Download)
 # ============================================================================
-class QRPage(QWidget):
+class QRPage(AppFrame):
     def __init__(self, stack: QStackedWidget, qr_image: str, email: str = None):
         super().__init__()
         self.stack = stack
@@ -924,7 +842,6 @@ class QRPage(QWidget):
         self.email = email
         self.la = load_language()
         self.qr_pixmap = None
-        self.setStyleSheet("background-color: #0f1530;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # Load QR image
@@ -933,13 +850,14 @@ class QRPage(QWidget):
         if not pix.isNull():
             self.qr_pixmap = pix
 
-        # Corner hints
-        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_bl = QLabel("Back", self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel("Exit", self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._apply_corner_hints()
+
+    def _apply_corner_hints(self):
+        t = self.la.get("DEMOEN", {})
+        self.setCornerHints(
+            bl=(t.get("BACK", "Back"), Asset.icon_back),
+            br=(t.get("EXIT", "Exit"), Asset.icon_enter),
+        )
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -963,19 +881,11 @@ class QRPage(QWidget):
                 email_font = QFont()
                 email_font.setPointSize(10)
                 painter.setFont(email_font)
-                painter.setPen(COLOR_GREEN)
+                painter.setPen(QColor(T_Color.text_primary))
                 email_rect = QRect(0, qr_y + scaled.height() + 5, w, 20)
                 painter.drawText(email_rect, Qt.AlignmentFlag.AlignCenter, self.email)
 
         painter.end()
-
-    def resizeEvent(self, ev):
-        super().resizeEvent(ev)
-        w, h = self.width(), self.height()
-        pad = 12
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Back or ev.key() == Qt.Key.Key_Left:
@@ -983,11 +893,15 @@ class QRPage(QWidget):
         elif ev.key() == Qt.Key.Key_Return:
             QApplication.instance().quit()
 
+    def refresh_language(self):
+        self.la = load_language()
+        self._apply_corner_hints()
+
 
 # ============================================================================
 # Time / Date Page
 # ============================================================================
-class TimeDatePage(QWidget):
+class TimeDatePage(AppFrame):
     COMMON_TIMEZONES = [
         "Asia/Shanghai",
         "Asia/Tokyo",
@@ -1007,50 +921,29 @@ class TimeDatePage(QWidget):
         super().__init__()
         self.stack = stack
         self.la = load_language()
-        self.setStyleSheet("background-color: #0f1530;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # Get current timezone
         self._sync_timezone_from_system()
 
-        # Time display (large)
-        self.time_label = QLabel(self)
+        # Time display (large) — 主题文字色（强调）
+        self.time_label = TitleLabel("", self)
         time_font = QFont()
         time_font.setPointSize(30)
         time_font.setBold(True)
         self.time_label.setFont(time_font)
-        self.time_label.setStyleSheet("color: #00E5FF; background: transparent;")
+        self.time_label.setColor(T_Color.accent)
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Date display
-        self.date_label = QLabel(self)
-        date_font = QFont()
-        date_font.setPointSize(14)
-        self.date_label.setFont(date_font)
-        self.date_label.setStyleSheet("color: #8892c9; background: transparent;")
+        self.date_label = SubtitleLabel("", self)
         self.date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Saved hint
-        self.saved_label = QLabel("", self)
-        saved_font = QFont()
-        saved_font.setPointSize(12)
-        self.saved_label.setFont(saved_font)
-        self.saved_label.setStyleSheet("color: #00E5FF; background: transparent;")
+        self.saved_label = HintLabel("", self)
+        self.saved_label.setColor(T_Color.accent)
         self.saved_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.saved_label.hide()
-
-        # Corner hints
-        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_tl = QLabel(self)
-        self.corner_tl.setStyleSheet(hint_style)
-        self.corner_tr = QLabel(self)
-        self.corner_tr.setStyleSheet(hint_style)
-        self.corner_tr.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.corner_bl = QLabel(self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel(self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._update_texts()
         self._update_clock()
@@ -1112,10 +1005,13 @@ class TimeDatePage(QWidget):
     def _update_texts(self):
         self.la = load_language()
         t = self.la.get("DEMOEN", {})
-        self.corner_tl.setText("A: ◀" + t.get("TIMEZONE", "TZ"))
-        self.corner_tr.setText("B: " + t.get("TIMEZONE", "TZ") + "▶")
-        self.corner_bl.setText("C: " + t.get("BACK", "Back"))
-        self.corner_br.setText("D: " + t.get("CONFIRM", "Confirm"))
+        tz_text = t.get("TIMEZONE", "TZ")
+        self.setCornerHints(
+            tl=(tz_text, Asset.icon_left),
+            tr=(tz_text, Asset.icon_right),
+            bl=(t.get("BACK", "Back"), Asset.icon_back),
+            br=(t.get("CONFIRM", "Confirm"), Asset.icon_enter),
+        )
         self.update()
 
     def _current_tz_display(self):
@@ -1148,7 +1044,7 @@ class TimeDatePage(QWidget):
         rect_x = (w - rect_w) // 2
 
         # Background card
-        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setPen(QPen(COLOR_UNSELECT, 1))
         painter.setBrush(COLOR_CARD)
         painter.drawRoundedRect(rect_x, tz_y, rect_w, rect_h, 10, 10)
 
@@ -1157,7 +1053,7 @@ class TimeDatePage(QWidget):
         tz_font.setPointSize(12)
         tz_font.setBold(True)
         painter.setFont(tz_font)
-        painter.setPen(COLOR_GREEN)
+        painter.setPen(QColor(T_Color.text_primary))
 
         display = self._current_tz_display()
         painter.drawText(QRect(rect_x, tz_y, rect_w, rect_h), Qt.AlignmentFlag.AlignCenter, display)
@@ -1166,7 +1062,7 @@ class TimeDatePage(QWidget):
         arrow_font = QFont()
         arrow_font.setPointSize(16)
         painter.setFont(arrow_font)
-        painter.setPen(COLOR_GRAY)
+        painter.setPen(COLOR_PURPLE)
         painter.drawText(QRect(rect_x - 30, tz_y, 30, rect_h), Qt.AlignmentFlag.AlignCenter, "◀")
         painter.drawText(QRect(rect_x + rect_w, tz_y, 30, rect_h), Qt.AlignmentFlag.AlignCenter, "▶")
 
@@ -1178,13 +1074,6 @@ class TimeDatePage(QWidget):
         self.time_label.setGeometry(0, h // 2 - 70, w, 40)
         self.date_label.setGeometry(0, h // 2 - 30, w, 25)
         self.saved_label.setGeometry(0, h - 60, w, 25)
-        pad = 12
-        self.corner_tl.move(pad, pad)
-        self.corner_tr.adjustSize()
-        self.corner_tr.move(w - self.corner_tr.width() - pad, pad)
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Left or ev.key() == Qt.Key.Key_Up:
@@ -1233,57 +1122,42 @@ class TimeDatePage(QWidget):
 # ============================================================================
 # Shutdown Confirmation Page
 # ============================================================================
-class ShutdownPage(QWidget):
+class ShutdownPage(AppFrame):
     def __init__(self, stack: QStackedWidget):
         super().__init__()
         self.stack = stack
         self.la = load_language()
-        self.setStyleSheet("background-color: #0f1530;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        # Warning icon
-        self.icon_label = QLabel("⚠", self)
+        # Warning icon (emoji) — 使用主题 warning 色
+        self.icon_label = TitleLabel("⚠", self)
         icon_font = QFont()
         icon_font.setPointSize(36)
         self.icon_label.setFont(icon_font)
-        self.icon_label.setStyleSheet("color: #FFD93D; background: transparent;")
+        self.icon_label.setColor(T_Color.warning)
         self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Warning title
-        self.title_label = QLabel(self)
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
-        self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet("color: #ffffff; background: transparent;")
+        self.title_label = TitleLabel("", self)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title_label.setWordWrap(True)
 
         # Hint text
-        self.hint_label = QLabel(self)
-        hint_font = QFont()
-        hint_font.setPointSize(11)
-        self.hint_label.setFont(hint_font)
-        self.hint_label.setStyleSheet("color: #8892c9; background: transparent;")
+        self.hint_label = HintLabel("", self)
         self.hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hint_label.setWordWrap(True)
-
-        # Corner hints
-        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_bl = QLabel("C:取消", self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel("D:确认关机", self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._update_texts()
 
     def _update_texts(self):
         self.la = load_language()
-        title = self.la.get("DEMOEN", {}).get("SHUTDOWN_TITLE", "关机确认")
-        hint = self.la.get("DEMOEN", {}).get("SHUTDOWN_HINT", "当前仅关机树莓派，机器狗关机还需按键")
-        self.title_label.setText(title)
-        self.hint_label.setText(hint)
+        t = self.la.get("DEMOEN", {})
+        self.title_label.setText(t.get("SHUTDOWN_TITLE", "关机确认"))
+        self.hint_label.setText(t.get("SHUTDOWN_HINT", "当前仅关机树莓派，机器狗关机还需按键"))
+        self.setCornerHints(
+            bl=(t.get("CANCEL", "取消"), Asset.icon_back),
+            br=(t.get("CONFIRM", "确认关机"), Asset.icon_enter),
+        )
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -1291,10 +1165,6 @@ class ShutdownPage(QWidget):
         self.icon_label.setGeometry(0, h // 2 - 90, w, 40)
         self.title_label.setGeometry(20, h // 2 - 45, w - 40, 30)
         self.hint_label.setGeometry(20, h // 2 - 10, w - 40, 50)
-        pad = 12
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Back:
@@ -1302,57 +1172,46 @@ class ShutdownPage(QWidget):
         elif ev.key() == Qt.Key.Key_Return:
             os.system("echo pi | sudo -S shutdown now")
 
+    def refresh_language(self):
+        self._update_texts()
+
 
 # ============================================================================
 # Reboot Confirmation Page
 # ============================================================================
-class RebootPage(QWidget):
+class RebootPage(AppFrame):
     def __init__(self, stack: QStackedWidget):
         super().__init__()
         self.stack = stack
         self.la = load_language()
-        self.setStyleSheet("background-color: #0f1530;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        self.icon_label = QLabel("🔄", self)
+        self.icon_label = TitleLabel("🔄", self)
         icon_font = QFont()
         icon_font.setPointSize(36)
         self.icon_label.setFont(icon_font)
-        self.icon_label.setStyleSheet("color: #FFD93D; background: transparent;")
+        self.icon_label.setColor(T_Color.accent)
         self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.title_label = QLabel(self)
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
-        self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet("color: #ffffff; background: transparent;")
+        self.title_label = TitleLabel("", self)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title_label.setWordWrap(True)
 
-        self.hint_label = QLabel(self)
-        hint_font = QFont()
-        hint_font.setPointSize(11)
-        self.hint_label.setFont(hint_font)
-        self.hint_label.setStyleSheet("color: #8892c9; background: transparent;")
+        self.hint_label = HintLabel("", self)
         self.hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hint_label.setWordWrap(True)
-
-        hint_style = "color: #8892c9; font-size: 12px; background: transparent;"
-        self.corner_bl = QLabel("C:取消", self)
-        self.corner_bl.setStyleSheet(hint_style)
-        self.corner_br = QLabel("D:确认重启", self)
-        self.corner_br.setStyleSheet(hint_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._update_texts()
 
     def _update_texts(self):
         self.la = load_language()
-        title = self.la.get("DEMOEN", {}).get("REBOOT_TITLE", "重启确认")
-        hint = self.la.get("DEMOEN", {}).get("REBOOT_HINT", "确定要重启树莓派？")
-        self.title_label.setText(title)
-        self.hint_label.setText(hint)
+        t = self.la.get("DEMOEN", {})
+        self.title_label.setText(t.get("REBOOT_TITLE", "重启确认"))
+        self.hint_label.setText(t.get("REBOOT_HINT", "确定要重启树莓派？"))
+        self.setCornerHints(
+            bl=(t.get("CANCEL", "取消"), Asset.icon_back),
+            br=(t.get("CONFIRM", "确认重启"), Asset.icon_enter),
+        )
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -1360,16 +1219,15 @@ class RebootPage(QWidget):
         self.icon_label.setGeometry(0, h // 2 - 90, w, 40)
         self.title_label.setGeometry(20, h // 2 - 45, w - 40, 30)
         self.hint_label.setGeometry(20, h // 2 - 10, w - 40, 50)
-        pad = 12
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.adjustSize()
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
 
     def keyPressEvent(self, ev: QKeyEvent):
         if ev.key() == Qt.Key.Key_Back:
             self.stack.navigate_to("list")
         elif ev.key() == Qt.Key.Key_Return:
             os.system("echo pi | sudo -S reboot")
+
+    def refresh_language(self):
+        self._update_texts()
 
 
 # ============================================================================
@@ -1378,7 +1236,7 @@ class RebootPage(QWidget):
 class SettingsStack(QStackedWidget):
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #0f1530;")
+        # 不设置背景色：背景由各页面的 AppFrame 统一提供
 
         self.list_page = SettingsListPage(self)
         self.about_page = AboutPage(self)
@@ -1440,7 +1298,7 @@ class SettingsStack(QStackedWidget):
 class SettingsApp(QWidget):
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #0f1530;")
+        # 背景由 AppFrame 提供，本容器不重复填色
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         layout = QVBoxLayout(self)
@@ -1467,6 +1325,7 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: QApplication.instance().quit())
 
     app = QApplication(sys.argv)
+    apply_app_palette(app)
 
     w = SettingsApp()
     w.showFullScreen()

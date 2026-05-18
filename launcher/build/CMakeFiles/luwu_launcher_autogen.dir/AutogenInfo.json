@@ -237,6 +237,12 @@
 			null
 		],
 		[
+			"/home/pi/luwu-os/launcher/devicetable.h",
+			"Mu",
+			"EWIEGA46WW/moc_devicetable.cpp",
+			null
+		],
+		[
 			"/home/pi/luwu-os/launcher/galleryview.h",
 			"Mu",
 			"EWIEGA46WW/moc_galleryview.cpp",

@@ -11,6 +11,7 @@ qt_add_executable(luwu_launcher
     galleryview.h
     demogridview.cpp
     demogridview.h
+    devicetable.h
     keyfilter.h
     statusbar.cpp
     statusbar.h
