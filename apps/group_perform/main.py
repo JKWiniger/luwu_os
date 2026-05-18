@@ -60,7 +60,7 @@ try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({
         "cn": {
-            "title": "群组表演",
+            "title": "",
             "room": "房间 {}",
             "room_wait": "房间 ---",
             "devices": "设备 {}",
@@ -81,7 +81,7 @@ try:
             "corner_exit": "退出",
         },
         "en": {
-            "title": "Group Performance",
+            "title": "",
             "room": "Room {}",
             "room_wait": "Room ---",
             "devices": "Devices {}",
