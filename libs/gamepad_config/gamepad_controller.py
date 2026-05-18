@@ -95,8 +95,12 @@ class XGOController:
         self._running = False
         self._config_mtime = 0    # 配置文件最后修改时间
         self._gamepad_dev = None  # 当前手柄设备（用于震动）
-        signal.signal(signal.SIGTERM, self._on_exit)
-        signal.signal(signal.SIGINT, self._on_exit)
+        # signal 只能在主线程注册，子线程中跳过（不影响功能）
+        try:
+            signal.signal(signal.SIGTERM, self._on_exit)
+            signal.signal(signal.SIGINT, self._on_exit)
+        except ValueError:
+            pass
 
     # ── 初始化 ────────────────────────────────────────────────────
 
@@ -155,6 +159,7 @@ class XGOController:
         import evdev
         all_devs = evdev.list_devices()
         log.debug(f"evdev 扫描到 {len(all_devs)} 个输入设备:")
+        candidates = []  # [(priority, dev)] 0=主手柄 1=触摸板/其他
         for path in all_devs:
             try:
                 dev = evdev.InputDevice(path)
@@ -162,10 +167,16 @@ class XGOController:
                 matched = any(kw in name_low for kw in GAMEPAD_KEYWORDS)
                 log.debug(f"  {path}: '{dev.name}' → {'✓ 匹配' if matched else '✗ 跳过'}")
                 if matched:
-                    log.info(f"找到手柄: {dev.name} ({path})")
-                    return dev
+                    # 触摸板/运动传感器优先级降低，优先选主手柄
+                    is_secondary = any(x in name_low for x in ["touchpad", "touch pad", "motion", "gyro", "accel"])
+                    candidates.append((1 if is_secondary else 0, dev))
             except Exception as e:
                 log.debug(f"  {path}: 打开失败 {e}")
+        if candidates:
+            candidates.sort(key=lambda x: x[0])
+            dev = candidates[0][1]
+            log.info(f"找到手柄: {dev.name} ({dev.path})")
+            return dev
         return None
 
     # ── 震动反馈 ──────────────────────────────────────────────────
@@ -436,10 +447,10 @@ class XGOController:
                 time.sleep(2)
                 continue
 
-            log.info(f"开始监听: {dev.name} ({', '.join(f'ABS {c}' for c in abs_info)})")
             self._gamepad_dev = dev
             try:
                 abs_info = {code: dev.absinfo(code) for code in AXIS_MAP if hasattr(dev, "absinfo")}
+                log.info(f"开始监听: {dev.name} ({', '.join(f'ABS {c}' for c in abs_info)})")
 
                 ev_count = 0
                 for event in dev.read_loop():

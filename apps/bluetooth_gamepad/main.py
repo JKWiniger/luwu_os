@@ -18,8 +18,10 @@ import sys
 import re
 import time
 import signal
+import select
 import subprocess
 import threading
+import pty
 
 # ===================== 阶段计时 =====================
 T0 = time.monotonic()
@@ -107,36 +109,184 @@ DEMO_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_gamepad.png")
 _APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
 
 
-# ===================== 工具函数 =====================
-def run_cmd(cmd: str, timeout: int = 12):
-    """执行 shell 命令，返回 (rc, stdout, stderr)"""
-    try:
-        r = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=timeout,
-        )
-        return r.returncode, r.stdout.strip(), r.stderr.strip()
-    except subprocess.TimeoutExpired:
-        return -1, "", "timeout"
-    except Exception as e:
-        return -1, "", str(e)
+# ===================== 持久化 bluetoothctl 会话 =====================
+class BtSession:
+    """维护一个持久 bluetoothctl 进程，保证 agent 注册不丢失
+    
+    关键：bluetoothctl 的 agent 命令需要进程保持运行才能维护 D-Bus 对象。
+    之前每次 subprocess.run 都会让进程退出 → agent 注销 → 配对失败。
+    这个类用一个 Popen 进程一直活着，所有命令通过 stdin 发送。
+    """
 
+    def __init__(self):
+        self._proc = None
+        self._lock = threading.Lock()
+        self._ready = False
+
+    # ── 启动 / 停止 ──────────────────────────────────────────────
+
+    def start(self):
+        print("[bt_gamepad] starting persistent bluetoothctl session (pty)...", flush=True)
+        # 用 PTY 让 bluetoothctl 认为自己是交互式终端 —— 否则 buffering 会卡死
+        self._master_fd, slave_fd = pty.openpty()
+        self._proc = subprocess.Popen(
+            ["bluetoothctl"],
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            close_fds=True,
+        )
+        os.close(slave_fd)
+        # 先标记 alive 让 _send 能通过
+        self._ready = True
+        # 等待 bluetoothctl 启动并出现提示符
+        self._read_until(8)
+        # 初始设置
+        self._send("power on", 5)
+        self._send("pairable on", 5)
+        out = self._send("agent NoInputNoOutput", 5)
+        print(f"[bt_gamepad] agent: {out.strip()[:150]}", flush=True)
+        if "Failed" in out or "fail" in out.lower():
+            print("[bt_gamepad] !! agent register FAILED", flush=True)
+            self._ready = False
+        else:
+            print("[bt_gamepad] agent registered OK", flush=True)
+        self._send("default-agent", 5)
+        print("[bt_gamepad] BtSession ready", flush=True)
+
+    def stop(self):
+        self._ready = False
+        if hasattr(self, '_master_fd') and self._master_fd is not None:
+            try:
+                os.write(self._master_fd, b"scan off\nquit\n")
+            except Exception:
+                pass
+            try:
+                os.close(self._master_fd)
+            except Exception:
+                pass
+            self._master_fd = None
+        if self._proc:
+            try:
+                self._proc.wait(timeout=3)
+            except Exception:
+                self._proc.kill()
+            self._proc = None
+            print("[bt_gamepad] BtSession stopped", flush=True)
+
+    def is_alive(self):
+        return self._ready and self._proc and self._proc.poll() is None
+
+    # ── 底层通信（PTY 读写）───────────────────────────────────
+
+    def _read_until(self, timeout=8, idle=0.5, wait_for=None):
+        """读取输出。
+        - 普通命令：连续读取，遇到 idle 秒没新数据就返回。
+        - 慢命令(pair/connect)：传入 wait_for=["successful","failed"] 等关键词，
+          只有匹配到关键词 或 超时 才返回，中间的静默不会提前退出。
+        """
+        buf = ""
+        deadline = time.time() + timeout
+        last_data = time.time()
+        while time.time() < deadline:
+            r, _, _ = select.select([self._master_fd], [], [], 0.1)
+            if r:
+                try:
+                    chunk = os.read(self._master_fd, 4096).decode("utf-8", errors="replace")
+                except Exception:
+                    break
+                if chunk:
+                    buf += chunk
+                    last_data = time.time()
+                    # 如果有关键词等待，检查是否命中
+                    if wait_for:
+                        low = buf.lower()
+                        if any(kw in low for kw in wait_for):
+                            break
+            else:
+                # 没新数据，检查静默期（仅在无 wait_for 时使用）
+                if not wait_for and buf and (time.time() - last_data) > idle:
+                    break
+        return buf
+
+    def _send(self, cmd: str, timeout=8, idle=0.5, wait_for=None):
+        """发送命令，返回完整输出。wait_for: 关键词列表，命中才返回。"""
+        with self._lock:
+            if not self.is_alive():
+                print(f"[bt_gamepad] !! session dead, skip: {cmd}", flush=True)
+                return ""
+            print(f"[bt_gamepad] BT> {cmd}", flush=True)
+            try:
+                os.write(self._master_fd, (cmd + "\n").encode())
+            except Exception as e:
+                print(f"[bt_gamepad] !! write error: {e}", flush=True)
+                return ""
+            out = self._read_until(timeout, idle, wait_for=wait_for)
+            # 精简输出
+            for line in out.strip().splitlines():
+                line = line.strip()
+                if line and "[bluetoothctl]" not in line and not line.startswith("\x1b"):
+                    print(f"[bt_gamepad] BT< {line[:200]}", flush=True)
+            return out
+
+    # ── 高级操作 ──────────────────────────────────────────────────
+
+    def show(self):
+        return self._send("show", 5)
+
+    def devices(self):
+        return self._send("devices", 5)
+
+    def info(self, mac: str):
+        return self._send(f"info {mac}", 5)
+
+    def scan(self, duration: int = SCAN_DURATION):
+        """扫描指定时长后关闭"""
+        # 启动扫描（不等待输出完）
+        self._send("scan on", timeout=2, idle=0.3)
+        # 扫描期间持锁后台消费 stdout，避免后续命令读到脱起的扫描输出
+        with self._lock:
+            deadline = time.time() + duration
+            while time.time() < deadline:
+                r, _, _ = select.select([self._master_fd], [], [], 0.5)
+                if r:
+                    try:
+                        os.read(self._master_fd, 4096)
+                    except Exception:
+                        break
+        self._send("scan off", timeout=2, idle=0.3)
+
+    def pair(self, mac: str, timeout=20):
+        return self._send(f"pair {mac}", timeout,
+                          wait_for=["pairing successful", "failed to pair",
+                                    "already exists", "not available"])
+
+    def trust(self, mac: str):
+        return self._send(f"trust {mac}", 5)
+
+    def connect(self, mac: str, timeout=15):
+        return self._send(f"connect {mac}", timeout,
+                          wait_for=["connection successful", "failed to connect",
+                                    "already connected", "not available"])
+
+
+# 全局单例
+_bt = BtSession()
+
+
+# ===================== 工具函数（基于 BtSession）=====================
 
 def bt_setup():
-    """初始化蓝牙：开机 + 配对代理 + 可被发现/可被配对"""
-    run_cmd("bluetoothctl power on")
-    run_cmd("bluetoothctl pairable on")
-    run_cmd("bluetoothctl agent NoInputNoOutput")
-    run_cmd("bluetoothctl default-agent")
-
+    """初始化蓝牙会话（启动持久进程）"""
+    if not _bt.is_alive():
+        _bt.start()
 
 def bt_is_powered() -> bool:
-    rc, out, _ = run_cmd("bluetoothctl show")
-    return "Powered: yes" in out
-
+    return "Powered: yes" in _bt.show()
 
 def bt_list_devices():
-    """返回 [(mac, name), ...] —— 已知 + 已扫描到的所有设备"""
-    rc, out, _ = run_cmd("bluetoothctl devices")
+    """返回 [(mac, name), ...]"""
+    out = _bt.devices()
     items = []
     for line in out.splitlines():
         m = re.match(r"Device\s+([0-9A-Fa-f:]{17})\s+(.+)", line.strip())
@@ -144,77 +294,58 @@ def bt_list_devices():
             items.append((m.group(1), m.group(2).strip()))
     return items
 
-
 def bt_info(mac: str) -> str:
-    """返回 bluetoothctl info <mac> 的完整输出"""
-    _, out, _ = run_cmd(f"bluetoothctl info {mac}")
-    return out
-
+    return _bt.info(mac)
 
 def bt_is_gaming_device(mac: str) -> bool:
-    """通过 Icon / Class 判断是否为游戏手柄（名字过滤失败时的兜底检测）"""
     info = bt_info(mac)
-    # Icon: input-gaming  → 明确是手柄/游戏输入设备
     if "Icon: input-gaming" in info:
         return True
-    # Bluetooth Class 低字节：Major=Peripheral(0x05), Minor=Gamepad(0x08) → Class 末位含 0x508
     m = re.search(r"Class:\s+0x([0-9a-fA-F]+)", info)
     if m:
         cls = int(m.group(1), 16)
         major = (cls >> 8) & 0x1F
         minor = (cls >> 2) & 0x3F
-        if major == 5 and minor in (4, 8):  # Joystick / Gamepad
+        if major == 5 and minor in (4, 8):
             return True
     return False
-
 
 def bt_is_connected(mac: str) -> bool:
     return "Connected: yes" in bt_info(mac)
 
-
 def bt_is_paired(mac: str) -> bool:
     return "Paired: yes" in bt_info(mac)
 
-
 def bt_pair(mac: str) -> bool:
-    rc, out, err = run_cmd(f"bluetoothctl pair {mac}", timeout=20)
-    txt = (out + err).lower()
-    return rc == 0 or "successful" in txt or "already" in txt
-
+    out = _bt.pair(mac, timeout=20)
+    txt = out.lower()
+    return "successful" in txt or "already" in txt
 
 def bt_trust(mac: str) -> bool:
-    rc, _, _ = run_cmd(f"bluetoothctl trust {mac}")
-    return rc == 0
-
+    out = _bt.trust(mac)
+    return "succeeded" in out.lower() or "Changing" in out
 
 def bt_connect(mac: str) -> bool:
-    rc, out, err = run_cmd(f"bluetoothctl connect {mac}", timeout=15)
-    txt = (out + err).lower()
-    return rc == 0 or "successful" in txt
-
+    out = _bt.connect(mac, timeout=15)
+    txt = out.lower()
+    return "successful" in txt or "already" in txt
 
 def bt_scan(duration: int = SCAN_DURATION):
-    """扫描指定时长后自动退出（bluez 5.x 的 --timeout 选项）"""
-    run_cmd(f"bluetoothctl --timeout {duration} scan on", timeout=duration + 5)
-
+    _bt.scan(duration)
 
 def is_gamepad_name(name: str) -> bool:
-    """通过名字快速判断是否可能是手柄"""
     if not name:
         return False
     low = name.lower()
     return any(kw in low for kw in GAMEPAD_KEYWORDS)
 
-
 def find_gamepads():
-    """返回当前已知设备里的所有手柄 [(mac, name, connected), ...]
-    双重检测：先按名字关键词匹配，不命中再查询蓝牙设备 Class/Icon"""
+    """返回当前已知设备里的所有手柄 [(mac, name, connected), ...]"""
     result = []
     for mac, name in bt_list_devices():
         if is_gamepad_name(name):
             result.append((mac, name, bt_is_connected(mac)))
         elif bt_is_gaming_device(mac):
-            # 名字没匹配但设备类型是 input-gaming
             result.append((mac, name, bt_is_connected(mac)))
     return result
 
@@ -584,8 +715,8 @@ class BTGamepadPage(AppFrame):
             self._bt_worker.quit()
             self._bt_worker.wait(3000)
             self._bt_worker = None
-        # 收尾：停止扫描，避免后台一直耗电
-        run_cmd("bluetoothctl scan off", timeout=3)
+        # 停止持久 bluetoothctl 会话
+        _bt.stop()
         super().closeEvent(ev)
 
 
