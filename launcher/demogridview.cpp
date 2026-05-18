@@ -374,10 +374,14 @@ void DemoGridView::updateItemPositions() {
             int dx = (zoomW - itemW) / 2;
             int dy = (zoomH - itemH) / 2;
             itemIcons[i]->setGeometry(ix - dx, iy - dy, zoomW, zoomH);
+            // 选中项 label 加宽加高以容纳 14px 大字，保持水平居中
+            int extraW = 24;
+            int extraH = 6;
+            itemLabels[i]->setGeometry(ix - extraW / 2, iy + itemH + 8 - extraH / 2, itemW + extraW, labelH + extraH);
         } else {
             itemIcons[i]->setGeometry(ix, iy, itemW, itemH);
+            itemLabels[i]->setGeometry(ix, iy + itemH + 8, itemW, labelH);
         }
-        itemLabels[i]->setGeometry(ix, iy + itemH + 8, itemW, labelH);
         itemIcons[i]->setVisible(true);
         itemLabels[i]->setVisible(true);
     }

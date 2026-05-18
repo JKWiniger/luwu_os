@@ -70,4 +70,8 @@ private:
     void applyCardGeometry(int i);
     void updateCornerPositions();
     void onAnimTick();
+
+public:
+    // 供外部（main.cpp）连接动画帧信号，用于 StatusBar 置顶刷新
+    QTimer* animationTimer() const { return animTimer; }
 };

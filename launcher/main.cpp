@@ -324,6 +324,13 @@ int main(int argc, char *argv[]) {
     QObject::connect(&stack, &QStackedWidget::currentChanged, [statusBar]() {
         statusBar->raise();
     });
+    // GalleryView 动画期间，每帧都置顶并刷新 StatusBar。
+    // 原因：卡片 centerY=25 与 StatusBar 底边(y=25)重叠，动画 setGeometry 会触发
+    // GalleryView 背景重绘，在 linuxfb 上会短暂覆盖 StatusBar 区域造成黑字闪烁。
+    QObject::connect(gallery->animationTimer(), &QTimer::timeout, statusBar, [statusBar]() {
+        statusBar->raise();
+        statusBar->update();
+    });
 
     int rc = app.exec();
 

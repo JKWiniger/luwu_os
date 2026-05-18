@@ -10,6 +10,9 @@ StatusBar::StatusBar(QWidget *parent) : QWidget(parent) {
     // 完全透明，不拦截鼠标/按键事件
     setAttribute(Qt::WA_TransparentForMouseEvents);
     setAttribute(Qt::WA_TranslucentBackground);
+    // linuxfb 上 WA_TranslucentBackground 不能阻止 Qt 用调色板默认色预填充背景，
+    // WA_NoSystemBackground 明确告知 Qt：不要在 paintEvent 前填充任何系统背景
+    setAttribute(Qt::WA_NoSystemBackground);
     setFixedHeight(26);
 
     updateStatus();
