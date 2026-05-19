@@ -311,10 +311,30 @@ luwu-undervolt-monitor.py (systemd 服务，单一写入者)
 
 | 防护 | 机制 |
 |------|------|
-| ext4 `commit=1` | 断电最多丢 1 秒数据 |
+| ext4 `data=journal` | 通过 `cmdline.txt` 的 `rootflags=data=journal` 启用（内核命令行优先级高于 fstab），**文件数据也进日志**，掉电后不会出现"文件存在但内容为 0" |
+| ext4 `commit=1` | 日志最多 1 秒刷新一次（fstab 挂载选项），断电最多丢 1 秒数据 |
 | `tune2fs -c 5` | 每 5 次挂载自动 fsck 修复 |
 | 硬件看门狗 | 15 秒超时，系统卡死自动重启 |
 | 持久化日志 | `/var/log/journal`，重启不丢 |
+
+### 为什么需要 `data=journal`
+
+> 2026-05-19 实测：SD 卡 FTL 硬断电测试 3 次全部诚实（`sd_power_test.py` verify 结果一致），
+> 确认卡本身不撒谎。`.git/objects/` 对象文件变 0 字节的根因是 ext4 默认 `data=ordered` 模式
+> 只保护元数据不保护文件内容——掉电瞬间正在写入的文件内容可能丢失而 inode 保持存在，
+> 导致 Git 报 "object file is empty"。改为 `data=journal` 后，文件内容写入前先复制到日志，
+> 掉电后从日志恢复，彻底消除"空文件"类损坏。
+> 
+> **实现方式**：`/boot/firmware/cmdline.txt` 中添加 `rootflags=data=journal`（内核命令行参数），
+> 优先级高于 `/etc/fstab`。`install.sh` 第 7 步自动部署此项。
+
+### 欠压关机逻辑验证
+
+> 2026-05-19 复盘：上次 `.git` 损坏伴随系统非正常掉电，journal 中有 `orphan cleanup on readonly fs`
+> 痕迹。欠压监控在 `battery > 10%` 时会**记录欠压到 journal 但忽略不关机**——高负载场景下
+> 持续欠压可能先于电池耗尽导致系统崩溃，而 journal 因掉电未刷盘丢失了欠压记录。
+> 当前逻辑设计前提（电池 > 10% 时的欠压均为瞬时）在高功耗持续场景下可能不成立，
+> 后续可能需要增加"持续欠压超时"作为独立关机条件（不依赖电池百分比）。
 
 ### 效果
 - 电池充足时不当关机，比赛/演示不中断

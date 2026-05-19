@@ -77,11 +77,17 @@ echo "[7/11] 文件系统加固 ..."
 tune2fs -c 5 /dev/mmcblk0p2
 echo "  ✓ fsck 每5次挂载自动执行"
 
+# 内核命令行 rootflags=data=journal：文件数据也进日志，掉电不丢文件内容
+if ! grep -q 'rootflags=data=journal' /boot/firmware/cmdline.txt; then
+    sed -i 's|rootfstype=ext4|rootfstype=ext4 rootflags=data=journal|' /boot/firmware/cmdline.txt
+fi
+echo "  ✓ data=journal (rootflags) 已设置"
+
 # 挂载选项 commit=1：journal 每秒刷盘，断电最多丢1秒数据
 if ! grep -q 'commit=1' /etc/fstab; then
     sed -i 's|defaults,noatime|defaults,noatime,commit=1|' /etc/fstab
 fi
-echo "  ✓ commit=1 已设置"
+echo "  ✓ commit=1 (fstab) 已设置"
 
 # 8. 硬件看门狗 — 系统卡死自动重启
 echo "[8/11] 硬件看门狗 ..."
