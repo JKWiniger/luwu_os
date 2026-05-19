@@ -7,7 +7,7 @@ XGO 机器人控制库
 from .xgolib_dog import XGO_DOG
 from .xgolib_rider import XGO_RIDER
 
-__version__ = '1.1.0'
+__version__ = '1.1.4'
 __all__ = ['XGO', 'XGO_DOG', 'XGO_RIDER']
 
 # 自动扫描的候选串口列表（按优先级排列）
@@ -41,16 +41,24 @@ def XGO(version="auto", port=None, baud=115200, verbose=False):
     XGO类自动选择对应库的函数
   
     Args:
-        version: 设备版本
-            "auto"      - 自动检测
-            "xgomini"   - XGO-MINI
-            "xgolite"   - XGO-LITE
-            "xgomini2sw" - XGO-mini2SW
-            "xgorider"  - XGO-RIDER
+        version: 设备版本（支持短名和全名）
+            "auto"                    - 自动检测
+            "mini"   / "xgomini"      - XGO-MINI
+            "lite"   / "xgolite"      - XGO-LITE
+            "mini3w" / "xgomini2sw"   - XGO-mini2SW
+            "rider"  / "xgorider"     - XGO-RIDER
         port: 串口设备路径，不传则自动扫描 SCAN_PORTS
         baud: 波特率
         verbose: 是否显示调试信息
     """
+    # 短名 → 内部全名 映射
+    _alias = {
+        "mini":   "xgomini",
+        "lite":   "xgolite",
+        "mini3w": "xgomini2sw",
+        "rider":  "xgorider",
+    }
+    version = _alias.get(version, version)  # 短名转全名，已是全名则原样保留
     if version == "auto":
         try:
             # port 未指定时自动扫描；已指定时只读该端口
@@ -106,4 +114,7 @@ def XGO(version="auto", port=None, baud=115200, verbose=False):
     
     else:
         print(f"Warning: Unknown version '{version}', using 'xgomini' instead")
+        if port is None:
+            port, _ = _scan_port(baud, verbose)
+            port = port or "/dev/ttyAMA0"
         return XGO_DOG(port, baud, version="xgomini", verbose=verbose)

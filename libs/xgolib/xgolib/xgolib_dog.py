@@ -101,6 +101,9 @@ def conver2u8(data, limit, min_value=0):
 
 
 def conver2float(data, limit):
+    # 防御性检查：串口读取失败时 data 可能为 None，避免 TypeError
+    if data is None:
+        return 0.0
     if not isinstance(limit, list):
         return (data - 128.0) / 255.0 * limit
     else:
@@ -108,6 +111,9 @@ def conver2float(data, limit):
 
 
 def Byte2Float(rawdata):
+    # 防御性检查：rawdata 为 None 或长度不足时返回 0.0，避免 IndexError/TypeError
+    if rawdata is None or len(rawdata) < 4:
+        return 0.0
     a = bytearray()
     a.append(rawdata[3])
     a.append(rawdata[2])
