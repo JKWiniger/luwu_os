@@ -42,7 +42,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # ---- 狗库 ----
 sys.path.insert(0, "/home/pi/lib")
-from xgolib import XGO  # noqa: E402
+from xgolib import XGO, XGO_RIDER  # noqa: E402
 
 # ---- 主题层 ----
 if "/home/pi/luwu-os" not in sys.path:
@@ -305,12 +305,20 @@ def handle_down(data):
 
 @socketio.on("left")
 def handle_left(data):
-    executor.submit(execute_action, dog.move_y, int(data))
+    val = int(data)
+    if isinstance(dog, XGO_RIDER):
+        executor.submit(execute_action, dog.turn, val)
+    else:
+        executor.submit(execute_action, dog.move_y, val)
 
 
 @socketio.on("right")
 def handle_right(data):
-    executor.submit(execute_action, dog.move_y, int(data))
+    val = int(data)
+    if isinstance(dog, XGO_RIDER):
+        executor.submit(execute_action, dog.turn, val)
+    else:
+        executor.submit(execute_action, dog.move_y, val)
 
 
 @socketio.on("height")

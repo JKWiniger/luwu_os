@@ -230,7 +230,7 @@ class XGOController:
             log.debug("stop")
 
         elif func_id == "rider_axis_x":
-            v = (axis_val or 0) * 1.5
+            v = -((axis_val or 0) * 1.5)  # 取反：推杆向上=前进
             if xgo: xgo.rider_move_x(v) if is_rider else xgo.move_x(v)
             log.debug(f"rider_axis_x {v:.2f}")
 

@@ -35,7 +35,7 @@ mark("PySide6 import done")
 
 # ===================== 狗库 =====================
 sys.path.insert(0, "/home/pi/lib")
-from xgolib import XGO
+from xgolib import XGO, XGO_RIDER
 
 mark("xgolib import done")
 
@@ -204,6 +204,7 @@ class DogController:
 
     def __init__(self):
         self._dog = None
+        self._is_rider = False
         self._step_control = 70
         self._pace_freq = 2
         self._height = 105
@@ -214,9 +215,14 @@ class DogController:
     def _init_dog(self):
         try:
             self._dog = XGO()
-            print("[joystick] XGO 机器狗初始化成功", flush=True)
+            self._is_rider = isinstance(self._dog, XGO_RIDER)
+            if self._is_rider:
+                print("[joystick] XGO RIDER 初始化成功", flush=True)
+            else:
+                print("[joystick] XGO 机器狗初始化成功", flush=True)
         except Exception as e:
             self._dog = None
+            self._is_rider = False
             print(f"[joystick] XGO 初始化失败: {e}", flush=True)
 
     @property
@@ -230,7 +236,10 @@ class DogController:
         self._play_ball = 0
         if self._dog:
             try:
-                self._dog.reset()
+                if self._is_rider:
+                    self._dog.rider_reset()
+                else:
+                    self._dog.reset()
             except Exception:
                 pass
         self._step_control = 70
@@ -278,107 +287,213 @@ class DogController:
     def process_event(self, name, value):
         if not self._dog:
             return
-        # 跨障模式下只响应 SELECT/START
+        # 跨障模式下只响应 SELECT/START（仅 dog 机型）
         if self._crossing_state and name not in ("SELECT", "START"):
             return
         try:
-            if name == "RK1_LEFT_RIGHT":
-                v = -value
-                fvalue = int(self._step_control * self.STEP_SCALE_Y * v)
-                self._dog.move("y", fvalue)
-            elif name == "RK1_UP_DOWN":
-                v = -value
-                fvalue = int(self._step_control * self.STEP_SCALE_X * v)
-                self._dog.move("x", fvalue)
-            elif name == "RK2_UP_DOWN":
-                v = -value
-                if v == 0:
-                    self._dog.turn(0)
-                elif abs(v) > 0.9:
-                    fvalue = int(self._my_map(self._step_control, 0, 100, 20, self.STEP_SCALE_Z * 100)) * (1 if v > 0 else -1)
-                    self._dog.turn(fvalue)
-            elif name == "RK2_LEFT_RIGHT":
-                fvalue = int(value * 15)
-                self._dog.attitude("p", fvalue)
-            elif name == "A":
-                if value == 1 and not self._crossing_state:
-                    self._height = max(75, self._height - 10)
-                    self._dog.translation("z", self._height)
-            elif name == "B":
-                if value == 1:
-                    self._dog.attitude("y", -35)
-                else:
-                    self._dog.attitude("r", 0)
-                    self._dog.attitude("y", 0)
-            elif name == "X":
-                if value == 1:
-                    self._dog.attitude("y", 35)
-                else:
-                    self._dog.attitude("r", 0)
-                    self._dog.attitude("y", 0)
-            elif name == "Y":
-                if value == 1 and not self._crossing_state:
-                    self._height = min(115, self._height + 10)
-                    self._dog.translation("z", self._height)
-            elif name == "L1":
-                if value == 1 and not self._crossing_state:
-                    self._dog.action(10)
-            elif name == "R1":
-                if value == 1 and not self._crossing_state and self._play_ball == 0:
-                    self._play_ball = 2
-                    t = threading.Thread(
-                        target=self._play_ball_task,
-                        args=(self._play_ball,),
-                        name="play_ball_task",
-                        daemon=True,
-                    )
-                    t.start()
-            elif name == "SELECT":
-                if value == 1:
-                    if not self._crossing_state:
-                        self._crossing_state = True
-                        self._dog.gait_type("high_walk")
-                        time.sleep(0.01)
-                        self._dog.pace("slow")
-                        time.sleep(0.01)
-                        self._dog.translation("z", 95)
-                        time.sleep(0.01)
-                        self._dog.forward(25)
-                    else:
-                        self.reset()
-            elif name == "START":
-                if value == 1:
-                    self.reset()
-            elif name == "BTN_RK1":
-                if value == 1:
-                    self._step_control += 30
-                    if self._step_control > 100:
-                        self._step_control = 40
-            elif name == "BTN_RK2":
-                if value == 1:
-                    self._pace_freq += 1
-                    if self._pace_freq > 3:
-                        self._pace_freq = 1
-                    pace_map = {1: "slow", 2: "normal", 3: "high"}
-                    self._dog.pace(pace_map.get(self._pace_freq, "normal"))
-            elif name == "L2":
-                v = (value + 1) / 2
-                if v > 0.95:
-                    self._dog.action(16)
-            elif name == "R2":
-                v = (value + 1) / 2
-                if v > 0.95:
-                    self._dog.action(11)
-            elif name == "WSAD_LEFT_RIGHT":
-                v = -value
-                fvalue = v * self._step_control * self.STEP_SCALE_Y
-                self._dog.move("y", fvalue)
-            elif name == "WSAD_UP_DOWN":
-                v = -value
-                fvalue = int(v * self._step_control * self.STEP_SCALE_X)
-                self._dog.move("x", fvalue)
+            if self._is_rider:
+                self._process_rider(name, value)
+            else:
+                self._process_dog(name, value)
         except Exception as e:
             print(f"[joystick] 控制错误 ({name}={value}): {e}", flush=True)
+
+    def _process_rider(self, name, value):
+        dog = self._dog
+        # Rider 参数极限：VX_LIMIT=1.5, VYAW_LIMIT=360, ATTITUDE_LIMIT roll=17
+        speed_ratio = self._step_control / 100.0  # 0.4~1.0 调速比例
+        # --- 摇杆轴 ---
+        if name == "RK1_LEFT_RIGHT":
+            # 左摇杆左右 → 转向 (VYAW_LIMIT=360)
+            v = -value
+            if abs(v) < 0.05:
+                dog.rider_turn(0)
+            else:
+                dog.rider_turn(v * speed_ratio * 360)
+        elif name == "RK1_UP_DOWN":
+            # 左摇杆上下 → 前进/后退 (VX_LIMIT=1.5)
+            v = -value
+            if abs(v) < 0.05:
+                dog.rider_move_x(0)
+            else:
+                dog.rider_move_x(v * speed_ratio * 1.5)
+        elif name == "RK2_UP_DOWN":
+            # 右摇杆上下 → 前进/后退（备用）
+            v = -value
+            if abs(v) < 0.05:
+                dog.rider_move_x(0)
+            else:
+                dog.rider_move_x(v * speed_ratio * 1.5)
+        elif name == "RK2_LEFT_RIGHT":
+            # 右摇杆左右 → 横滚倾斜 (ATTITUDE_LIMIT roll=17)
+            dog.rider_roll(value * 17)
+        # --- 按钮 ---
+        elif name == "A":
+            if value == 1 and not self._crossing_state:
+                self._height = max(75, self._height - 10)
+                dog.rider_height(self._height)
+        elif name == "B":
+            if value == 1:
+                dog.rider_roll(-15)
+            else:
+                dog.rider_roll(0)
+        elif name == "X":
+            if value == 1:
+                dog.rider_roll(15)
+            else:
+                dog.rider_roll(0)
+        elif name == "Y":
+            if value == 1 and not self._crossing_state:
+                self._height = min(115, self._height + 10)
+                dog.rider_height(self._height)
+        elif name == "L1":
+            if value == 1 and not self._crossing_state:
+                dog.rider_action(1)
+        elif name == "R1":
+            if value == 1 and not self._crossing_state:
+                dog.rider_action(2)
+        elif name == "SELECT":
+            # Rider 的 SELECT：切换平衡模式
+            if value == 1:
+                if not self._crossing_state:
+                    self._crossing_state = True
+                    dog.rider_balance_roll(1)
+                else:
+                    self._crossing_state = False
+                    dog.rider_balance_roll(0)
+        elif name == "START":
+            if value == 1:
+                self.reset()
+        elif name == "BTN_RK1":
+            if value == 1:
+                self._step_control += 30
+                if self._step_control > 100:
+                    self._step_control = 40
+        elif name == "BTN_RK2":
+            if value == 1:
+                self._pace_freq += 1
+                if self._pace_freq > 3:
+                    self._pace_freq = 1
+        elif name == "L2":
+            v = (value + 1) / 2
+            if v > 0.95:
+                dog.rider_action(4)
+        elif name == "R2":
+            v = (value + 1) / 2
+            if v > 0.95:
+                dog.rider_action(5)
+        elif name == "WSAD_LEFT_RIGHT":
+            v = -value
+            if abs(v) < 0.05:
+                dog.rider_turn(0)
+            else:
+                dog.rider_turn(v * speed_ratio * 360)
+        elif name == "WSAD_UP_DOWN":
+            v = -value
+            if abs(v) < 0.05:
+                dog.rider_move_x(0)
+            else:
+                dog.rider_move_x(v * speed_ratio * 1.5)
+
+    def _process_dog(self, name, value):
+        dog = self._dog
+        # --- 摇杆轴 ---
+        if name == "RK1_LEFT_RIGHT":
+            v = -value
+            fvalue = int(self._step_control * self.STEP_SCALE_Y * v)
+            dog.move("y", fvalue)
+        elif name == "RK1_UP_DOWN":
+            v = -value
+            fvalue = int(self._step_control * self.STEP_SCALE_X * v)
+            dog.move("x", fvalue)
+        elif name == "RK2_UP_DOWN":
+            v = -value
+            if v == 0:
+                dog.turn(0)
+            elif abs(v) > 0.9:
+                fvalue = int(self._my_map(self._step_control, 0, 100, 20, self.STEP_SCALE_Z * 100)) * (1 if v > 0 else -1)
+                dog.turn(fvalue)
+        elif name == "RK2_LEFT_RIGHT":
+            fvalue = int(value * 15)
+            dog.attitude("p", fvalue)
+        # --- 按钮 ---
+        elif name == "A":
+            if value == 1 and not self._crossing_state:
+                self._height = max(75, self._height - 10)
+                dog.translation("z", self._height)
+        elif name == "B":
+            if value == 1:
+                dog.attitude("y", -35)
+            else:
+                dog.attitude("r", 0)
+                dog.attitude("y", 0)
+        elif name == "X":
+            if value == 1:
+                dog.attitude("y", 35)
+            else:
+                dog.attitude("r", 0)
+                dog.attitude("y", 0)
+        elif name == "Y":
+            if value == 1 and not self._crossing_state:
+                self._height = min(115, self._height + 10)
+                dog.translation("z", self._height)
+        elif name == "L1":
+            if value == 1 and not self._crossing_state:
+                dog.action(10)
+        elif name == "R1":
+            if value == 1 and not self._crossing_state and self._play_ball == 0:
+                self._play_ball = 2
+                t = threading.Thread(
+                    target=self._play_ball_task,
+                    args=(self._play_ball,),
+                    name="play_ball_task",
+                    daemon=True,
+                )
+                t.start()
+        elif name == "SELECT":
+            if value == 1:
+                if not self._crossing_state:
+                    self._crossing_state = True
+                    dog.gait_type("high_walk")
+                    time.sleep(0.01)
+                    dog.pace("slow")
+                    time.sleep(0.01)
+                    dog.translation("z", 95)
+                    time.sleep(0.01)
+                    dog.forward(25)
+                else:
+                    self.reset()
+        elif name == "START":
+            if value == 1:
+                self.reset()
+        elif name == "BTN_RK1":
+            if value == 1:
+                self._step_control += 30
+                if self._step_control > 100:
+                    self._step_control = 40
+        elif name == "BTN_RK2":
+            if value == 1:
+                self._pace_freq += 1
+                if self._pace_freq > 3:
+                    self._pace_freq = 1
+                pace_map = {1: "slow", 2: "normal", 3: "high"}
+                dog.pace(pace_map.get(self._pace_freq, "normal"))
+        elif name == "L2":
+            v = (value + 1) / 2
+            if v > 0.95:
+                dog.action(16)
+        elif name == "R2":
+            v = (value + 1) / 2
+            if v > 0.95:
+                dog.action(11)
+        elif name == "WSAD_LEFT_RIGHT":
+            v = -value
+            fvalue = v * self._step_control * self.STEP_SCALE_Y
+            dog.move("y", fvalue)
+        elif name == "WSAD_UP_DOWN":
+            v = -value
+            fvalue = int(v * self._step_control * self.STEP_SCALE_X)
+            dog.move("x", fvalue)
 
     @property
     def step_control(self):

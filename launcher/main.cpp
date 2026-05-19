@@ -261,7 +261,8 @@ int main(int argc, char *argv[]) {
             if (!err.isEmpty()) {
                 qDebug().noquote() << "[luwu-launcher] device detect stderr:" << QString::fromUtf8(err);
             }
-            QString dev = QString::fromUtf8(out).split('\n').value(0).trimmed();
+            QStringList lines = QString::fromUtf8(out).split('\n', Qt::SkipEmptyParts);
+            QString dev = lines.isEmpty() ? QString() : lines.last().trimmed();
             if (!dev.isEmpty() && demoGrid) {
                 demoGrid->setDeviceType(dev);
             }

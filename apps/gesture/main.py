@@ -118,24 +118,25 @@ GESTURE_AUDIO = {
     'Rock': 'six',  # Rock 复用 six 音效
 }
 
-# 手势 → 机器狗动作 ID 映射（参考 hands.py）
+# 手势 → 机器狗动作 ID 映射
+# Rider 仅支持 1~6，仅使用幅度较小的动作：1左右摇摆 / 2高低起伏
 GESTURE_ACTION = {
-    'Good': 23,
-    '1': 7,
-    '2': 8,
-    '3': 9,
-    '4': 22,
-    '5': 13,  # 招手
-    'Stone': 20,
-    'OK': 19,
-    'Rock': 24,  # 等同 six
+    'Good':  1,   # 左右摇摆
+    '1':     2,   # 高低起伏
+    '2':     1,   # 左右摇摆
+    '3':     2,   # 高低起伏
+    '4':     1,   # 左右摇摆
+    '5':     2,   # 高低起伏
+    'Stone': 1,   # 左右摇摆
+    'OK':    2,   # 高低起伏
+    'Rock':  1,   # 左右摇摆
 }
 
 # 音频目录
 MUSIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'music')
 
-# 动作冷却时间（秒），避免重复触发
-ACTION_COOLDOWN = 3.0
+# 动作冷却时间（秒），避免重复触发；当前仅用动作 1/2，最长 4s，留 1s 余量
+ACTION_COOLDOWN = 5.0
 
 
 # ===================== 手势识别核心 =====================
@@ -373,12 +374,21 @@ class GesturePage(QWidget):
             return
         try:
             self._dog = XGO()
+            print(f"[gesture] dog type={type(self._dog).__name__}, class={self._dog.__class__.__name__}", flush=True)
+            print(f"[gesture] dog.port={self._dog.port}, dog.version={getattr(self._dog, 'version', 'N/A')}", flush=True)
+            # 检查是否是 Rider
+            if hasattr(self._dog, 'rider_action'):
+                print("[gesture] ✓ Rider 方法可用 (rider_action exists)", flush=True)
+            else:
+                print("[gesture] ✗ 非 Rider (rider_action not found)", flush=True)
             self._dog.reset()
             print("[gesture] XGO 初始化成功", flush=True)
             mark("xgo dog ready")
         except Exception as e:
             self._dog = None
             print(f"[gesture] XGO 初始化失败: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
 
     def _init_camera(self):
         """初始化 Picamera2。"""
@@ -464,6 +474,7 @@ class GesturePage(QWidget):
 
         action_id = GESTURE_ACTION.get(gesture_result)
         audio_key = GESTURE_AUDIO.get(gesture_result)
+        print(f"[gesture] _process_gesture({gesture_result}) -> action_id={action_id}, audio={audio_key}, dog={'None' if self._dog is None else type(self._dog).__name__}", flush=True)
         if action_id is None and audio_key is None:
             return
 
@@ -472,10 +483,15 @@ class GesturePage(QWidget):
         # 1. 触发机器狗动作
         if action_id is not None and self._dog is not None:
             try:
+                print(f"[gesture] >>> calling dog.action({action_id}), ser.is_open={self._dog.ser.is_open}, ser.port={self._dog.ser.port}, baud={self._dog.ser.baudrate}", flush=True)
                 self._dog.action(action_id)
-                print(f"[gesture] dog.action({action_id}) for {gesture_result}", flush=True)
+                print(f"[gesture] dog.action({action_id}) for {gesture_result} — DONE", flush=True)
             except Exception as e:
                 print(f"[gesture] dog.action error: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+        elif action_id is not None and self._dog is None:
+            print(f"[gesture] ⚠ dog is None, cannot send action({action_id})", flush=True)
 
         # 2. 播放音频（拄 ai 程序的成功写法：os.system + aplay + & 后台；
         #    需要提前将 mp3 转为 wav，aplay 不支持 mp3 解码）
@@ -544,6 +560,7 @@ class GesturePage(QWidget):
                 2,
             )
             # 触发手势动作 & 播放声音
+            print(f"[gesture] 🔥 trigger gesture={self._prev_gesture}, stable={self._stable_count}/{self.MIN_STABLE_FRAMES}", flush=True)
             self._process_gesture(self._prev_gesture)
 
         # 转换为 QPixmap 显示
