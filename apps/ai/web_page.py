@@ -547,16 +547,16 @@ let selectedMBTI = null;
 // 10 题，每题归属一个 MBTI 维度；A 选项对应 dim[0]，B 选项对应 dim[1]
 // 分配：EI×3、NS×3、FT×2、PJ×2；同维度按多数票决定最终字母（平局取 A 选项字母）
 const QUIZ_DATA = [
-  {dim:'EI', q:'1. 和主人互动时，你更像...',         a:'热情话痨，主动找话题',     b:'安静陪伴，等主人开口'},
-  {dim:'EI', q:'2. 在热闹的场合里，你会...',         a:'越聊越精神，享受人群',     b:'感到疲惫，想找个安静角落'},
-  {dim:'EI', q:'3. 想表达观点时，你倾向...',         a:'边想边说，思路在交流中清晰', b:'先在心里想清楚，再开口'},
-  {dim:'NS', q:'4. 看待事物时，你更关注...',         a:'背后的含义和未来可能性',   b:'眼前的事实和具体细节'},
-  {dim:'NS', q:'5. 回答问题时，你更倾向...',         a:'讲故事、举例子、用比喻',   b:'给知识、讲道理、列要点'},
-  {dim:'NS', q:'6. 学习新东西，你喜欢...',           a:'先理解概念，再去用',       b:'先动手做，边做边学'},
-  {dim:'FT', q:'7. 主人遇到困难时，你会...',         a:'温暖鼓励，给情感支持',     b:'冷静分析，给解决方案'},
-  {dim:'FT', q:'8. 判断一件事，你更看重...',         a:'对方的感受是否被照顾到',   b:'逻辑是否成立、是非对错'},
-  {dim:'PJ', q:'9. 你的说话风格是...',               a:'活泼跳跃，爱开玩笑',       b:'沉稳有序，条理清晰'},
-  {dim:'PJ', q:'10. 面对计划，你更倾向...',          a:'保持灵活，随机应变',       b:'提前安排好，按部就班'}
+  {dim:'EI', q_key:'QUIZ_Q1', q:'1. 和主人互动时，你更像...',         a_key:'QUIZ_Q1_A', a:'热情话痨，主动找话题',     b_key:'QUIZ_Q1_B', b:'安静陪伴，等主人开口'},
+  {dim:'EI', q_key:'QUIZ_Q2', q:'2. 在热闹的场合里，你会...',         a_key:'QUIZ_Q2_A', a:'越聊越精神，享受人群',     b_key:'QUIZ_Q2_B', b:'感到疲惫，想找个安静角落'},
+  {dim:'EI', q_key:'QUIZ_Q3', q:'3. 想表达观点时，你倾向...',         a_key:'QUIZ_Q3_A', a:'边想边说，思路在交流中清晰', b_key:'QUIZ_Q3_B', b:'先在心里想清楚，再开口'},
+  {dim:'NS', q_key:'QUIZ_Q4', q:'4. 看待事物时，你更关注...',         a_key:'QUIZ_Q4_A', a:'背后的含义和未来可能性',   b_key:'QUIZ_Q4_B', b:'眼前的事实和具体细节'},
+  {dim:'NS', q_key:'QUIZ_Q5', q:'5. 回答问题时，你更倾向...',         a_key:'QUIZ_Q5_A', a:'讲故事、举例子、用比喻',   b_key:'QUIZ_Q5_B', b:'给知识、讲道理、列要点'},
+  {dim:'NS', q_key:'QUIZ_Q6', q:'6. 学习新东西，你喜欢...',           a_key:'QUIZ_Q6_A', a:'先理解概念，再去用',       b_key:'QUIZ_Q6_B', b:'先动手做，边做边学'},
+  {dim:'FT', q_key:'QUIZ_Q7', q:'7. 主人遇到困难时，你会...',         a_key:'QUIZ_Q7_A', a:'温暖鼓励，给情感支持',     b_key:'QUIZ_Q7_B', b:'冷静分析，给解决方案'},
+  {dim:'FT', q_key:'QUIZ_Q8', q:'8. 判断一件事，你更看重...',         a_key:'QUIZ_Q8_A', a:'对方的感受是否被照顾到',   b_key:'QUIZ_Q8_B', b:'逻辑是否成立、是非对错'},
+  {dim:'PJ', q_key:'QUIZ_Q9', q:'9. 你的说话风格是...',               a_key:'QUIZ_Q9_A', a:'活泼跳跃，爱开玩笑',       b_key:'QUIZ_Q9_B', b:'沉稳有序，条理清晰'},
+  {dim:'PJ', q_key:'QUIZ_Q10', q:'10. 面对计划，你更倾向...',          a_key:'QUIZ_Q10_A', a:'保持灵活，随机应变',       b_key:'QUIZ_Q10_B', b:'提前安排好，按部就班'}
 ];
 let quizAnswers = new Array(QUIZ_DATA.length).fill(-1);
 
@@ -604,11 +604,14 @@ function renderQuiz() {
   if (!b) return;
   b.innerHTML = QUIZ_DATA.map((item, q) => {
     const sel = quizAnswers[q];
+    const qText = (LANGS[item.q_key] || item.q);
+    const aText = (LANGS[item.a_key] || item.a);
+    const bText = (LANGS[item.b_key] || item.b);
     return `
-      <div class="quiz-q" id="quiz_q${q+1}">${item.q}</div>
+      <div class="quiz-q" id="quiz_q${q+1}">${qText}</div>
       <div class="quiz-opts">
-        <div class="quiz-opt${sel===0?' selected':''}" id="quiz_q${q+1}_a" onclick="pickQuiz(${q},0,this)">A: ${item.a}</div>
-        <div class="quiz-opt${sel===1?' selected':''}" id="quiz_q${q+1}_b" onclick="pickQuiz(${q},1,this)">B: ${item.b}</div>
+        <div class="quiz-opt${sel===0?' selected':''}" id="quiz_q${q+1}_a" onclick="pickQuiz(${q},0,this)">A: ${aText}</div>
+        <div class="quiz-opt${sel===1?' selected':''}" id="quiz_q${q+1}_b" onclick="pickQuiz(${q},1,this)">B: ${bText}</div>
       </div>`;
   }).join('');
 }
@@ -871,10 +874,6 @@ function applyI18n() {
   setPh('user_nickname', 'USER_NICKNAME_PLACEHOLDER', '如：主人、小朋友');
   set('sec_personality', 'PERSONALITY_TYPE', '选择您的性格类型');
   set('lbl_quick_test', 'QUICK_TEST', '快速测试');
-  set('quiz_q1', 'QUIZ_Q1'); set('quiz_q1_a', 'QUIZ_Q1_A'); set('quiz_q1_b', 'QUIZ_Q1_B');
-  set('quiz_q2', 'QUIZ_Q2'); set('quiz_q2_a', 'QUIZ_Q2_A'); set('quiz_q2_b', 'QUIZ_Q2_B');
-  set('quiz_q3', 'QUIZ_Q3'); set('quiz_q3_a', 'QUIZ_Q3_A'); set('quiz_q3_b', 'QUIZ_Q3_B');
-  set('quiz_q4', 'QUIZ_Q4'); set('quiz_q4_a', 'QUIZ_Q4_A'); set('quiz_q4_b', 'QUIZ_Q4_B');
   set('sec_requirements', 'REQUIREMENTS', '对机器人的具体要求');
   setPh('agent_requirements', 'REQUIREMENTS_PLACEHOLDER', '描述你想要的机器人性格...');
   set('sec_generate', 'GENERATE_EDIT_SECTION', '生成与编辑');

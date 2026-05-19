@@ -767,8 +767,8 @@ class LanguagePage(AppFrame):
         self.setCornerHints(
             tl="CN",
             tr="EN",
-            bl=(self.la.get("DEMOEN", {}).get("SAVE", "保存"), Asset.icon_back),
-            br=(self.la.get("DEMOEN", {}).get("EXIT", "退出"), Asset.icon_enter),
+            bl=(self.la.get("DEMOEN", {}).get("EXIT", "退出"), Asset.icon_back),
+            br=(self.la.get("DEMOEN", {}).get("SAVE", "保存"), Asset.icon_enter),
         )
 
     def paintEvent(self, ev):
@@ -832,14 +832,15 @@ class LanguagePage(AppFrame):
             self.en_selected = True
             self.update()
         elif ev.key() == Qt.Key.Key_Back:
-            # Save language (写入全局 configs/language.ini) and restart
+            # 左下角：退出，返回列表
+            self.stack.navigate_to("list")
+        elif ev.key() == Qt.Key.Key_Return:
+            # 右下角：保存语言并重启
             set_lang_code(self.content)
             saved_text = self.la.get("LANGUAGE", {}).get("SAVED", "Saved!")
             self.saved_label.setText(saved_text)
             self.saved_label.show()
             QTimer.singleShot(1500, lambda: self._do_restart())
-        elif ev.key() == Qt.Key.Key_Return:
-            QApplication.instance().quit()
 
     def _do_restart(self):
         # Quit app; launcher will restart preload process automatically

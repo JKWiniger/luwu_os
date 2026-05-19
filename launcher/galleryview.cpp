@@ -158,17 +158,35 @@ void GalleryView::moveSelection(int delta) {
     int newIdx = currentIndex + delta;
     if (newIdx < 0 || newIdx >= CARD_COUNT) return;
 
+    // 先记录当前状态作为动画起始
+    animStartGeom = currentGeom;
+    animStartLabelGeom = currentLabelGeom;
+    currentIndex = newIdx;
+    updateTargetStates();
+
+    // 退出视野的卡片：其标签在动画时会横穿屏幕顶部（StatusBar 区域），
+    // 立即推到屏幕外，只让图片参与退场动画
+    for (int i = 0; i < CARD_COUNT; ++i) {
+        if (qAbs(i - newIdx) > VISIBLE_RANGE) {
+            cardLabels[i]->setGeometry(QRect(-9999, -9999, 1, 1));
+            animStartLabelGeom[i] = QRect(-9999, -9999, 1, 1);
+            currentLabelGeom[i] = QRect(-9999, -9999, 1, 1);
+        }
+    }
+
+    // 先把即将显示的标签的 geometry 设到目标位置，再 show，
+    // 避免 show() 触发瞬间在旧位置上闪现一张卡片标题
     for (int i = 0; i < CARD_COUNT; ++i) {
         if (qAbs(i - newIdx) <= VISIBLE_RANGE) {
+            if (cardImages[i]->isHidden()) {
+                cardImages[i]->setGeometry(targetGeom[i]);
+                cardLabels[i]->setGeometry(targetLabelGeom[i]);
+            }
             cardImages[i]->show();
             cardLabels[i]->show();
         }
     }
 
-    animStartGeom = currentGeom;
-    animStartLabelGeom = currentLabelGeom;
-    currentIndex = newIdx;
-    updateTargetStates();
     updateCardStyles();
 
     int w = width();
@@ -232,7 +250,9 @@ void GalleryView::updateTargetStates() {
     int sideSide   = centerSide * 70 / 100;
 
     int centerX = w / 2;
-    int centerY = (h - centerSide) / 2 - 15;
+    // centerY 必须 >= StatusBar 高度(26px)，避免卡片压在 StatusBar 底边
+    // 320x240 下公式结果恰好是 25，差 1px 就触发 GalleryView 重绘覆盖 StatusBar，产生黑字闪烁
+    int centerY = qMax(26, (h - centerSide) / 2 - 15);
     int sideY   = centerY + (centerSide - sideSide) / 2;
 
     int peek = sideSide * 28 / 100;

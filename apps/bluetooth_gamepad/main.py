@@ -64,9 +64,11 @@ _T = _Translator({
         "already": "手柄已连接",
         "disconnected": "手柄已断开，重新扫描中...",
         "not_found": "未发现手柄，{} 秒后重试",
+        "not_available": "手柄不在范围内，请确认已开机并进入配对模式",
         "pair_failed": "配对失败，重试中...",
         "connect_failed": "连接失败，重试中...",
         "bt_error": "蓝牙未就绪",
+        "reconnecting": "正在重连 {}...",
         "hint_exit": "退出",
         "hint_rescan": "重新扫描",
     },
@@ -81,9 +83,11 @@ _T = _Translator({
         "already": "Gamepad already connected",
         "disconnected": "Disconnected, rescanning...",
         "not_found": "No gamepad found, retry in {}s",
+        "not_available": "Gamepad out of range, turn on and enter pairing mode",
         "pair_failed": "Pair failed, retrying...",
         "connect_failed": "Connect failed, retrying...",
         "bt_error": "Bluetooth not ready",
+        "reconnecting": "Reconnecting {}...",
         "hint_exit": "Exit",
         "hint_rescan": "Rescan",
     },
@@ -110,24 +114,48 @@ _APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
 
 
 # ===================== 持久化 bluetoothctl 会话 =====================
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+BT_LOG_FILE = "/tmp/bt_gamepad.log"
+
+
+def _bt_log(msg: str):
+    """写入蓝牙调试日志文件"""
+    try:
+        ts = time.strftime("%m-%d %H:%M:%S")
+        with open(BT_LOG_FILE, "a") as f:
+            f.write(f"[{ts}] {msg}\n")
+    except Exception:
+        pass
+
+
 class BtSession:
     """维护一个持久 bluetoothctl 进程，保证 agent 注册不丢失
     
     关键：bluetoothctl 的 agent 命令需要进程保持运行才能维护 D-Bus 对象。
     之前每次 subprocess.run 都会让进程退出 → agent 注销 → 配对失败。
     这个类用一个 Popen 进程一直活着，所有命令通过 stdin 发送。
+    
+    健壮性改进：
+    - 日志写入 /tmp/bt_gamepad.log 方便排查
+    - ANSI 转义码过滤，避免干扰关键词匹配
+    - 关键词命中后继续读 0.8s 捕获后续输出
+    - 会话健康检查 + 自动重启 (ensure_alive)
+    - 连接频率限制，避免 bluetoothd "Operation already in progress"
     """
 
     def __init__(self):
         self._proc = None
         self._lock = threading.Lock()
         self._ready = False
+        self._master_fd = None
+        self._last_connect_ts = {}
+        self._connect_min_interval = 3.0
 
     # ── 启动 / 停止 ──────────────────────────────────────────────
 
     def start(self):
+        _bt_log("BtSession.start() called")
         print("[bt_gamepad] starting persistent bluetoothctl session (pty)...", flush=True)
-        # 用 PTY 让 bluetoothctl 认为自己是交互式终端 —— 否则 buffering 会卡死
         self._master_fd, slave_fd = pty.openpty()
         self._proc = subprocess.Popen(
             ["bluetoothctl"],
@@ -137,24 +165,30 @@ class BtSession:
             close_fds=True,
         )
         os.close(slave_fd)
-        # 先标记 alive 让 _send 能通过
-        self._ready = True
         # 等待 bluetoothctl 启动并出现提示符
-        self._read_until(8)
+        init_out = self._read_until(8)
+        _bt_log(f"init output: {init_out[:200]}")
+        self._ready = True
         # 初始设置
         self._send("power on", 5)
         self._send("pairable on", 5)
         out = self._send("agent NoInputNoOutput", 5)
         print(f"[bt_gamepad] agent: {out.strip()[:150]}", flush=True)
-        if "Failed" in out or "fail" in out.lower():
+        _bt_log(f"agent output: {out.strip()[:200]}")
+        clean = _ANSI_RE.sub('', out).lower()
+        if "failed" in clean and "already" not in clean:
             print("[bt_gamepad] !! agent register FAILED", flush=True)
+            _bt_log("WARNING: agent registration failed")
             self._ready = False
         else:
             print("[bt_gamepad] agent registered OK", flush=True)
+            _bt_log("agent registered OK")
         self._send("default-agent", 5)
         print("[bt_gamepad] BtSession ready", flush=True)
+        _bt_log("BtSession ready")
 
     def stop(self):
+        _bt_log("BtSession.stop() called")
         self._ready = False
         if hasattr(self, '_master_fd') and self._master_fd is not None:
             try:
@@ -173,9 +207,24 @@ class BtSession:
                 self._proc.kill()
             self._proc = None
             print("[bt_gamepad] BtSession stopped", flush=True)
+            _bt_log("BtSession stopped")
 
     def is_alive(self):
-        return self._ready and self._proc and self._proc.poll() is None
+        alive = self._ready and self._proc and self._proc.poll() is None
+        if not alive and self._ready:
+            _bt_log("WARNING: BtSession.is_alive()=False but _ready=True")
+        return alive
+
+    def ensure_alive(self):
+        """如果会话挂了，自动重启"""
+        if not self.is_alive():
+            _bt_log("BtSession dead, auto-restarting...")
+            print("[bt_gamepad] BtSession dead, restarting...", flush=True)
+            self.stop()
+            time.sleep(1)
+            self.start()
+            return self.is_alive()
+        return True
 
     # ── 底层通信（PTY 读写）───────────────────────────────────
 
@@ -183,11 +232,12 @@ class BtSession:
         """读取输出。
         - 普通命令：连续读取，遇到 idle 秒没新数据就返回。
         - 慢命令(pair/connect)：传入 wait_for=["successful","failed"] 等关键词，
-          只有匹配到关键词 或 超时 才返回，中间的静默不会提前退出。
+          只有匹配到关键词 或 超时 才返回。关键词命中后继续读 0.8s 捕获后续状态。
         """
         buf = ""
         deadline = time.time() + timeout
         last_data = time.time()
+        hit_keyword = False
         while time.time() < deadline:
             r, _, _ = select.select([self._master_fd], [], [], 0.1)
             if r:
@@ -198,14 +248,16 @@ class BtSession:
                 if chunk:
                     buf += chunk
                     last_data = time.time()
-                    # 如果有关键词等待，检查是否命中
-                    if wait_for:
-                        low = buf.lower()
-                        if any(kw in low for kw in wait_for):
-                            break
+                    # 如果有关键词等待，检查是否命中（先清理 ANSI 码再匹配）
+                    if wait_for and not hit_keyword:
+                        clean = _ANSI_RE.sub('', buf).lower()
+                        if any(kw in clean for kw in wait_for):
+                            hit_keyword = True
+                            # 命中后给 0.8s 的 grace period 继续读后续输出
+                            deadline = min(deadline, time.time() + 0.8)
             else:
-                # 没新数据，检查静默期（仅在无 wait_for 时使用）
-                if not wait_for and buf and (time.time() - last_data) > idle:
+                # 没新数据，检查静默期（仅在无 wait_for 或已命中关键词时使用）
+                if (not wait_for or hit_keyword) and buf and (time.time() - last_data) > idle:
                     break
         return buf
 
@@ -213,20 +265,26 @@ class BtSession:
         """发送命令，返回完整输出。wait_for: 关键词列表，命中才返回。"""
         with self._lock:
             if not self.is_alive():
+                _bt_log(f"SKIP (session dead): {cmd}")
                 print(f"[bt_gamepad] !! session dead, skip: {cmd}", flush=True)
                 return ""
+            _bt_log(f"BT> {cmd}")
             print(f"[bt_gamepad] BT> {cmd}", flush=True)
             try:
                 os.write(self._master_fd, (cmd + "\n").encode())
             except Exception as e:
+                _bt_log(f"WRITE ERROR: {e}")
                 print(f"[bt_gamepad] !! write error: {e}", flush=True)
                 return ""
             out = self._read_until(timeout, idle, wait_for=wait_for)
-            # 精简输出
+            # 精简输出（过滤 ANSI 和提示行）
             for line in out.strip().splitlines():
                 line = line.strip()
-                if line and "[bluetoothctl]" not in line and not line.startswith("\x1b"):
-                    print(f"[bt_gamepad] BT< {line[:200]}", flush=True)
+                if line and "[bluetoothctl]" not in line:
+                    clean_line = _ANSI_RE.sub('', line).strip()
+                    if clean_line:
+                        print(f"[bt_gamepad] BT< {clean_line[:200]}", flush=True)
+            _bt_log(f"BT< ({len(out)} bytes) {_ANSI_RE.sub('', out).strip()[:300]}")
             return out
 
     # ── 高级操作 ──────────────────────────────────────────────────
@@ -240,9 +298,20 @@ class BtSession:
     def info(self, mac: str):
         return self._send(f"info {mac}", 5)
 
+    def remove(self, mac: str):
+        """移除设备（用于重新配对）"""
+        return self._send(f"remove {mac}", 5)
+
+    def unblock(self, mac: str):
+        """解锁设备"""
+        return self._send(f"unblock {mac}", 5)
+
     def scan(self, duration: int = SCAN_DURATION):
         """扫描指定时长后关闭"""
-        # 启动扫描（不等待输出完）
+        # 先确保之前的扫描已关闭（处理异常退出残留）
+        self._send("scan off", timeout=2, idle=0.3)
+        time.sleep(0.3)
+        # 启动扫描
         self._send("scan on", timeout=2, idle=0.3)
         # 扫描期间持锁后台消费 stdout，避免后续命令读到脱起的扫描输出
         with self._lock:
@@ -256,18 +325,30 @@ class BtSession:
                         break
         self._send("scan off", timeout=2, idle=0.3)
 
-    def pair(self, mac: str, timeout=20):
+    def pair(self, mac: str, timeout=25):
         return self._send(f"pair {mac}", timeout,
                           wait_for=["pairing successful", "failed to pair",
-                                    "already exists", "not available"])
+                                    "already exists", "not available",
+                                    "authentication failed", "canceled"])
 
     def trust(self, mac: str):
         return self._send(f"trust {mac}", 5)
 
-    def connect(self, mac: str, timeout=15):
+    def connect(self, mac: str, timeout=20):
+        # 频率限制：同一设备两次 connect 之间至少间隔 _connect_min_interval 秒
+        now = time.time()
+        last = self._last_connect_ts.get(mac, 0)
+        if now - last < self._connect_min_interval:
+            wait = self._connect_min_interval - (now - last)
+            _bt_log(f"RATE LIMIT: waiting {wait:.1f}s before connect {mac}")
+            print(f"[bt_gamepad] rate limit: waiting {wait:.1f}s before connect", flush=True)
+            time.sleep(wait)
+        self._last_connect_ts[mac] = time.time()
         return self._send(f"connect {mac}", timeout,
                           wait_for=["connection successful", "failed to connect",
-                                    "already connected", "not available"])
+                                    "already connected", "not available",
+                                    "host is down", "operation already",
+                                    "refused", "timed out", "br-connection"])
 
 
 # 全局单例
@@ -316,19 +397,31 @@ def bt_is_connected(mac: str) -> bool:
 def bt_is_paired(mac: str) -> bool:
     return "Paired: yes" in bt_info(mac)
 
+def bt_remove(mac: str):
+    """移除已配对设备（用于 re-pair）"""
+    return _bt.remove(mac)
+
+def bt_unblock(mac: str):
+    return _bt.unblock(mac)
+
 def bt_pair(mac: str) -> bool:
-    out = _bt.pair(mac, timeout=20)
-    txt = out.lower()
-    return "successful" in txt or "already" in txt
+    out = _bt.pair(mac, timeout=25)
+    clean = _ANSI_RE.sub('', out).lower()
+    _bt_log(f"bt_pair({mac}) result: {clean[:200]}")
+    return "successful" in clean or "already" in clean
 
 def bt_trust(mac: str) -> bool:
     out = _bt.trust(mac)
-    return "succeeded" in out.lower() or "Changing" in out
+    clean = _ANSI_RE.sub('', out).lower()
+    _bt_log(f"bt_trust({mac}) result: {clean[:200]}")
+    return "succeeded" in clean or "changing" in clean
 
 def bt_connect(mac: str) -> bool:
-    out = _bt.connect(mac, timeout=15)
-    txt = out.lower()
-    return "successful" in txt or "already" in txt
+    out = _bt.connect(mac, timeout=20)
+    clean = _ANSI_RE.sub('', out).lower()
+    _bt_log(f"bt_connect({mac}) result: {clean[:200]}")
+    # "host is down" / "operation already" 表示暂时失败，下次可重试
+    return "successful" in clean or "already" in clean
 
 def bt_scan(duration: int = SCAN_DURATION):
     _bt.scan(duration)
@@ -372,17 +465,23 @@ class BTWorker(QThread):
     # ---- 主流程 ----
     def run(self):
         # 1. 初始化蓝牙
+        _bt_log("BTWorker.run() started")
         self.status_changed.emit("init", "")
         bt_setup()
         if not bt_is_powered():
+            _bt_log("ERROR: Bluetooth not powered")
             self.status_changed.emit("bt_error", "")
             return
 
         # 2. 主循环：连 → 维持 → 断 → 重扫
         while self._running:
+            # 确保 BT 会话还活着
+            _bt.ensure_alive()
+
             # 2.1 优先复用已连接的手柄
             mac, name = self._find_connected()
             if mac:
+                _bt_log(f"Found already-connected gamepad: {name} ({mac})")
                 self.status_changed.emit("already", name)
                 self.gamepad_ready.emit(mac, name)
                 self._monitor(mac, name)
@@ -390,11 +489,21 @@ class BTWorker(QThread):
                     break
                 continue
 
-            # 2.2 扫描 + 配对 + 连接
+            # 2.2 尝试直接连接已知已配对但未连接的手柄（无需扫描）
+            mac, name = self._find_paired_disconnected()
+            if mac:
+                _bt_log(f"Found paired-but-disconnected gamepad: {name} ({mac}), trying connect")
+                self.status_changed.emit("connecting", name)
+                if self._try_connect_paired(mac, name):
+                    self._monitor(mac, name)
+                    continue
+                _bt_log(f"Direct connect to {name} failed, falling through to scan")
+
+            # 2.3 扫描 + 配对 + 连接
             ok = self._scan_and_connect()
             if not ok and self._running:
                 # 连续多次失败，停顿一段时间后重试
-                for _ in range(3):
+                for _ in range(5):
                     if not self._running or self._force_rescan:
                         break
                     time.sleep(1)
@@ -405,6 +514,44 @@ class BTWorker(QThread):
             if connected:
                 return mac, name
         return None, None
+
+    def _find_paired_disconnected(self):
+        """找到已配对/信任但未连接的手柄（优先尝试直连）"""
+        for mac, name, connected in find_gamepads():
+            if not connected and bt_is_paired(mac):
+                return mac, name
+        return None, None
+
+    def _try_connect_paired(self, mac: str, name: str) -> bool:
+        """对已配对设备尝试直连，最多重试 2 次（轻量级，不会 remove 设备）"""
+        for attempt in range(2):
+            if not self._running:
+                return False
+            if attempt > 0:
+                delay = 3  # 重试前等 3 秒
+                _bt_log(f"  retry connect {name} attempt {attempt+1}/2, delay={delay}s")
+                print(f"[bt_gamepad] reconnect attempt {attempt+1}/2 for {name}, waiting {delay}s...", flush=True)
+                for _ in range(delay):
+                    if not self._running:
+                        return False
+                    time.sleep(1)
+
+            if bt_connect(mac):
+                # 验证连接
+                for _ in range(8):
+                    if bt_is_connected(mac):
+                        self.status_changed.emit("connected", name)
+                        self.gamepad_ready.emit(mac, name)
+                        _bt_log(f"SUCCESS: connected to {name} after {attempt+1} attempts")
+                        return True
+                    time.sleep(1)
+                _bt_log(f"  connect reported success but not confirmed after 8s")
+            else:
+                _bt_log(f"  connect attempt {attempt+1} failed")
+
+        # 直连失败不删除设备，留给扫描+配对流程处理
+        _bt_log(f"  direct connect failed for {name}, will try scan+connect")
+        return False
 
     def _scan_and_connect(self) -> bool:
         retry = 0
@@ -435,7 +582,11 @@ class BTWorker(QThread):
 
             retry += 1
             remaining = max(1, MAX_SCAN_RETRY - retry)
-            self.status_changed.emit("not_found", str(SCAN_RETRY_INTERVAL))
+            # 多次完全找不到手柄 → 提示用户检查设备
+            if len(gamepads) == 0 and retry >= 3:
+                self.status_changed.emit("not_available", str(SCAN_RETRY_INTERVAL))
+            else:
+                self.status_changed.emit("not_found", str(SCAN_RETRY_INTERVAL))
             for _ in range(SCAN_RETRY_INTERVAL):
                 if not self._running or self._force_rescan:
                     break
@@ -446,38 +597,93 @@ class BTWorker(QThread):
         return False
 
     def _try_pair_connect(self, mac: str, name: str) -> bool:
-        # 已配对则跳过 pair
+        # 额外尝试次数（已配对设备）
+        max_connect_retries = 2
+
+        # 已配对则跳过 pair，直接连；未配对的先配对
         if not bt_is_paired(mac):
             self.status_changed.emit("pairing", name)
             if not bt_pair(mac):
                 self.status_changed.emit("pair_failed", name)
+                _bt_log(f"pair failed for {name}")
                 time.sleep(1)
                 return False
             bt_trust(mac)
-            time.sleep(1)
+            time.sleep(1.5)  # 配对后给系统一点时间
+        else:
+            # 已配对设备：先 unlock 确保没有被 block
+            bt_unblock(mac)
+            time.sleep(0.3)
 
-        self.status_changed.emit("connecting", name)
-        if not bt_connect(mac):
-            self.status_changed.emit("connect_failed", name)
-            time.sleep(1)
-            return False
+        # 连接尝试（最多 max_connect_retries 次）
+        for attempt in range(max_connect_retries):
+            if not self._running:
+                return False
 
-        # 连接结果验证
-        for _ in range(5):
-            if bt_is_connected(mac):
-                self.status_changed.emit("connected", name)
-                self.gamepad_ready.emit(mac, name)
-                return True
-            time.sleep(0.5)
+            self.status_changed.emit("connecting", name)
+            if bt_connect(mac):
+                # 连接结果验证（最多等 8 秒）
+                for _ in range(8):
+                    if bt_is_connected(mac):
+                        self.status_changed.emit("connected", name)
+                        self.gamepad_ready.emit(mac, name)
+                        _bt_log(f"SUCCESS: connected to {name} (attempt {attempt+1})")
+                        return True
+                    time.sleep(1)
+                _bt_log(f"  connect reported success but not confirmed after 8s")
+            else:
+                _bt_log(f"  connect failed for {name} (attempt {attempt+1}/{max_connect_retries})")
+
+            # 还有重试机会
+            if attempt < max_connect_retries - 1:
+                wait = (attempt + 1) * 2  # 2s, 4s
+                _bt_log(f"  waiting {wait}s before retry...")
+                print(f"[bt_gamepad] connect retry {attempt+2}/{max_connect_retries} for {name} in {wait}s...", flush=True)
+                for _ in range(wait):
+                    if not self._running:
+                        return False
+                    time.sleep(1)
+
+        # 所有尝试都失败 → remove + 下次扫描重新配对
+        _bt_log(f"  all connect attempts failed for {name}, removing to re-pair")
+        print(f"[bt_gamepad] removing {name} to attempt fresh re-pair...", flush=True)
+        bt_remove(mac)
+        time.sleep(0.5)
 
         self.status_changed.emit("connect_failed", name)
         return False
 
     def _monitor(self, mac: str, name: str):
-        """连接成功后监控掉线"""
+        """连接成功后监控掉线，掉线时尝试快速重连"""
+        disconnect_count = 0
         while self._running and not self._force_rescan:
             time.sleep(3)
             if not bt_is_connected(mac):
+                disconnect_count += 1
+                _bt_log(f"monitor: {name} disconnected (count={disconnect_count})")
+                
+                # 前 2 次掉线尝试快速重连
+                if disconnect_count <= 2:
+                    self.status_changed.emit("reconnecting", name)
+                    _bt_log(f"  attempting quick reconnect #{disconnect_count}")
+                    if bt_connect(mac):
+                        for _ in range(5):
+                            if bt_is_connected(mac):
+                                _bt_log(f"  quick reconnect succeeded")
+                                self.status_changed.emit("connected", name)
+                                disconnect_count = 0
+                                break
+                            time.sleep(0.5)
+                        else:
+                            _bt_log(f"  quick reconnect failed")
+                            continue
+                        continue
+                    else:
+                        _bt_log(f"  quick reconnect failed")
+                        time.sleep(1)
+                        continue
+                
+                # 多次掉线 → 通知上层重启扫描
                 self.status_changed.emit("disconnected", name)
                 self.gamepad_lost.emit()
                 time.sleep(2)
@@ -663,6 +869,15 @@ class BTGamepadPage(AppFrame):
             self.status_label.setStyleSheet(muted)
         elif key == "connect_failed":
             self.status_label.setText(_T("connect_failed"))
+            self.status_label.setStyleSheet(muted)
+        elif key == "reconnecting":
+            self.device_label.setText(detail)
+            self.status_label.setText(_T("reconnecting", detail))
+            self.status_label.setStyleSheet(muted)
+        elif key == "not_available":
+            self.device_label.setText("")
+            self.sub_label.setText(_T("not_available"))
+            self.status_label.setText(_T("not_found", detail))
             self.status_label.setStyleSheet(muted)
         elif key == "bt_error":
             self.status_label.setText(_T("bt_error"))
