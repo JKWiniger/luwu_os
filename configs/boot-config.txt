@@ -1,6 +1,5 @@
 # For more options and information see
 # http://rptl.io/configtxt
-# XGO-Rider 优化版 (WM8960 + OV5647 + SPI LCD + UART0 + 蓝牙手柄) [CM4/CM5 双平台]
 
 # ====== 硬件接口 ======
 dtparam=i2c_arm=on              # I2C: WM8960 寄存器控制
@@ -24,6 +23,10 @@ dtoverlay=luwu-keys
 # disable_fw_kms_setup=1
 
 
+# ====== 串口子系统 ======
+[all]
+enable_uart=1
+
 # ====== CM4: UART + 蓝牙 ======
 [cm4]
 dtoverlay=uart5,txd5_pin=12,rxd5_pin=13                # GPIO12/13 → ttyAMA5 (新CM4机器狗)
@@ -36,7 +39,7 @@ dtoverlay=ov5647
 # ====== CM5: UART + 蓝牙 ======
 [cm5]
 # CM5 蓝牙走 SoC 内部 UART, 无需 miniuart-bt/core_freq
-dtoverlay=uart0                 # GPIO14/15 → ttyAMA0 (机器狗)
+dtoverlay=uart0-pi5             # GPIO14/15 → ttyAMA0 (机器狗, RP1)
 # ====== CSI OV5647 (cam0=RP1电源管理) ======
 camera_auto_detect=0
 dtoverlay=ov5647,cam0

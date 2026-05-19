@@ -193,13 +193,15 @@ def get_disk_info():
             if gb >= 1:
                 return f"{gb:.1f} GB"
             return f"{size // (1024**2)} MB"
-        return f"{fmt(total)} | 用{fmt(used)} | 剩{fmt(free)}"
+        # Return raw data; caller applies i18n formatting
+        return (fmt(total), fmt(used), fmt(free))
     except Exception:
-        return "Unknown"
+        return ("Unknown", "Unknown", "Unknown")
 
 def _get_pkg_version(pkg_name: str) -> str:
     """使用 importlib.metadata 直接读取已安装包的版本号（毫秒级，无子进程）。
     避免在主线程调用 `pip show` 造成 1~2 秒阻塞，导致打开 settings 时屏幕黑一半。
+    返回值可能是版本号字符串、"Not installed" 或 "Unknown"（需由调用方通过 la 翻译）。
     """
     try:
         try:
@@ -209,9 +211,9 @@ def _get_pkg_version(pkg_name: str) -> str:
         try:
             return version(pkg_name)
         except PackageNotFoundError:
-            return "未安装"
+            return "Not installed"
     except Exception:
-        return "未知"
+        return "Unknown"
 
 def get_xgolib_version():
     return _get_pkg_version("xgolib")
@@ -272,10 +274,10 @@ class SettingsListPage(AppFrame):
     def _apply_corner_hints(self):
         t = self.la.get("DEMOEN", {})
         self.setCornerHints(
-            tl=(t.get("UP", "上移"),    Asset.icon_left),
-            tr=(t.get("DOWN", "下移"),  Asset.icon_right),
-            bl=(t.get("BACK", "返回"),  Asset.icon_back),
-            br=(t.get("CONFIRM", "进入"), Asset.icon_enter),
+            tl=(t.get("UP", "Up"),    Asset.icon_left),
+            tr=(t.get("DOWN", "Down"),  Asset.icon_right),
+            bl=(t.get("BACK", "Back"),  Asset.icon_back),
+            br=(t.get("CONFIRM", "Confirm"), Asset.icon_enter),
         )
 
     def _make_item_widget(self, item, index):
@@ -453,30 +455,47 @@ class AboutPage(AppFrame):
         self._apply_corner_hints()
 
         # 加载中占位
-        self.loading_label = HintLabel("加载中…", self)
+        t = self.la.get("DEMOEN", {})
+        self.loading_label = HintLabel(t.get("LOADING", "Loading..."), self)
         self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def _apply_corner_hints(self):
         t = self.la.get("DEMOEN", {})
         self.setCornerHints(
-            tl=(t.get("UP", "上翻"),    Asset.icon_left),
-            tr=(t.get("DOWN", "下翻"),  Asset.icon_right),
-            bl=(t.get("BACK", "返回"),  Asset.icon_back),
-            br=(t.get("EXIT", "退出"),  Asset.icon_enter),
+            tl=(t.get("UP", "Up"),    Asset.icon_left),
+            tr=(t.get("DOWN", "Down"),  Asset.icon_right),
+            bl=(t.get("BACK", "Back"),  Asset.icon_back),
+            br=(t.get("EXIT", "Exit"),  Asset.icon_enter),
         )
 
     def _gather_info(self):
+        t = self.la.get("DEMOEN", {})
         items = []
-        items.append(("LuwuOS 版本", "2.0.0"))
-        items.append(("xgolib 版本", get_xgolib_version()))
-        items.append(("xgoedu 版本", get_xgoedu_version()))
-        items.append(("CPU", get_cpu_model()))
-        items.append(("CPU 核心数", str(get_cpu_cores())))
-        items.append(("内存总量", get_ram_total()))
-        items.append(("可用内存", get_ram_available()))
-        items.append(("硬盘", get_disk_info()))
-        items.append(("SN", f"{get_sn_short()}{get_mac_address()}"))
+        items.append((t.get("LUWUOS_VER", "LuwuOS Version"), "2.0.0"))
+        items.append((t.get("XGOLIB_VER", "xgolib Version"), self._tr_val(get_xgolib_version())))
+        items.append((t.get("XGOEDU_VER", "xgoedu Version"), self._tr_val(get_xgoedu_version())))
+        items.append((t.get("CPU_MODEL", "CPU"), self._tr_val(get_cpu_model())))
+        items.append((t.get("CPU_CORES", "CPU Cores"), str(get_cpu_cores())))
+        items.append((t.get("RAM_TOTAL", "Total RAM"), self._tr_val(get_ram_total())))
+        items.append((t.get("RAM_AVAIL", "Avail RAM"), self._tr_val(get_ram_available())))
+        disk_total, disk_used, disk_free = get_disk_info()
+        disk_fmt = t.get("DISK_FORMAT", "{total} | Used {used} | Free {free}")
+        items.append((t.get("DISK", "Disk"), disk_fmt.format(
+            total=self._tr_val(disk_total),
+            used=self._tr_val(disk_used),
+            free=self._tr_val(disk_free)
+        )))
+        items.append((t.get("SN_LABEL", "SN"), f"{get_sn_short()}{get_mac_address()}"))
         return items
+
+    def _tr_val(self, val):
+        """Translate status/value strings (Not installed / Unknown)."""
+        t = self.la.get("DEMOEN", {})
+        if val == "Not installed":
+            return t.get("PKG_NOT_INSTALLED", "Not installed")
+        if val == "Unknown":
+            return t.get("PKG_UNKNOWN", "Unknown")
+        return val
 
     def _build_info_labels(self):
         """首次进入 about 页时才采集信息并创建 labels。"""
@@ -572,6 +591,11 @@ class AboutPage(AppFrame):
     def refresh_language(self):
         self.la = load_language()
         self._apply_corner_hints()
+        # 重新采集并重建信息标签（语言变更后刷新）
+        if self._info_loaded:
+            self._build_info_labels()
+            self._relayout_items()
+            self.update()
 
 
 # ============================================================================
@@ -587,7 +611,9 @@ class SNPage(AppFrame):
 
         # SN display
         self.sn_id = get_sn_short() + get_mac_address()
-        full_sn = f"SN: {self.sn_id}"
+        t = self.la.get("DEMOEN", {})
+        sn_prefix = t.get("SN_PREFIX", "SN: ")
+        full_sn = f"{sn_prefix}{self.sn_id}"
         self.sn_label = SubtitleLabel(full_sn, self)
         self.sn_label.setColor(T_Color.accent)
         self.sn_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -599,8 +625,8 @@ class SNPage(AppFrame):
         self._generate_barcode()
 
         self.setCornerHints(
-            bl=(self.la.get("DEMOEN", {}).get("BACK", "返回"), Asset.icon_back),
-            br=(self.la.get("DEMOEN", {}).get("EXIT", "退出"), Asset.icon_enter),
+            bl=(self.la.get("DEMOEN", {}).get("BACK", "Back"), Asset.icon_back),
+            br=(self.la.get("DEMOEN", {}).get("EXIT", "Exit"), Asset.icon_enter),
         )
 
     def _generate_barcode(self):
@@ -646,6 +672,16 @@ class SNPage(AppFrame):
         elif ev.key() == Qt.Key.Key_Return:
             QApplication.instance().quit()
 
+    def refresh_language(self):
+        self.la = load_language()
+        t = self.la.get("DEMOEN", {})
+        sn_prefix = t.get("SN_PREFIX", "SN: ")
+        self.sn_label.setText(f"{sn_prefix}{self.sn_id}")
+        self.setCornerHints(
+            bl=(t.get("BACK", "Back"), Asset.icon_back),
+            br=(t.get("EXIT", "Exit"), Asset.icon_enter),
+        )
+
 
 # ============================================================================
 # Volume Page
@@ -659,7 +695,7 @@ class VolumePage(AppFrame):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # Title
-        self.title_label = TitleLabel("Volume", self)
+        self.title_label = TitleLabel(self.la.get("DEMOEN", {}).get("VOLUME_TITLE", "Volume"), self)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Volume percent label
@@ -676,8 +712,8 @@ class VolumePage(AppFrame):
         self.setCornerHints(
             tl="-5%",
             tr="+5%",
-            bl=(self.la.get("DEMOEN", {}).get("EXIT", "退出"), Asset.icon_back),
-            br=(self.la.get("DEMOEN", {}).get("SAVE", "保存"), Asset.icon_enter),
+            bl=(self.la.get("DEMOEN", {}).get("EXIT", "Exit"), Asset.icon_back),
+            br=(self.la.get("DEMOEN", {}).get("SAVE", "Save"), Asset.icon_enter),
         )
 
     def paintEvent(self, ev):
@@ -733,10 +769,21 @@ class VolumePage(AppFrame):
         elif ev.key() == Qt.Key.Key_Return:
             # Save and go back (右下角）
             write_volume(self.volume)
-            saved_text = self.la.get("VOLUME", {}).get("SAVED", "Saved!")
+            saved_text = self.la.get("DEMOEN", {}).get("SAVED_MSG", "Saved!")
             self.saved_label.setText(saved_text)
             self.saved_label.show()
             QTimer.singleShot(800, lambda: self.stack.navigate_to("list"))
+
+    def refresh_language(self):
+        self.la = load_language()
+        t = self.la.get("DEMOEN", {})
+        self.title_label.setText(t.get("VOLUME_TITLE", "Volume"))
+        self.setCornerHints(
+            tl="-5%",
+            tr="+5%",
+            bl=(t.get("EXIT", "Exit"), Asset.icon_back),
+            br=(t.get("SAVE", "Save"), Asset.icon_enter),
+        )
 
 
 # ============================================================================
@@ -751,7 +798,7 @@ class LanguagePage(AppFrame):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # Title
-        self.title_label = TitleLabel("Language", self)
+        self.title_label = TitleLabel(self.la.get("DEMOEN", {}).get("LANGUAGE_TITLE", "Language"), self)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Option buttons (drawn manually)
@@ -767,8 +814,8 @@ class LanguagePage(AppFrame):
         self.setCornerHints(
             tl="CN",
             tr="EN",
-            bl=(self.la.get("DEMOEN", {}).get("EXIT", "退出"), Asset.icon_back),
-            br=(self.la.get("DEMOEN", {}).get("SAVE", "保存"), Asset.icon_enter),
+            bl=(self.la.get("DEMOEN", {}).get("EXIT", "Exit"), Asset.icon_back),
+            br=(self.la.get("DEMOEN", {}).get("SAVE", "Save"), Asset.icon_enter),
         )
 
     def paintEvent(self, ev):
@@ -837,7 +884,7 @@ class LanguagePage(AppFrame):
         elif ev.key() == Qt.Key.Key_Return:
             # 右下角：保存语言并重启
             set_lang_code(self.content)
-            saved_text = self.la.get("LANGUAGE", {}).get("SAVED", "Saved!")
+            saved_text = self.la.get("DEMOEN", {}).get("SAVED_MSG", "Saved!")
             self.saved_label.setText(saved_text)
             self.saved_label.show()
             QTimer.singleShot(1500, lambda: self._do_restart())
@@ -845,6 +892,17 @@ class LanguagePage(AppFrame):
     def _do_restart(self):
         # Quit app; launcher will restart preload process automatically
         QApplication.instance().quit()
+
+    def refresh_language(self):
+        self.la = load_language()
+        t = self.la.get("DEMOEN", {})
+        self.title_label.setText(t.get("LANGUAGE_TITLE", "Language"))
+        self.setCornerHints(
+            tl="CN",
+            tr="EN",
+            bl=(t.get("EXIT", "Exit"), Asset.icon_back),
+            br=(t.get("SAVE", "Save"), Asset.icon_enter),
+        )
 
 
 # ============================================================================
@@ -1008,15 +1066,10 @@ class TimeDatePage(AppFrame):
     def _update_clock(self):
         now = datetime.datetime.now()
         self.time_label.setText(now.strftime("%H:%M:%S"))
-        weekdays_cn = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
-        weekdays_en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        lang = get_lang_code()
-        if lang == "cn":
-            wd = weekdays_cn[now.weekday()]
-            self.date_label.setText(now.strftime(f"%Y-%m-%d {wd}"))
-        else:
-            wd = weekdays_en[now.weekday()]
-            self.date_label.setText(now.strftime(f"%Y-%m-%d {wd}"))
+        t = self.la.get("DEMOEN", {})
+        weekdays = t.get("WEEKDAYS", ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"])
+        wd = weekdays[now.weekday()] if isinstance(weekdays, list) and len(weekdays) > now.weekday() else now.strftime("%a")
+        self.date_label.setText(now.strftime(f"%Y-%m-%d {wd}"))
 
     def _update_texts(self):
         self.la = load_language()
@@ -1031,22 +1084,10 @@ class TimeDatePage(AppFrame):
         self.update()
 
     def _current_tz_display(self):
-        """Display name for the current timezone selection."""
-        display_map = {
-            "Asia/Shanghai":     "上海 UTC+8",
-            "Asia/Tokyo":        "东京 UTC+9",
-            "Asia/Seoul":        "首尔 UTC+9",
-            "Asia/Singapore":    "新加坡 UTC+8",
-            "Asia/Kolkata":      "印度 UTC+5:30",
-            "Europe/London":     "伦敦 UTC+0",
-            "Europe/Berlin":     "柏林 UTC+1",
-            "Europe/Paris":      "巴黎 UTC+1",
-            "America/New_York":  "纽约 UTC-5",
-            "America/Los_Angeles": "洛杉矶 UTC-8",
-            "America/Chicago":   "芝加哥 UTC-6",
-            "Australia/Sydney":  "悉尼 UTC+10",
-        }
-        return display_map.get(self.current_tz, self.current_tz)
+        """Display name for the current timezone selection (via i18n)."""
+        t = self.la.get("DEMOEN", {})
+        tz_key = "TZ_" + self.current_tz.replace("/", "_")
+        return t.get(tz_key, self.current_tz)
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -1168,11 +1209,11 @@ class ShutdownPage(AppFrame):
     def _update_texts(self):
         self.la = load_language()
         t = self.la.get("DEMOEN", {})
-        self.title_label.setText(t.get("SHUTDOWN_TITLE", "关机确认"))
-        self.hint_label.setText(t.get("SHUTDOWN_HINT", "当前仅关机树莓派，机器狗关机还需按键"))
+        self.title_label.setText(t.get("SHUTDOWN_TITLE", "Shutdown Confirm"))
+        self.hint_label.setText(t.get("SHUTDOWN_HINT", "Only shuts down Raspberry Pi. Robot dog needs button shutdown."))
         self.setCornerHints(
-            bl=(t.get("CANCEL", "取消"), Asset.icon_back),
-            br=(t.get("CONFIRM", "确认关机"), Asset.icon_enter),
+            bl=(t.get("CANCEL", "Cancel"), Asset.icon_back),
+            br=(t.get("CONFIRM", "Confirm"), Asset.icon_enter),
         )
 
     def resizeEvent(self, ev):
@@ -1222,11 +1263,11 @@ class RebootPage(AppFrame):
     def _update_texts(self):
         self.la = load_language()
         t = self.la.get("DEMOEN", {})
-        self.title_label.setText(t.get("REBOOT_TITLE", "重启确认"))
-        self.hint_label.setText(t.get("REBOOT_HINT", "确定要重启树莓派？"))
+        self.title_label.setText(t.get("REBOOT_TITLE", "Reboot Confirm"))
+        self.hint_label.setText(t.get("REBOOT_HINT", "Are you sure to reboot Raspberry Pi?"))
         self.setCornerHints(
-            bl=(t.get("CANCEL", "取消"), Asset.icon_back),
-            br=(t.get("CONFIRM", "确认重启"), Asset.icon_enter),
+            bl=(t.get("CANCEL", "Cancel"), Asset.icon_back),
+            br=(t.get("CONFIRM", "Confirm"), Asset.icon_enter),
         )
 
     def resizeEvent(self, ev):
