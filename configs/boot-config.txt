@@ -23,40 +23,24 @@ dtoverlay=luwu-keys
 # max_framebuffers=2
 # disable_fw_kms_setup=1
 
-# ====== UART 机器狗 (老硬件 ttyAMA0 / 新硬件 ttyAMA5, xgolib 自动扫描) ======
-enable_uart=1
-dtoverlay=uart0                 # 老硬件: 机器狗; 新硬件: 闲置(GPIO14/15 被蓝牙占用)
-dtoverlay=uart5                 # 新硬件: 机器狗走 RP1 UART5; 老硬件: 闲置无影响
 
-# ====== 蓝牙 (miniuart-bt 把蓝牙赶到 mini-UART, 兼容老/新两种硬件) ======
-# 新硬件理想应去掉 miniuart-bt 让蓝牙独享 PL011, 但老硬件仍需 mini-UART 腾出 ttyAMA0 给机器狗
-# dtoverlay=disable-bt          # 不要禁用, 项目依赖蓝牙手柄自动配对
-dtoverlay=miniuart-bt
-core_freq=250                   # 锁频, 保证 mini-uart 蓝牙波特率稳定
-
-# ====== 系统 ======
-auto_initramfs=1
-arm_64bit=1
-arm_boost=1
-disable_overscan=1
-
-# ====== 启动加速 ======
-boot_delay=0
-disable_splash=1
-gpu_mem=128                     # SPI fb1 + Qt, 128MB 稳妥
-
+# ====== CM4: UART + 蓝牙 ======
 [cm4]
+dtoverlay=uart5,txd5_pin=12,rxd5_pin=13                # GPIO12/13 → ttyAMA5 (新CM4机器狗)
+# 蓝牙默认独占 UART0 PL011, 物理隔离, 无需 miniuart-bt
 # 启用 CM4 内置 XHCI USB host 模式 (USB 摄像头/蓝牙适配器等)
 otg_mode=1
 # ====== CSI OV5647 (标准CSI接口, 不用cam0) ======
 dtoverlay=ov5647
 
+# ====== CM5: UART + 蓝牙 ======
 [cm5]
+# CM5 蓝牙走 SoC 内部 UART, 无需 miniuart-bt/core_freq
+dtoverlay=uart0                 # GPIO14/15 → ttyAMA0 (机器狗)
 # ====== CSI OV5647 (cam0=RP1电源管理) ======
 camera_auto_detect=0
 dtoverlay=ov5647,cam0
 dtoverlay=dwc2,dr_mode=host
-
 # ====== 风扇温控 (CM5 pwm-fan) ======
 # 参考 fan-control-config 经验配置, 温度毫摄氏度
 dtparam=fan_temp0=36000,fan_temp0_hyst=2000,fan_temp0_speed=80
@@ -64,4 +48,13 @@ dtparam=fan_temp1=40000,fan_temp1_hyst=3000,fan_temp1_speed=80
 dtparam=fan_temp2=52000,fan_temp2_hyst=4000,fan_temp2_speed=80
 dtparam=fan_temp3=58000,fan_temp3_hyst=5000,fan_temp3_speed=80
 
+# ====== 全局系统配置 ======
 [all]
+# dtoverlay=disable-bt          # 不要禁用, 项目依赖蓝牙手柄自动配对
+auto_initramfs=1
+arm_64bit=1
+arm_boost=1
+disable_overscan=1
+boot_delay=0
+disable_splash=1
+gpu_mem=128                     # SPI fb1 + Qt, 128MB 稳妥
