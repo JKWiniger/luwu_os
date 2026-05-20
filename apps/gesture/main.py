@@ -118,25 +118,51 @@ GESTURE_AUDIO = {
     'Rock': 'six',  # Rock 复用 six 音效
 }
 
-# 手势 → 机器狗动作 ID 映射
-# Rider 仅支持 1~6，仅使用幅度较小的动作：1左右摇摆 / 2高低起伏
-GESTURE_ACTION = {
+# 手势 → 机器狗动作 ID 映射（按机型分开）
+# ----- Rider（XGO-RIDER）-----
+# Rider 仅支持 action 1~6
+#   1 左右摇摆 / 2 高低起伏 / 3 前进后退 / 4 四方蛇形 / 5 升降旋转 / 6 圆周晃动
+GESTURE_ACTION_RIDER = {
     'Good':  1,   # 左右摇摆
     '1':     2,   # 高低起伏
-    '2':     1,   # 左右摇摆
-    '3':     2,   # 高低起伏
-    '4':     1,   # 左右摇摆
-    '5':     2,   # 高低起伏
+    '2':     1,   # 前进后退
+    '3':     2,   # 四方蛇形
+    '4':     1,   # 升降旋转
+    '5':     2,   # 圆周晃动
     'Stone': 1,   # 左右摇摆
-    'OK':    2,   # 高低起伏
-    'Rock':  1,   # 左右摇摆
+    'OK':    1,   # 圆周晃动
+    'Rock':  2,   # 四方蛇形
+}
+
+# ----- Dog（XGO-MINI / LITE / MW）-----
+# 完整动作表（选用 12~24 等表现力强的预设动作）
+#   13 招手 / 14 伸懒腰 / 15 波浪 / 16 摇摆 / 17 乞讨 / 18 找食物
+#   19 握手 / 20 鸡头 / 21 俯卧撑 / 22 张望 / 23 跳舞 / 24 调皮
+GESTURE_ACTION_DOG = {
+    'Good':  13,  # 招手（点赞 → 招手回应）
+    '1':     16,  # 摇摆
+    '2':     15,  # 波浪
+    '3':     17,  # 乞讨
+    '4':     18,  # 找食物
+    '5':     13,  # 招手
+    'Stone': 21,  # 俯卧撑（拳头 → 用力）
+    'OK':    19,  # 握手（OK → 握手）
+    'Rock':  20,  # 鸡头（摇滚 → 鸡头律动）
+}
+
+# 动作 ID → 持续时长（秒），与 xgolib ActionTime 表一致
+ACTION_TIME = {
+    1: 3, 2: 3, 3: 5, 4: 5, 5: 4, 6: 4, 7: 4, 8: 4, 9: 4,
+    10: 7, 11: 7, 12: 5, 13: 7, 14: 10, 15: 6, 16: 6,
+    17: 4, 18: 6, 19: 10, 20: 9, 21: 8, 22: 7, 23: 6, 24: 7,
+    128: 10, 129: 10, 130: 10, 144: 12, 255: 1,
 }
 
 # 音频目录
 MUSIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'music')
 
-# 动作冷却时间（秒），避免重复触发；当前仅用动作 1/2，最长 4s，留 1s 余量
-ACTION_COOLDOWN = 5.0
+# 最小动作冷却（秒）。实际冷却 = max(MIN_ACTION_COOLDOWN, 动作时长 + 1s)
+MIN_ACTION_COOLDOWN = 5.0
 
 
 # ===================== 手势识别核心 =====================
@@ -368,7 +394,8 @@ class GesturePage(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def _init_dog(self):
-        """初始化 XGO 机器狗。"""
+        """初始化 XGO 机器狗，并识别机型（rider / dog）。"""
+        self._is_rider = False
         if XGO is None:
             print("[gesture] XGO 库不可用，仅启用手势识别", flush=True)
             return
@@ -376,11 +403,12 @@ class GesturePage(QWidget):
             self._dog = XGO()
             print(f"[gesture] dog type={type(self._dog).__name__}, class={self._dog.__class__.__name__}", flush=True)
             print(f"[gesture] dog.port={self._dog.port}, dog.version={getattr(self._dog, 'version', 'N/A')}", flush=True)
-            # 检查是否是 Rider
-            if hasattr(self._dog, 'rider_action'):
-                print("[gesture] ✓ Rider 方法可用 (rider_action exists)", flush=True)
+            # 检查是否是 Rider（决定使用哪一套动作映射）
+            self._is_rider = hasattr(self._dog, 'rider_action')
+            if self._is_rider:
+                print("[gesture] ✓ Rider 方法可用 → 使用 GESTURE_ACTION_RIDER", flush=True)
             else:
-                print("[gesture] ✗ 非 Rider (rider_action not found)", flush=True)
+                print("[gesture] ✗ 非 Rider → 使用 GESTURE_ACTION_DOG", flush=True)
             self._dog.reset()
             print("[gesture] XGO 初始化成功", flush=True)
             mark("xgo dog ready")
@@ -469,12 +497,20 @@ class GesturePage(QWidget):
     def _process_gesture(self, gesture_result):
         """根据手势触发机器狗动作并播放对应音频。"""
         now = time.time()
-        if now - self._last_action_time < ACTION_COOLDOWN:
+
+        # 根据机型选择对应的动作映射
+        mapping = GESTURE_ACTION_RIDER if self._is_rider else GESTURE_ACTION_DOG
+        action_id = mapping.get(gesture_result)
+        audio_key = GESTURE_AUDIO.get(gesture_result)
+
+        # 动态冷却：动作时长 + 1s 余量，且不低于最小冷却
+        cooldown = MIN_ACTION_COOLDOWN
+        if action_id is not None:
+            cooldown = max(MIN_ACTION_COOLDOWN, ACTION_TIME.get(action_id, 5) + 1.0)
+        if now - self._last_action_time < cooldown:
             return  # 冷却中，跳过
 
-        action_id = GESTURE_ACTION.get(gesture_result)
-        audio_key = GESTURE_AUDIO.get(gesture_result)
-        print(f"[gesture] _process_gesture({gesture_result}) -> action_id={action_id}, audio={audio_key}, dog={'None' if self._dog is None else type(self._dog).__name__}", flush=True)
+        print(f"[gesture] _process_gesture({gesture_result}) -> action_id={action_id}, audio={audio_key}, cooldown={cooldown}s, mode={'RIDER' if self._is_rider else 'DOG'}, dog={'None' if self._dog is None else type(self._dog).__name__}", flush=True)
         if action_id is None and audio_key is None:
             return
 
