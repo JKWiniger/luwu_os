@@ -379,6 +379,39 @@ CM5 电源+电池 → vcgencmd + xgolib   → /tmp/luwu_battery_level → 多 Ap
 | `/home/pi/luwu-os/configs/luwu-undervolt.service` | 监控服务 install.sh 部署源 |
 | `/home/pi/luwu-os/launcher/statusbar.cpp` | Qt 状态栏（时间+电池，读 `/tmp/luwu_battery_level`）|
 | `/home/pi/luwu-os/launcher/statusbar.h` | 状态栏头文件 |
+| `/home/pi/luwu-os/configs/hardware_autoconf.py` | CM4 硬件自动识别脚本（就地运行，无需 cp）|
+| `/home/pi/luwu-os/configs/luwu-hw-autoconf.service` | 硬件自动识别 systemd 服务 install.sh 部署源 |
+
+---
+
+## 改造 9：CM4 硬件版本自动识别与配置自适应
+
+### 背景
+同一张 SD 卡可能被插到不同批次的 CM4（新批次串口在 GPIO12/13，走 RP1 UART5；老批次串口在 GPIO14/15，走 PL011 ttyAMA0），也可能被插到 CM5。每次开机必须自动识别当前硬件并切换到正确的 `config.txt`，否则机器狗串口对不上导致无法通信。
+
+### 四种场景覆盖
+
+| 场景 | ttyAMA5 | ttyAMA0 | 动作 |
+|------|---------|---------|------|
+| 新 CM4 + 新配置 | 有回应 | — | ✓ 不动 |
+| 老 CM4 + 新配置 | 无回应 | — | → 切 cm4-old.config + 重启 |
+| 老 CM4 + 老配置 | 不存在 | 有回应 | ✓ 不动 |
+| 新 CM4 + 老配置 | 不存在 | 无回应 | → 切 boot-config.txt + 重启 |
+
+> CM5 在 `is_cm4()` 判断处直接退出，`[cm5]` 段由固件天然隔离，无需任何处理。
+
+### 探测原理
+向候选串口发送 xgolib 固件版本查询帧（`PROBE_FRAME`），收到任意回复视为"该串口有机器狗"；端口被占用（`PermissionError`）同样视为有设备。
+
+### 相关文件
+
+| 文件 | 用途 |
+|------|------|
+| `/home/pi/luwu-os/configs/hardware_autoconf.py` | 自动识别脚本（源文件，就地运行） |
+| `/home/pi/luwu-os/configs/luwu-hw-autoconf.service` | systemd 服务（`Before=luwu-launcher.service`，单次执行） |
+| `/home/pi/luwu-os/configs/boot-config.txt` | 新 CM4/CM5 配置模板 |
+| `/home/pi/luwu-os/configs/cm4-old.config` | 老 CM4 配置模板 |
+| `/tmp/luwu_hw_autoconf.log` | 运行日志（每次开机追加） |
 
 ---
 

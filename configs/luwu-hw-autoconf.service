@@ -1,0 +1,15 @@
+[Unit]
+Description=Luwu OS Hardware Auto-Config (CM4 new/old detection)
+DefaultDependencies=no
+After=local-fs.target
+Before=luwu-launcher.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/pi/luwu-os/configs/hardware_autoconf.py
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
