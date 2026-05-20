@@ -4,10 +4,14 @@ luwu-os 硬件自动识别脚本 — CM4 新/老硬件自适应
 
 逻辑:
   1. 非 CM4 → 直接退出 (CM5 无需处理)
-  2. /dev/ttyAMA5 不存在 → 已是老硬件配置, 退出
-  3. /dev/ttyAMA5 存在 → 发 xgolib 固件查询帧, 等回应
-     - 有回应 → 新硬件, 保持配置, 退出
-     - 无回应 → 老硬件, 复制 cm4-old.config → /boot/firmware/config.txt, 重启
+  2. 检查防循环标记: 如果上次刚切换过配置且本次仍然探测失败 → 保持不动
+  3. /dev/ttyAMA5 存在 (新配置) → 发 xgolib 固件查询帧
+     - 有回应 → 新硬件确认, 退出
+     - 无回应 → 老硬件, 切换到 cm4-old.config, 写标记, 重启
+  4. /dev/ttyAMA5 不存在 (老配置) → 探测 ttyAMA0
+     - 有回应 → 老硬件确认, 退出
+     - 无回应 → 可能新硬件, 切换到 boot-config.txt, 写标记, 重启
+  5. 两端口都无回应且有上次切换标记 → 保持当前配置 (机器狗未连接)
 """
 
 import os
@@ -24,6 +28,7 @@ PORT_NEW    = "/dev/ttyAMA5"   # 新CM4 机器狗串口
 PORT_OLD    = "/dev/ttyAMA0"   # 老CM4 机器狗串口
 BAUD        = 115200
 LOG_FILE    = "/tmp/luwu_hw_autoconf.log"
+SWITCH_FLAG = "/tmp/luwu_hw_autoconf_switched"  # 防循环标记
 
 # xgolib read_firmware 帧: addr=0x07, len=10
 # tx = [0x55, 0x00, 0x09, 0x02, addr, read_len, checksum, 0x00, 0xAA]
@@ -91,6 +96,29 @@ def reboot_after(sec: int = 2):
     subprocess.run(["reboot"], check=False)
 
 
+def had_recent_switch() -> bool:
+    """检查上次启动是否刚做过配置切换（防循环标记存在）"""
+    return os.path.exists(SWITCH_FLAG)
+
+
+def mark_switch():
+    """写入防循环标记，下次启动时如果仍然失败则不再切换"""
+    try:
+        with open(SWITCH_FLAG, "w") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S"))
+    except Exception:
+        pass
+
+
+def clear_switch_flag():
+    """探测成功，清除防循环标记"""
+    try:
+        if os.path.exists(SWITCH_FLAG):
+            os.remove(SWITCH_FLAG)
+    except Exception:
+        pass
+
+
 def main():
     log("=== luwu hardware_autoconf start ===")
 
@@ -105,10 +133,15 @@ def main():
         log(f"{PORT_NEW} exists, probing...")
         if probe_port(PORT_NEW):
             log("New CM4 hardware confirmed (ttyAMA5 responded) ✓")
+            clear_switch_flag()
             return
-        # ttyAMA5 无回应 → 老硬件误用了新配置
+        # ttyAMA5 无回应 → 可能是老硬件误用了新配置, 也可能机器狗没连接
+        if had_recent_switch():
+            log("No response on ttyAMA5, but already switched last boot → keeping current config (dog may be disconnected)")
+            return
         log("No response on ttyAMA5 → old CM4 hardware on new config")
         if switch_config(OLD_CONFIG):
+            mark_switch()
             reboot_after()
         else:
             log("Switch to old config failed — manual intervention required")
@@ -121,14 +154,22 @@ def main():
         log(f"{PORT_OLD} exists, probing...")
         if probe_port(PORT_OLD):
             log("Old CM4 hardware confirmed (ttyAMA0 responded) ✓")
+            clear_switch_flag()
             return
-        # ttyAMA0 无回应 → 新硬件误用了老配置
+        # ttyAMA0 无回应 → 可能是新硬件误用了老配置, 也可能机器狗没连接
+        if had_recent_switch():
+            log("No response on ttyAMA0, but already switched last boot → keeping current config (dog may be disconnected)")
+            return
         log("No response on ttyAMA0 → new CM4 hardware on old config")
     else:
+        if had_recent_switch():
+            log(f"{PORT_OLD} not found, but already switched last boot → keeping current config")
+            return
         log(f"{PORT_OLD} not found either → assuming new CM4 hardware on old config")
 
     log("Switching back to new config (boot-config.txt) and rebooting...")
     if switch_config(NEW_CONFIG):
+        mark_switch()
         reboot_after()
     else:
         log("Switch to new config failed — manual intervention required")
