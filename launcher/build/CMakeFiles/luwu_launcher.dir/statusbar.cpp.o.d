@@ -390,6 +390,8 @@ CMakeFiles/luwu_launcher.dir/statusbar.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QTimer \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qtimer.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qbasictimer.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QColor \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qcolor.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QFile \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfile.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qfiledevice.h \
@@ -415,10 +417,19 @@ CMakeFiles/luwu_launcher.dir/statusbar.cpp.o: \
  /usr/include/c++/14/bits/istream.tcc \
  /usr/include/c++/14/bits/sstream.tcc /usr/include/c++/14/codecvt \
  /usr/include/c++/14/bits/fs_dir.h /usr/include/c++/14/bits/fs_ops.h \
- /usr/include/aarch64-linux-gnu/qt6/QtCore/QDateTime \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QDir \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qdir.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qdirlisting.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qdatetime.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qcalendar.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qlocale.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qfile.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qfileinfo.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qtimezone.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QFileInfo \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qfileinfo.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QDateTime \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/qdatetime.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QResizeEvent \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qevent.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qcoreevent.h \
@@ -454,7 +465,10 @@ CMakeFiles/luwu_launcher.dir/statusbar.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qpainter.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qtextoption.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qpen.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QPen \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qpen.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QFont \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qfont.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QFontMetrics \
- /usr/include/aarch64-linux-gnu/qt6/QtGui/qfontmetrics.h
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qfontmetrics.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtCore/QRectF

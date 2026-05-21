@@ -120,6 +120,7 @@ _TEXTS = {
         "country_confirm_desc":   "确定要设置为 {} 吗？\n重启后生效",
         "country_confirm_c":      "C:取消",
         "country_confirm_d":      "D:确认重启",
+        "ip_display":             "IP: {}",
     },
     "en": {
         "scanning":    "Point WiFi QR code at camera",
@@ -168,6 +169,7 @@ _TEXTS = {
         "country_confirm_desc":   "Set to {}?\nTakes effect after reboot",
         "country_confirm_c":      "C:Cancel",
         "country_confirm_d":      "D:Reboot Now",
+        "ip_display":             "IP: {}",
     },
 }
 
@@ -316,10 +318,17 @@ class WifiSetupPage(QWidget):
         self.corner_tr = QLabel(t("country_hint"), self)
         self.corner_tr.setStyleSheet(corner_style)
 
-        # --- Current WiFi label (top-center) — 已连接提示走 success 色 ---
+        # --- Current WiFi label (top-center) — 已连接提示走 success 色，使用 title 以大号显示 ---
         self.wifi_now_label = QLabel("", self)
         self.wifi_now_label.setStyleSheet(
-            T_qss.overlay_pill("caption", color=T_Color.success)
+            T_qss.overlay_pill("title", color=T_Color.success, strong=True)
+        )
+
+        # --- IP label (bottom-center) — 当前 IP 地址 ---
+        self.ip_label = QLabel("", self)
+        self.ip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.ip_label.setStyleSheet(
+            T_qss.overlay_pill("body", color=T_Color.accent, strong=True)
         )
 
         # --- Camera ---
@@ -336,6 +345,12 @@ class WifiSetupPage(QWidget):
 
         QTimer.singleShot(100, self._start_camera)
         QTimer.singleShot(200, self._update_current_wifi)
+        QTimer.singleShot(300, self._update_ip)
+
+        # 每 10 秒刷新一次 IP
+        self._ip_timer = QTimer(self)
+        self._ip_timer.timeout.connect(self._update_ip)
+        self._ip_timer.start(10000)
 
     # ---- Camera lifecycle ----
     def _start_camera(self):
@@ -546,6 +561,38 @@ class WifiSetupPage(QWidget):
         self.wifi_now_label.move((w - self.wifi_now_label.width()) // 2, pad + 4)
         self.wifi_now_label.raise_()
 
+    # ---- Get current IP address ----
+    def _update_ip(self):
+        """获取当前 IP 并更新底部标签。"""
+        try:
+            r = subprocess.run(
+                ["hostname", "-I"],
+                capture_output=True, text=True, timeout=3
+            )
+            ips = r.stdout.strip().split()
+            # 取第一个非 127.x 的 IPv4 地址
+            ip = ""
+            for addr in ips:
+                if addr and not addr.startswith("127.") and ":" not in addr:
+                    ip = addr
+                    break
+            if ip:
+                self.ip_label.setText(t("ip_display", ip))
+            else:
+                self.ip_label.setText("")
+        except Exception:
+            self.ip_label.setText("")
+        self._reposition_ip_label()
+
+    def _reposition_ip_label(self):
+        self.ip_label.adjustSize()
+        w = self.width()
+        h = self.height()
+        pad = 12
+        self.ip_label.move((w - self.ip_label.width()) // 2,
+                           h - self.ip_label.height() - pad - 4)
+        self.ip_label.raise_()
+
     # ---- Reset to default network (threaded) ----
     def _reset_network(self):
         self._state = "reset"
@@ -556,12 +603,38 @@ class WifiSetupPage(QWidget):
         )
 
         class _ResetWorker(QThread):
+            finished = Signal()
             def run(self):
+                # 删除所有已有的 WiFi 连接，仅保留即将创建的 XGO2
+                try:
+                    r = subprocess.run(
+                        ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    for line in r.stdout.strip().split('\n'):
+                        if ':' in line:
+                            name, ctype = line.split(':', 1)
+                            if 'wireless' in ctype.lower() or 'wifi' in ctype.lower():
+                                subprocess.run(
+                                    ["sudo", "nmcli", "connection", "delete", name],
+                                    capture_output=True, text=True, timeout=5
+                                )
+                                print(f"[wifi_setup] deleted connection: {name}", flush=True)
+                except Exception as e:
+                    print(f"[wifi_setup] delete connections error: {e}", flush=True)
                 _connect_wifi("XGO2", "LuwuDynamics", "wpa")
                 print("[wifi_setup] Network reset to XGO2", flush=True)
+                self.finished.emit()
 
         self._reset_worker = _ResetWorker()
+        self._reset_worker.finished.connect(self._on_reset_done)
         self._reset_worker.start()
+
+    def _on_reset_done(self):
+        """重置完成后刷新已连接 WiFi 和 IP 标签。"""
+        time.sleep(2)  # 等待 NetworkManager 完全建立连接
+        self._update_current_wifi()
+        self._update_ip()
 
     # ================================================================
     # Country selection (B key)
@@ -587,6 +660,7 @@ class WifiSetupPage(QWidget):
         self.corner_br.hide()
         self.corner_tr.hide()
         self.wifi_now_label.hide()
+        self.ip_label.hide()
 
     def _exit_country_mode(self):
         self._country_step = None
@@ -597,7 +671,9 @@ class WifiSetupPage(QWidget):
         self.corner_br.show()
         self.corner_tr.show()
         self.wifi_now_label.show()
+        self.ip_label.show()
         self._reposition_wifi_label()
+        self._update_ip()
         self.status_label.setText(t("scanning"))
         self.status_label.setStyleSheet(T_qss.overlay_pill("title", strong=True))
         self.hint_label.setText(t("qr_hint"))
@@ -761,6 +837,7 @@ class WifiSetupPage(QWidget):
         self.corner_br.hide()
         self.corner_tr.hide()
         self.wifi_now_label.hide()
+        self.ip_label.hide()
 
         # NOTE: keep camera running — _process_frame() checks
         # _manual_step first and draws manual UI, skipping camera.
@@ -839,7 +916,9 @@ class WifiSetupPage(QWidget):
         self.corner_br.show()
         self.corner_tr.show()
         self.wifi_now_label.show()
+        self.ip_label.show()
         self._reposition_wifi_label()
+        self._update_ip()
 
         self.status_label.setText(t("scanning"))
         self.status_label.setStyleSheet(T_qss.overlay_pill("title", strong=True))
@@ -937,6 +1016,7 @@ class WifiSetupPage(QWidget):
         self.corner_br.show()
         self.corner_tr.show()
         self.wifi_now_label.show()
+        self.ip_label.show()
 
         self.status_label.setText(t("connecting", self._manual_ssid))
         self.status_label.setStyleSheet(
@@ -1215,6 +1295,12 @@ class WifiSetupPage(QWidget):
         self.wifi_now_label.raise_()
         self.wifi_now_label.adjustSize()
         self.wifi_now_label.move((w - self.wifi_now_label.width()) // 2, pad + 4)
+
+        # IP label (bottom-center)
+        self.ip_label.raise_()
+        self.ip_label.adjustSize()
+        self.ip_label.move((w - self.ip_label.width()) // 2,
+                           h - self.ip_label.height() - pad - 4)
 
     # ---- Close ----
     def closeEvent(self, ev):

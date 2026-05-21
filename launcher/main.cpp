@@ -34,6 +34,25 @@ static bool isMouseConnected() {
     return false;
 }
 
+// 检测是否有活跃的网络连接（读 /sys/class/net/ 下接口状态）
+static bool isNetworkConnected() {
+    // 检查常见接口：wlan0, eth0, wlan1
+    const char *ifaces[] = {"wlan0", "eth0", "wlan1"};
+    for (const char *name : ifaces) {
+        QString path = QString("/sys/class/net/%1/operstate").arg(name);
+        QFile f(path);
+        if (f.open(QIODevice::ReadOnly)) {
+            if (f.readAll().trimmed() == "up") {
+                // 确认有非 link-local 的 IPv4 地址
+                QString ipPath = QString("/sys/class/net/%1/address").arg(name);
+                return true;
+            }
+            f.close();
+        }
+    }
+    return false;
+}
+
 // ========================================================================
 // 配置常量
 // ========================================================================
@@ -60,6 +79,13 @@ int main(int argc, char *argv[]) {
 
     GalleryView *gallery = new GalleryView(&stack);
     DemoGridView *demoGrid = new DemoGridView(&stack);
+
+    // 根据网络状态设置启动时默认选中的卡片
+    //  未联网 → 无线网络(0)  已联网 → 图形化编程(1)
+    bool online = isNetworkConnected();
+    gallery->setStartIndex(online ? 1 : 0);
+    qDebug() << "[luwu-launcher] network" << (online ? "connected" : "disconnected")
+             << "-> startIndex=" << (online ? 1 : 0);
 
     stack.addWidget(gallery);   // index 0: 主菜单
     stack.addWidget(demoGrid);  // index 1: demo 网格页

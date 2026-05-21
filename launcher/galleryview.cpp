@@ -10,11 +10,11 @@
 static constexpr const char *ASSET_DIR = "/home/pi/luwu-os/launcher/assets/";
 
 const CardData CARDS[CARD_COUNT] = {
-    {"网络",     "WiFi",     "card_network.png",  "apps/network/main.py"},
-    {"编程",     "Coding",   "card_coding.png",   "apps/coding/main.py"},
-    {"AI 对话",  "AI Chat",  "card_ai.png",       "apps/ai/main.py"},
-    {"示例",     "Demo",     "card_more.png",     "apps/demo_page/main.py"},
-    {"设置",     "Settings", "card_settings.png", "apps/settings/main.py"},
+    {"无线网络",   "WiFi",     "card_network.png",  "apps/network/main.py"},
+    {"图形化编程", "Coding",   "card_coding.png",   "apps/coding/main.py"},
+    {"AI交互",    "AI Chat",  "card_ai.png",       "apps/ai/main.py"},
+    {"示例程序",   "Demos",    "card_more.png",     "apps/demo_page/main.py"},
+    {"系统设置",   "Settings", "card_settings.png", "apps/settings/main.py"},
 };
 
 // ========================================================================
@@ -38,6 +38,16 @@ static QPixmap loadCardImage(const QString &path, const QSize &fallbackSize) {
         p.end();
     }
     return fb;
+}
+
+// 环形偏移：在大小为 count 的环形列表中，从 from 到 to 的最短带符号偏移
+// 返回值范围 [-count/2, count/2]
+static int circularOffset(int from, int to, int count) {
+    int diff = to - from;
+    int half = count / 2;
+    if (diff > half)  diff -= count;
+    if (diff < -half) diff += count;
+    return diff;
 }
 
 // ========================================================================
@@ -155,8 +165,7 @@ QString GalleryView::selectedAppPath() const {
 
 void GalleryView::moveSelection(int delta) {
     if (animating) return;
-    int newIdx = currentIndex + delta;
-    if (newIdx < 0 || newIdx >= CARD_COUNT) return;
+    int newIdx = (currentIndex + delta + CARD_COUNT) % CARD_COUNT;
 
     // 先记录当前状态作为动画起始
     animStartGeom = currentGeom;
@@ -167,7 +176,7 @@ void GalleryView::moveSelection(int delta) {
     // 退出视野的卡片：其标签在动画时会横穿屏幕顶部（StatusBar 区域），
     // 立即推到屏幕外，只让图片参与退场动画
     for (int i = 0; i < CARD_COUNT; ++i) {
-        if (qAbs(i - newIdx) > VISIBLE_RANGE) {
+        if (qAbs(circularOffset(newIdx, i, CARD_COUNT)) > VISIBLE_RANGE) {
             cardLabels[i]->setGeometry(QRect(-9999, -9999, 1, 1));
             animStartLabelGeom[i] = QRect(-9999, -9999, 1, 1);
             currentLabelGeom[i] = QRect(-9999, -9999, 1, 1);
@@ -177,7 +186,7 @@ void GalleryView::moveSelection(int delta) {
     // 先把即将显示的标签的 geometry 设到目标位置，再 show，
     // 避免 show() 触发瞬间在旧位置上闪现一张卡片标题
     for (int i = 0; i < CARD_COUNT; ++i) {
-        if (qAbs(i - newIdx) <= VISIBLE_RANGE) {
+        if (qAbs(circularOffset(newIdx, i, CARD_COUNT)) <= VISIBLE_RANGE) {
             if (cardImages[i]->isHidden()) {
                 cardImages[i]->setGeometry(targetGeom[i]);
                 cardLabels[i]->setGeometry(targetLabelGeom[i]);
@@ -192,12 +201,15 @@ void GalleryView::moveSelection(int delta) {
     int w = width();
     if (w > 0) {
         for (int i = 0; i < CARD_COUNT; ++i) {
-            if (qAbs(i - currentIndex) <= VISIBLE_RANGE && animStartGeom[i].left() <= -350) {
+            if (qAbs(circularOffset(currentIndex, i, CARD_COUNT)) <= VISIBLE_RANGE
+                && animStartGeom[i].left() <= -350) {
                 const QRect &tgt = targetGeom[i];
-                if (i < currentIndex) {
-                    animStartGeom[i] = QRect(-tgt.width(), tgt.top(), tgt.width(), tgt.height());
-                } else {
+                if (delta > 0) {
+                    // 向右移动：新卡片从屏幕右侧飞入
                     animStartGeom[i] = QRect(w, tgt.top(), tgt.width(), tgt.height());
+                } else {
+                    // 向左移动：新卡片从屏幕左侧飞入
+                    animStartGeom[i] = QRect(-tgt.width(), tgt.top(), tgt.width(), tgt.height());
                 }
                 animStartLabelGeom[i] = targetLabelGeom[i];
             }
@@ -217,6 +229,12 @@ void GalleryView::retranslate() {
             cardLabels[i]->setText(luwu::tr(QString::fromUtf8(CARDS[i].title),
                                             QString::fromUtf8(CARDS[i].titleEn)));
         }
+    }
+}
+
+void GalleryView::setStartIndex(int idx) {
+    if (idx >= 0 && idx < CARD_COUNT) {
+        currentIndex = idx;
     }
 }
 
@@ -258,7 +276,7 @@ void GalleryView::updateTargetStates() {
     int peek = sideSide * 28 / 100;
 
     for (int i = 0; i < CARD_COUNT; ++i) {
-        int offset = i - currentIndex;
+        int offset = circularOffset(currentIndex, i, CARD_COUNT);
         int cw, ch, cx, cy;
 
         if (offset == 0) {
@@ -294,7 +312,7 @@ void GalleryView::updateTargetStates() {
 
 void GalleryView::updateCardStyles() {
     for (int i = 0; i < CARD_COUNT; ++i) {
-        int dist = qAbs(i - currentIndex);
+        int dist = qAbs(circularOffset(currentIndex, i, CARD_COUNT));
         bool selected = (dist == 0);
         bool near = (dist == 1);
 
@@ -347,7 +365,7 @@ void GalleryView::onAnimTick() {
         animTimer->stop();
 
         for (int i = 0; i < CARD_COUNT; ++i) {
-            if (qAbs(i - currentIndex) > VISIBLE_RANGE) {
+            if (qAbs(circularOffset(currentIndex, i, CARD_COUNT)) > VISIBLE_RANGE) {
                 cardImages[i]->hide();
                 cardLabels[i]->hide();
             }
@@ -357,7 +375,7 @@ void GalleryView::onAnimTick() {
     float t = easeOutCubic(rawT);
 
     for (int i = 0; i < CARD_COUNT; ++i) {
-        if (qAbs(i - currentIndex) > VISIBLE_RANGE && animStartGeom[i].left() < -100) {
+        if (qAbs(circularOffset(currentIndex, i, CARD_COUNT)) > VISIBLE_RANGE && animStartGeom[i].left() < -100) {
             continue;
         }
         const QRect &start = animStartGeom[i];

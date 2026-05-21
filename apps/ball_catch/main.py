@@ -263,6 +263,13 @@ class CatchingWorker(QThread):
                 self.picam2 = None
         except Exception:
             pass
+        # 复位机器狗
+        try:
+            if self.dog:
+                self.dog.reset()
+                time.sleep(0.3)
+        except Exception:
+            pass
         print("[ball_catch] worker loop ended")
 
     def _detect_ball(self, frame):
@@ -747,6 +754,13 @@ class BallCatchPage(QWidget):
             self._worker.stop_robot()
             self._worker.quit()
             self._worker.wait(5000)
+
+        # 兜底：确保机器狗 reset
+        if self._worker and self._worker.dog:
+            try:
+                self._worker.dog.reset()
+            except Exception:
+                pass
 
         if self._idle_picam2:
             try:

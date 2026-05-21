@@ -414,4 +414,6 @@ CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QPixmap \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qpixmap.h \
  /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/moc_statusbar.cpp \
- /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/../../../statusbar.h
+ /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/../../../statusbar.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QColor \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qcolor.h

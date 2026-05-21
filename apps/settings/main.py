@@ -154,33 +154,13 @@ def get_cpu_model():
 def get_cpu_cores():
     return os.cpu_count() or 0
 
-def get_ram_total():
+def get_cpu_load():
     try:
-        with open("/proc/meminfo", "r") as f:
-            for line in f:
-                if line.startswith("MemTotal"):
-                    kb = int(line.split(":")[1].strip().split()[0])
-                    gb = kb / (1024 * 1024)
-                    if gb >= 1:
-                        return f"{gb:.1f} GB"
-                    return f"{kb // 1024} MB"
+        with open("/proc/loadavg", "r") as f:
+            load_1m = float(f.read().strip().split()[0])
+            return f"{load_1m:.2f}"
     except Exception:
         return "Unknown"
-    return "Unknown"
-
-def get_ram_available():
-    try:
-        with open("/proc/meminfo", "r") as f:
-            for line in f:
-                if line.startswith("MemAvailable"):
-                    kb = int(line.split(":")[1].strip().split()[0])
-                    gb = kb / (1024 * 1024)
-                    if gb >= 1:
-                        return f"{gb:.1f} GB"
-                    return f"{kb // 1024} MB"
-    except Exception:
-        return "Unknown"
-    return "Unknown"
 
 def get_disk_info():
     try:
@@ -231,6 +211,9 @@ COLOR_GRAY = QColor(T_Color.text_muted)
 COLOR_PURPLE = QColor(T_Color.accent)                 # 原紫色动作色→主题 accent
 COLOR_UNSELECT = QColor(T_Color.card_border)          # 未选中卡片边框/进度条底色
 COLOR_GREEN = QColor(T_Color.success)
+COLOR_CARD_SELECTED_BG = QColor(58, 141, 255, 230)    # 选中卡片底色（带透明度）
+COLOR_CARD_BG = QColor(255, 255, 255, 200)             # 未选中卡片白底
+COLOR_TEXT = QColor(T_Color.text_primary)              # 深色主文字
 
 # ============================================================================
 # Setting Item Data
@@ -243,9 +226,20 @@ SETTING_ITEMS = [
     {"id": "contact_us",  "icon": "qrcode.png",        "label_key": "CONTACT"},
     {"id": "app_download","icon": "app_download.png",  "label_key": "APPDOWN"},
     {"id": "time",        "icon": "icon_sn.png",       "label_key": "TIME"},
-    {"id": "shutdown",    "icon": "power.png",         "label_key": "SHUTDOWN"},
     {"id": "reboot",      "icon": "power.png",         "label_key": "REBOOT"},
 ]
+
+def _recolor_pixmap(source: QPixmap, color: str) -> QPixmap:
+    """使用 alpha 通道作为遮罩，将图标重新着色为目标颜色。"""
+    result = QPixmap(source.size())
+    result.fill(Qt.GlobalColor.transparent)
+    p = QPainter(result)
+    p.drawPixmap(0, 0, source)
+    p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    p.fillRect(result.rect(), QColor(color))
+    p.end()
+    return result
+
 
 # ============================================================================
 # SettingsListPage
@@ -288,13 +282,18 @@ class SettingsListPage(AppFrame):
         layout.setContentsMargins(8, 1, 8, 1)
         layout.setSpacing(8)
 
-        # Icon
+        # Icon — 正常态用 text_primary（深蓝），选中态用 text_invert（白）
         icon_label = QLabel()
         icon_path = str(PICS_DIR / item["icon"])
-        pix = QPixmap(icon_path)
-        if not pix.isNull():
-            pix = pix.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            icon_label.setPixmap(pix)
+        source_pix = QPixmap(icon_path)
+        if not source_pix.isNull():
+            normal_pix = _recolor_pixmap(source_pix, T_Color.text_primary)
+            normal_pix = normal_pix.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            selected_pix = _recolor_pixmap(source_pix, T_Color.text_invert)
+            selected_pix = selected_pix.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            icon_label.setProperty("normal_pix", normal_pix)
+            icon_label.setProperty("selected_pix", selected_pix)
+            icon_label.setPixmap(normal_pix)
         icon_label.setFixedSize(20, 20)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_label.setStyleSheet(T_qss.transparent())
@@ -330,17 +329,26 @@ class SettingsListPage(AppFrame):
     def _update_item_style(self, container, idx, selected):
         container.setStyleSheet(f"#item_{idx} {{ {T_qss.card(selected)} }}")
         text_label = container.findChild(QLabel, f"text_{idx}")
+        icon_label = container.findChild(QLabel, f"icon_{idx}")
         arrow = container.findChild(QLabel, f"arrow_{idx}")
         if selected:
             if text_label:
                 text_label.setStyleSheet(T_qss.text("body", color=T_Color.text_invert))
             if arrow:
                 arrow.setStyleSheet(T_qss.text("caption", color=T_Color.text_invert))
+            if icon_label:
+                pix = icon_label.property("selected_pix")
+                if pix:
+                    icon_label.setPixmap(pix)
         else:
             if text_label:
                 text_label.setStyleSheet(T_qss.text("body"))
             if arrow:
                 arrow.setStyleSheet(T_qss.text("caption"))
+            if icon_label:
+                pix = icon_label.property("normal_pix")
+                if pix:
+                    icon_label.setPixmap(pix)
 
     def move_selection(self, delta):
         new_idx = self.selected_idx + delta
@@ -465,7 +473,7 @@ class AboutPage(AppFrame):
             tl=(t.get("UP", "Up"),    Asset.icon_left),
             tr=(t.get("DOWN", "Down"),  Asset.icon_right),
             bl=(t.get("BACK", "Back"),  Asset.icon_back),
-            br=(t.get("EXIT", "Exit"),  Asset.icon_enter),
+            br=(t.get("BACK", "Back"),  Asset.icon_enter),
         )
 
     def _gather_info(self):
@@ -476,8 +484,7 @@ class AboutPage(AppFrame):
         items.append((t.get("XGOEDU_VER", "xgoedu Version"), self._tr_val(get_xgoedu_version())))
         items.append((t.get("CPU_MODEL", "CPU"), self._tr_val(get_cpu_model())))
         items.append((t.get("CPU_CORES", "CPU Cores"), str(get_cpu_cores())))
-        items.append((t.get("RAM_TOTAL", "Total RAM"), self._tr_val(get_ram_total())))
-        items.append((t.get("RAM_AVAIL", "Avail RAM"), self._tr_val(get_ram_available())))
+        items.append((t.get("CPU_LOAD", "CPU Load"), self._tr_val(get_cpu_load())))
         disk_total, disk_used, disk_free = get_disk_info()
         disk_fmt = t.get("DISK_FORMAT", "{total} | Used {used} | Free {free}")
         items.append((t.get("DISK", "Disk"), disk_fmt.format(
@@ -586,7 +593,7 @@ class AboutPage(AppFrame):
         elif ev.key() == Qt.Key.Key_Back:
             self.stack.navigate_to("list")
         elif ev.key() == Qt.Key.Key_Return:
-            QApplication.instance().quit()
+            self.stack.navigate_to("list")
 
     def refresh_language(self):
         self.la = load_language()
@@ -626,7 +633,7 @@ class SNPage(AppFrame):
 
         self.setCornerHints(
             bl=(self.la.get("DEMOEN", {}).get("BACK", "Back"), Asset.icon_back),
-            br=(self.la.get("DEMOEN", {}).get("EXIT", "Exit"), Asset.icon_enter),
+            br=(self.la.get("DEMOEN", {}).get("BACK", "Back"), Asset.icon_enter),
         )
 
     def _generate_barcode(self):
@@ -670,7 +677,7 @@ class SNPage(AppFrame):
         if ev.key() == Qt.Key.Key_Back or ev.key() == Qt.Key.Key_Left:
             self.stack.navigate_to("list")
         elif ev.key() == Qt.Key.Key_Return:
-            QApplication.instance().quit()
+            self.stack.navigate_to("list")
 
     def refresh_language(self):
         self.la = load_language()
@@ -679,7 +686,7 @@ class SNPage(AppFrame):
         self.sn_label.setText(f"{sn_prefix}{self.sn_id}")
         self.setCornerHints(
             bl=(t.get("BACK", "Back"), Asset.icon_back),
-            br=(t.get("EXIT", "Exit"), Asset.icon_enter),
+            br=(t.get("BACK", "Back"), Asset.icon_enter),
         )
 
 
@@ -712,7 +719,7 @@ class VolumePage(AppFrame):
         self.setCornerHints(
             tl="-5%",
             tr="+5%",
-            bl=(self.la.get("DEMOEN", {}).get("EXIT", "Exit"), Asset.icon_back),
+            bl=(self.la.get("DEMOEN", {}).get("BACK", "Back"), Asset.icon_back),
             br=(self.la.get("DEMOEN", {}).get("SAVE", "Save"), Asset.icon_enter),
         )
 
@@ -764,8 +771,8 @@ class VolumePage(AppFrame):
                 self.volume = min(100, self.volume + 5)
                 self.update_volume_display()
         elif ev.key() == Qt.Key.Key_Back:
-            # Exit app (左下角）
-            QApplication.instance().quit()
+            # 返回列表（左下角）
+            self.stack.navigate_to("list")
         elif ev.key() == Qt.Key.Key_Return:
             # Save and go back (右下角）
             write_volume(self.volume)
@@ -781,7 +788,7 @@ class VolumePage(AppFrame):
         self.setCornerHints(
             tl="-5%",
             tr="+5%",
-            bl=(t.get("EXIT", "Exit"), Asset.icon_back),
+            bl=(t.get("BACK", "Back"), Asset.icon_back),
             br=(t.get("SAVE", "Save"), Asset.icon_enter),
         )
 
@@ -814,7 +821,7 @@ class LanguagePage(AppFrame):
         self.setCornerHints(
             tl="CN",
             tr="EN",
-            bl=(self.la.get("DEMOEN", {}).get("EXIT", "Exit"), Asset.icon_back),
+            bl=(self.la.get("DEMOEN", {}).get("BACK", "Back"), Asset.icon_back),
             br=(self.la.get("DEMOEN", {}).get("SAVE", "Save"), Asset.icon_enter),
         )
 
@@ -829,37 +836,35 @@ class LanguagePage(AppFrame):
         start_x = (w - total_w) // 2
         btn_y = h // 2 - btn_h // 2
 
-        cn_font = QFont()
-        cn_font.setPointSize(16)
-        cn_font.setBold(True)
-        en_font = QFont()
-        en_font.setPointSize(16)
-        en_font.setBold(True)
+        font = QFont()
+        font.setPointSize(16)
+        font.setBold(True)
 
-        # CN button
-        if self.cn_selected:
-            painter.setBrush(COLOR_PURPLE)
-        else:
-            painter.setBrush(COLOR_UNSELECT)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(start_x, btn_y, btn_w, btn_h, 10, 10)
-        painter.setPen(QColor(255, 255, 255))
-        painter.setFont(cn_font)
-        painter.drawText(QRect(start_x, btn_y, btn_w, btn_h), Qt.AlignmentFlag.AlignCenter, "CN")
+        # ---- CN button ----
+        cn_rect = QRect(start_x, btn_y, btn_w, btn_h)
+        self._draw_lang_btn(painter, cn_rect, "CN", self.cn_selected, font)
 
-        # EN button
-        en_x = start_x + btn_w + 20
-        if self.en_selected:
-            painter.setBrush(COLOR_PURPLE)
-        else:
-            painter.setBrush(COLOR_UNSELECT)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(en_x, btn_y, btn_w, btn_h, 10, 10)
-        painter.setPen(QColor(255, 255, 255))
-        painter.setFont(en_font)
-        painter.drawText(QRect(en_x, btn_y, btn_w, btn_h), Qt.AlignmentFlag.AlignCenter, "EN")
+        # ---- EN button ----
+        en_rect = QRect(start_x + btn_w + 20, btn_y, btn_w, btn_h)
+        self._draw_lang_btn(painter, en_rect, "EN", self.en_selected, font)
 
         painter.end()
+
+    def _draw_lang_btn(self, painter, rect, text, selected, font):
+        """统一绘制语言选择按钮：选中↔未选中视觉对比强烈。"""
+        if selected:
+            # 选中态：蓝色半透明底 + 蓝色实线边框 + 白色文字
+            painter.setBrush(COLOR_CARD_SELECTED_BG)
+            painter.setPen(QPen(COLOR_SELECT, 2))
+        else:
+            # 未选中态：白色半透明底 + 浅色边框 + 深色文字（清晰可见）
+            painter.setBrush(COLOR_CARD_BG)
+            painter.setPen(QPen(COLOR_UNSELECT, 1))
+        painter.drawRoundedRect(rect, 10, 10)
+
+        painter.setFont(font)
+        painter.setPen(COLOR_WHITE if selected else COLOR_TEXT)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -900,7 +905,7 @@ class LanguagePage(AppFrame):
         self.setCornerHints(
             tl="CN",
             tr="EN",
-            bl=(t.get("EXIT", "Exit"), Asset.icon_back),
+            bl=(t.get("BACK", "Back"), Asset.icon_back),
             br=(t.get("SAVE", "Save"), Asset.icon_enter),
         )
 
@@ -930,7 +935,7 @@ class QRPage(AppFrame):
         t = self.la.get("DEMOEN", {})
         self.setCornerHints(
             bl=(t.get("BACK", "Back"), Asset.icon_back),
-            br=(t.get("EXIT", "Exit"), Asset.icon_enter),
+            br=(t.get("BACK", "Back"), Asset.icon_enter),
         )
 
     def paintEvent(self, ev):
@@ -965,7 +970,7 @@ class QRPage(AppFrame):
         if ev.key() == Qt.Key.Key_Back or ev.key() == Qt.Key.Key_Left:
             self.stack.navigate_to("list")
         elif ev.key() == Qt.Key.Key_Return:
-            QApplication.instance().quit()
+            self.stack.navigate_to("list")
 
     def refresh_language(self):
         self.la = load_language()
@@ -1177,63 +1182,6 @@ class TimeDatePage(AppFrame):
 
 
 # ============================================================================
-# Shutdown Confirmation Page
-# ============================================================================
-class ShutdownPage(AppFrame):
-    def __init__(self, stack: QStackedWidget):
-        super().__init__()
-        self.stack = stack
-        self.la = load_language()
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
-        # Warning icon (emoji) — 使用主题 warning 色
-        self.icon_label = TitleLabel("⚠", self)
-        icon_font = QFont()
-        icon_font.setPointSize(36)
-        self.icon_label.setFont(icon_font)
-        self.icon_label.setColor(T_Color.warning)
-        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # Warning title
-        self.title_label = TitleLabel("", self)
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title_label.setWordWrap(True)
-
-        # Hint text
-        self.hint_label = HintLabel("", self)
-        self.hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.hint_label.setWordWrap(True)
-
-        self._update_texts()
-
-    def _update_texts(self):
-        self.la = load_language()
-        t = self.la.get("DEMOEN", {})
-        self.title_label.setText(t.get("SHUTDOWN_TITLE", "Shutdown Confirm"))
-        self.hint_label.setText(t.get("SHUTDOWN_HINT", "Only shuts down Raspberry Pi. Robot dog needs button shutdown."))
-        self.setCornerHints(
-            bl=(t.get("CANCEL", "Cancel"), Asset.icon_back),
-            br=(t.get("CONFIRM", "Confirm"), Asset.icon_enter),
-        )
-
-    def resizeEvent(self, ev):
-        super().resizeEvent(ev)
-        w, h = self.width(), self.height()
-        self.icon_label.setGeometry(0, h // 2 - 90, w, 40)
-        self.title_label.setGeometry(20, h // 2 - 45, w - 40, 30)
-        self.hint_label.setGeometry(20, h // 2 - 10, w - 40, 50)
-
-    def keyPressEvent(self, ev: QKeyEvent):
-        if ev.key() == Qt.Key.Key_Back:
-            self.stack.navigate_to("list")
-        elif ev.key() == Qt.Key.Key_Return:
-            os.system("echo pi | sudo -S shutdown now")
-
-    def refresh_language(self):
-        self._update_texts()
-
-
-# ============================================================================
 # Reboot Confirmation Page
 # ============================================================================
 class RebootPage(AppFrame):
@@ -1302,7 +1250,6 @@ class SettingsStack(QStackedWidget):
         self.language_page = LanguagePage(self)
         self.contact_page = QRPage(self, " xgorobot_wx.png", "hello@xgorobot.com")
         self.download_page = QRPage(self, "app_down_qr.png")
-        self.shutdown_page = ShutdownPage(self)
         self.reboot_page = RebootPage(self)
         self.time_page = TimeDatePage(self)
 
@@ -1313,9 +1260,8 @@ class SettingsStack(QStackedWidget):
         self.addWidget(self.language_page) # 4
         self.addWidget(self.contact_page)  # 5
         self.addWidget(self.download_page) # 6
-        self.addWidget(self.shutdown_page) # 7
-        self.addWidget(self.reboot_page)   # 8
-        self.addWidget(self.time_page)     # 9
+        self.addWidget(self.reboot_page)   # 7
+        self.addWidget(self.time_page)     # 8
 
         self.setCurrentIndex(0)
         self.page_map = {
@@ -1326,9 +1272,8 @@ class SettingsStack(QStackedWidget):
             "language":     4,
             "contact_us":   5,
             "app_download": 6,
-            "shutdown":     7,
-            "reboot":       8,
-            "time":         9,
+            "reboot":       7,
+            "time":         8,
         }
 
     def navigate_to(self, page_id: str):

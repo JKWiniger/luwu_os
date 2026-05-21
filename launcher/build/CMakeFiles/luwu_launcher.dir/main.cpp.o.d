@@ -502,4 +502,6 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qvector.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QRect \
  /home/pi/luwu-os/launcher/demogridview.h \
- /home/pi/luwu-os/launcher/statusbar.h
+ /home/pi/luwu-os/launcher/statusbar.h \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/QColor \
+ /usr/include/aarch64-linux-gnu/qt6/QtGui/qcolor.h

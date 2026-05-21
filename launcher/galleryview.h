@@ -38,6 +38,7 @@ public:
     void moveSelection(int delta);
     bool isAnimating() const;
     void retranslate();  // 重新根据当前语言设置卡片文字
+    void setStartIndex(int idx);  // 启动时设置初始选中（在首次布局前调用）
 
 signals:
     void enterPressed(int index);
