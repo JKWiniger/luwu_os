@@ -26,14 +26,12 @@ try:
     from libs.i18n import Translator as _Translator, get_lang as _get_lang
     _T = _Translator({
         "cn": {
-            "idle_title": "AI 聊天",
-            "idle_scan": "扫码配置",
-            "idle_web": "通过网页配置 →",
+            "idle_title": "AI 互动",
+            "idle_scan": "请扫码或访问下方网址进行配置",
         },
         "en": {
-            "idle_title": "AI Chat",
-            "idle_scan": "Scan to configure",
-            "idle_web": "Configure via web →",
+            "idle_title": "AI Interactive",
+            "idle_scan": "Scan QR or visit URL below to configure",
         },
     })
 except Exception:
@@ -650,11 +648,7 @@ class ConfigWebServer:
             draw.text((160, label_y + 20), url,
                        font=font_text, fill=(80, 90, 120), anchor="mt")
 
-            # Bottom hint: only show when not configured (left/right已由系统状态栏显示 C:退出 / D:开始)
-            if show_start_button and not config_ready:
-                hint_y = 240 - 16
-                draw.text((160, hint_y), _T("idle_web"),
-                           font=font_text, fill=(70, 80, 110), anchor="mb")
+            # Bottom hint removed (idle_web text no longer needed)
 
             return img
         except Exception as e:

@@ -29,7 +29,7 @@ sys.path.insert(0, APP_DIR)
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QKeyEvent, QPixmap, QImage, QPainter
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout,
+    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
 )
 
 # ===== Backend modules =====
@@ -63,16 +63,17 @@ if "/home/pi/luwu-os" not in sys.path:
     sys.path.insert(0, "/home/pi/luwu-os")
 try:
     from libs.i18n import Translator as _Translator
+    from libs.theme import Asset as T_Asset
     _T = _Translator({
         "cn": {
-            "corner_exit": "C: 退出",
-            "corner_start": "D: 开始",
+            "corner_exit": "退出",
+            "corner_start": "开始",
             "loading_title": "AI 启动中",
             "loading_hint": "正在加载服务···",
         },
         "en": {
-            "corner_exit": "C: Exit",
-            "corner_start": "D: Start",
+            "corner_exit": "Exit",
+            "corner_start": "Start",
             "loading_title": "AI starting",
             "loading_hint": "Loading services···",
         },
@@ -172,13 +173,47 @@ class AIChatPage(QWidget):
         # 立刻贴上首帧 loading，让用户启动后第一眼就看到内容不是黑屏
         self._render_loading()
 
-        # ---- Corner hints ----
+        # ---- Corner hints (icon + text) ----
+        ICON_SIZE = 16
         corner_style = "color: #5c6a9c; font-size: 11px; background: transparent;"
-        self.corner_bl = QLabel(_T("corner_exit"), self)     # KEY_BACK
-        self.corner_bl.setStyleSheet(corner_style)
-        self.corner_br = QLabel(_T("corner_start"), self)     # KEY_ENTER
-        self.corner_br.setStyleSheet(corner_style)
-        self.corner_br.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        # Bottom-left: C: 退出 (icon_back on left)
+        self.corner_bl = QWidget(self)
+        self.corner_bl.setStyleSheet("background: transparent;")
+        bl_layout = QHBoxLayout(self.corner_bl)
+        bl_layout.setContentsMargins(0, 0, 0, 0)
+        bl_layout.setSpacing(3)
+        bl_icon = QLabel(self.corner_bl)
+        bl_icon.setFixedSize(ICON_SIZE, ICON_SIZE)
+        bl_icon.setScaledContents(True)
+        bl_pix = QPixmap(T_Asset.icon_back)
+        if not bl_pix.isNull():
+            bl_icon.setPixmap(bl_pix.scaled(ICON_SIZE, ICON_SIZE,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+        bl_text = QLabel(_T("corner_exit"), self.corner_bl)
+        bl_text.setStyleSheet(corner_style)
+        bl_layout.addWidget(bl_icon)
+        bl_layout.addWidget(bl_text)
+
+        # Bottom-right: D: 开始 (text on left, icon_enter on right)
+        self.corner_br = QWidget(self)
+        self.corner_br.setStyleSheet("background: transparent;")
+        br_layout = QHBoxLayout(self.corner_br)
+        br_layout.setContentsMargins(0, 0, 0, 0)
+        br_layout.setSpacing(3)
+        br_text = QLabel(_T("corner_start"), self.corner_br)
+        br_text.setStyleSheet(corner_style)
+        br_icon = QLabel(self.corner_br)
+        br_icon.setFixedSize(ICON_SIZE, ICON_SIZE)
+        br_icon.setScaledContents(True)
+        br_pix = QPixmap(T_Asset.icon_enter)
+        if not br_pix.isNull():
+            br_icon.setPixmap(br_pix.scaled(ICON_SIZE, ICON_SIZE,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+        br_layout.addWidget(br_text)
+        br_layout.addWidget(br_icon)
         # 启动期间 D 不可用，隐藏右下提示
         self.corner_br.hide()
 
@@ -265,11 +300,11 @@ class AIChatPage(QWidget):
         self.status_label.adjustSize()
         self.status_label.move((w - self.status_label.width()) // 2, h - self.status_label.height() - pad)
 
-        # Corners
+        # Corners — 紧贴边缘
         self.corner_bl.adjustSize()
         self.corner_br.adjustSize()
-        self.corner_bl.move(pad, h - self.corner_bl.height() - pad)
-        self.corner_br.move(w - self.corner_br.width() - pad, h - self.corner_br.height() - pad)
+        self.corner_bl.move(0, h - self.corner_bl.height())
+        self.corner_br.move(w - self.corner_br.width(), h - self.corner_br.height())
 
         # 尺寸变化后重画 loading（避免先小后大闪烁）
         if self._is_loading:
