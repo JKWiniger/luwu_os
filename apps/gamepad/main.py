@@ -31,15 +31,34 @@ mark("python entry")
 JS0_PATH = "/dev/input/js0"
 
 
+def _is_usb_joystick(js_dev: str = "js0") -> bool:
+    """判断 joystick 设备是否来自 USB（2.4G 接收器）。
+
+    蓝牙 HID 设备的 sysfs uniq 字段包含蓝牙 MAC 地址（XX:XX:XX:XX:XX:XX），
+    而 USB 设备的 uniq 字段为空。以此区分 2.4G USB 接收器和蓝牙手柄。
+    """
+    try:
+        uniq_path = f"/sys/class/input/{js_dev}/device/uniq"
+        with open(uniq_path) as f:
+            uniq = f.read().strip()
+        # 非空且含冒号 → 蓝牙设备，不是 USB
+        if uniq and ":" in uniq:
+            print(f"[gamepad] {js_dev} is bluetooth (uniq={uniq}), skip", flush=True)
+            return False
+        return True
+    except OSError:
+        return True  # 读取失败时保守认为是 USB
+
+
 def detect_mode() -> str:
     """检测当前可用的输入模式"""
-    if os.path.exists(JS0_PATH):
+    if os.path.exists(JS0_PATH) and _is_usb_joystick():
         return "joystick"
     return "bluetooth"
 
 
 def is_joystick_available() -> bool:
-    return os.path.exists(JS0_PATH)
+    return os.path.exists(JS0_PATH) and _is_usb_joystick()
 
 
 _CURRENT_MODE = detect_mode()

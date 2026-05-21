@@ -32,7 +32,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(ROOT, "mappings.json")
 
 # ── 手柄识别 ──────────────────────────────────────────────────────
-GAMEPAD_KEYWORDS = ["xbox", "microsoft", "wireless controller", "controller", "tl_", "8bitdo", "ipega", "gamepad"]
+GAMEPAD_KEYWORDS = ["xbox", "microsoft", "wireless controller", "controller", "tl_", "8bitdo", "ipega", "gamepad", "bm769"]
 
 # evdev 按键码 → 按钮索引
 # 支持 PS4 DualShock4 / Xbox / 通用手柄（多种 code 映射同一 index）

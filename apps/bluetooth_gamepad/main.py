@@ -121,6 +121,7 @@ GAMEPAD_KEYWORDS = [
     "8bitdo", "joystick",
     "tl_",        # 天龙/腾龙系列: TL_0002E13CC2067322 等
     "gp",         # 部分国产手柄前缀
+    "bm769",      # BM769 2.4G 手柄（主用设备）
     "ipega", "betop", "flydigi", "razer", "dualsense", "dualshock",
 ]
 SCAN_DURATION = 10       # 单次扫描时长（秒）
