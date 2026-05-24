@@ -73,9 +73,9 @@ class CodingPage(AppFrame):
         self.display_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.display_label.setStyleSheet(f"background-color: rgb{T_RGB.bg_solid};")
         self.display_label.lower()  # 让 AppFrame 的角标 widget 浮在上面
-        self.display_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.display_label.installEventFilter(self)  # 通过事件过滤器捕获鼠标点击
 
-        # --- 加密锁按钮区域（PIL 坐标，用于点击检测）---
+        # --- 加密锁按钮区域（widget 坐标，用于点击检测）---
         self._lock_btn_rect = None  # (x1, y1, x2, y2) 或 None
         self._upgrade_banner_rect = None  # 升级横幅点击区域
         self._last_upgrade_status = None  # 去重：上次渲染时的升级状态
@@ -313,8 +313,36 @@ class CodingPage(AppFrame):
             print(f"[coding] key fifo read error: {e}", flush=True)
 
     # ====================================================================
+    # 坐标转换（PIL 320x240 ↔ widget 实际像素）
+    # ====================================================================
+    def _pil_to_widget_rect(self, pil_rect):
+        """将 PIL 画布 (320x240) 坐标系矩形转换为 widget 实际坐标。"""
+        pil_w, pil_h = 320, 240
+        widget_w = self.display_label.width()
+        widget_h = self.display_label.height()
+        if widget_w <= 0 or widget_h <= 0:
+            return pil_rect
+        scale = max(widget_w / pil_w, widget_h / pil_h)
+        offset_x = (widget_w - pil_w * scale) / 2
+        offset_y = (widget_h - pil_h * scale) / 2
+        x1, y1, x2, y2 = pil_rect
+        return (
+            int(x1 * scale + offset_x),
+            int(y1 * scale + offset_y),
+            int(x2 * scale + offset_x),
+            int(y2 * scale + offset_y),
+        )
+
+    # ====================================================================
     # 鼠标 / 触摸点击
     # ====================================================================
+    def eventFilter(self, obj, event):
+        """事件过滤器：捕获 display_label 上的鼠标点击并转发处理。"""
+        if obj is self.display_label and event.type() == event.Type.MouseButtonPress:
+            self.mousePressEvent(event)
+            return True
+        return super().eventFilter(obj, event)
+
     def mousePressEvent(self, ev):
         """处理触摸/鼠标点击：点击「关闭加密」删除 lock.json。"""
         if self.current_page == PAGE_MAIN:
@@ -377,6 +405,13 @@ class CodingPage(AppFrame):
             self._page_needs_redraw = True
             self._render_and_display()
             self._update_corner_labels()
+        elif key == Qt.Key.Key_Right:  # B → 关闭加密
+            if self._is_encrypted:
+                print("[coding] B pressed → disable encryption", flush=True)
+                self._disable_encryption()
+                self._update_corner_labels()
+            else:
+                print("[coding] B pressed → encryption already disabled", flush=True)
         elif key == Qt.Key.Key_Back:  # C → 退出
             print("[coding] C pressed → exit", flush=True)
             self._do_exit()
@@ -646,31 +681,33 @@ class CodingPage(AppFrame):
 
         # 加密保护状态
         self._lock_btn_rect = None
-        hint_text = t("browser_hint")
-        hw = draw.textbbox((0, 0), hint_text, font=self._font14)[2]
         if self._is_encrypted:
-            btn_text = t("disable_encryption")
-            tb = draw.textbbox((0, 0), btn_text, font=self._font12)
-            bw = tb[2] - tb[0]
-            th = tb[3] - tb[1]
-            btn_pad_h = 4
-            btn_h = 20
-            btn_w = bw + btn_pad_h * 2
-            btn_y = 4
+            # 加密状态标签（红色圆角标签，表明系统处于加密保护中）
+            status_text = t("disable_encryption")
+            stb = draw.textbbox((0, 0), status_text, font=self._font12)
+            sw = stb[2] - stb[0]
+            sh = stb[3] - stb[1]
+            pad_h = 6
+            tag_h = sh + pad_h
+            tag_w = sw + pad_h * 2
+            tag_y = 4
             icon_w = 18
-            icon_h = 18
-            btn_x = 320 - icon_w - btn_w
-            btn_rect = (btn_x, btn_y, btn_x + btn_w, btn_y + btn_h)
-            draw.rounded_rectangle(btn_rect, radius=4, fill=(211, 69, 61), outline=(211, 69, 61))
-            text_y = btn_y + (btn_h - th) // 2 - tb[1]
-            draw.text((btn_x + btn_pad_h, text_y), btn_text, font=self._font12, fill=T_RGB.text_invert)
+            tag_x = 320 - icon_w - tag_w
+            tag_rect = (tag_x, tag_y, tag_x + tag_w, tag_y + tag_h)
+            draw.rounded_rectangle(tag_rect, radius=4, fill=(211, 69, 61), outline=(211, 69, 61))
+            text_y = tag_y + (tag_h - sh) // 2 - stb[1]
+            draw.text((tag_x + pad_h, text_y), status_text, font=self._font12, fill=T_RGB.text_invert)
             if self._icon_right_small is not None:
                 icon_x = 320 - icon_w
-                icon_y = btn_y + (btn_h - icon_h) // 2
+                icon_y = tag_y + (tag_h - 18) // 2
                 self._paste_icon(bg, self._icon_right_small, (icon_x, icon_y))
-            self._lock_btn_rect = btn_rect
+            # B 键操作提示
+            hint_text = t("browser_hint")
+            hw = draw.textbbox((0, 0), hint_text, font=self._font14)[2]
             draw.text(((320 - hw) // 2, 202), hint_text, font=self._font14, fill=T_RGB.text_primary)
         else:
+            hint_text = t("browser_hint")
+            hw = draw.textbbox((0, 0), hint_text, font=self._font14)[2]
             draw.text(((320 - hw) // 2, 202), hint_text, font=self._font14, fill=T_RGB.text_primary)
 
     # ====================================================================

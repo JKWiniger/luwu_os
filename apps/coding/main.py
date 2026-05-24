@@ -9,7 +9,11 @@ Luwu OS - Coding (Blockly 图形编程) 应用
   D (GPIO24, bottom-right) KEY_ENTER  → 进入列表 / 运行 / 停止
 """
 import sys
+import os
 import signal
+
+# 确保能找到 coding 子模块（launcher 以脚本路径启动时目录不一定在 path 中）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 确保能找到 luwu-os 全局库
 LUWU_ROOT = "/home/pi/luwu-os"
