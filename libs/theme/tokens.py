@@ -4,9 +4,10 @@
 统一通过本模块取值。
 """
 from pathlib import Path
+import os
 
 # launcher 的资产作为子应用的视觉资产源，保证视觉一致
-_LAUNCHER_ASSETS = Path("/home/pi/luwu-os/launcher/assets")
+_LAUNCHER_ASSETS = Path(os.environ.get("LUWU_ROOT", "/opt/luwu-os")) / "launcher" / "assets"
 
 
 def hex_to_rgb(hex_str: str):
@@ -114,8 +115,9 @@ class Radius:
 def _resolve_font_path() -> str:
     try:
         import sys
-        if "/home/pi/luwu-os" not in sys.path:
-            sys.path.insert(0, "/home/pi/luwu-os")
+        _LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+        if _LUWU_ROOT not in sys.path:
+            sys.path.insert(0, _LUWU_ROOT)
         from libs.i18n import FONT_PATH as _F
         if _F:
             return _F

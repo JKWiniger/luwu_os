@@ -4,7 +4,7 @@
 """
 import sys, os, glob, time, json, subprocess, select, signal
 
-sys.path.insert(0, '/home/pi/luwu-os/libs/gamepad_config')
+sys.path.insert(0, os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), 'libs/gamepad_config'))
 from ble_hid_reader import parse_report_map, decode_notification
 
 # ── 0. 清理旧 monitor 进程 ──

@@ -42,8 +42,9 @@ from PySide6.QtWidgets import (
 )
 
 # ---- luwu-os 主题层 ----
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 from libs.theme import (  # noqa: E402
     apply_app_palette, Asset as T_Asset, Color as T_Color,
     Spacing, qss as T_qss,
@@ -130,7 +131,7 @@ MAX_SCAN_RETRY = 12      # 最大重试次数
 
 _LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
 DEMO_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_gamepad.png")
-_APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
+_APP_BG_IMAGE = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "assets/images/app_bg.png")
 
 
 # ===================== 持久化 bluetoothctl 会话 =====================
@@ -811,7 +812,7 @@ class ControllerThread(threading.Thread):
 
     def run(self):
         try:
-            gp_dir = "/home/pi/luwu-os/libs/gamepad_config"
+            gp_dir = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "libs/gamepad_config")
             if gp_dir not in sys.path:
                 sys.path.insert(0, gp_dir)
             import gamepad_controller as gc

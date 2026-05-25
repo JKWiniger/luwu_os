@@ -12,7 +12,7 @@ luwu-os 设备探测脚本
 - stderr 用于日志，退出码 0 表示拿到了非 unknown 结果。
 
 使用：
-  python3 /home/pi/luwu-os/configs/detect_device.py
+  python3 $LUWU_ROOT/configs/detect_device.py  # LUWU_ROOT 默认 /opt/luwu-os
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import os
 import sys
 from pathlib import Path
 
-LUWU_ROOT = Path("/home/pi/luwu-os")
+LUWU_ROOT = Path(os.environ.get("LUWU_ROOT", "/opt/luwu-os"))
 DEVICE_INI = LUWU_ROOT / "configs" / "device.ini"
 
 VALID = {"xgomini", "xgolite", "xgomini2sw", "xgorider"}

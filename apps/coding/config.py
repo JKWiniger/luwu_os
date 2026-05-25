@@ -19,7 +19,7 @@ KEYS_FIFO = "/tmp/luwu_keys.fifo"
 BLOCKLY_PORT = 80
 
 # 接入 luwu-os 全局 i18n 与主题
-LUWU_ROOT = "/home/pi/luwu-os"
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
 if LUWU_ROOT not in sys.path:
     sys.path.insert(0, LUWU_ROOT)
 
@@ -34,7 +34,7 @@ from libs.theme import Asset as T_Asset
 # coding 专属背景图路径
 _CODING_BG_IMAGE = LUWU_ROOT + "/assets/images/app_bg.png"
 
-LANGUAGE_INI = "/home/pi/luwu-os/configs/language.ini"
+LANGUAGE_INI = os.path.join(LUWU_ROOT, "configs/language.ini")
 FONT_PATH = T_Asset.font_path or _I18N_FONT_PATH or "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"
 
 # xgo_blockly 相关路径（系统 Python）

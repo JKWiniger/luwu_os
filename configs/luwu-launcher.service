@@ -2,16 +2,18 @@
 Description=Luwu OS Desktop Launcher
 After=multi-user.target
 Wants=multi-user.target
+Conflicts=luwu-splash.service
+After=luwu-splash.service
 
 [Service]
 Type=simple
-User=luwu
+# User=luwu  # 已移除，默认以 root 运行，跟用户名无关
 SupplementaryGroups=tty input dialout
 Environment="QT_QPA_PLATFORM=linuxfb:fb=/dev/fb-spi"
 Environment="QT_QPA_FONTDIR=/usr/share/fonts"
 # 先停掉 splash mplayer，释放 SPI 帧缓冲，再启动 Qt
-ExecStartPre=/home/pi/luwu-os/configs/kill-splash.sh
-ExecStart=/home/pi/luwu-os/launcher/build/luwu_launcher
+ExecStartPre=/opt/luwu-os/configs/kill-splash.sh
+ExecStart=/opt/luwu-os/launcher/build/luwu_launcher
 Restart=always
 RestartSec=3
 

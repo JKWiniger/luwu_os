@@ -34,12 +34,13 @@ from PySide6.QtGui import QKeyEvent, QImage, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget, QLabel
 
 # ---- Paths ----
-FACE_MODEL_PATH = "/home/pi/luwu-os/model/face_detection_yunet_2023mar.onnx"
+FACE_MODEL_PATH = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "model/face_detection_yunet_2023mar.onnx")
 KEYS_FIFO = "/tmp/luwu_keys.fifo"
 
 # ===================== i18n =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({

@@ -17,7 +17,7 @@ import struct
 import threading
 
 # 确保能 import gamepad_controller
-_GP_DIR = "/home/pi/luwu-os/libs/gamepad_config"
+_GP_DIR = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "libs/gamepad_config")
 if _GP_DIR not in sys.path:
     sys.path.insert(0, _GP_DIR)
 import gamepad_controller as gc

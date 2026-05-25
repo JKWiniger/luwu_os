@@ -11,9 +11,11 @@ from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 # 复用 luwu-os 主题体系
+import os
 import sys
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 from libs.theme import Asset as T_Asset, Color as T_Color, Spacing, qss as T_qss
 from libs.ui import AppFrame
 from libs.i18n import Translator as _Translator

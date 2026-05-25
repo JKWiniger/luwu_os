@@ -37,7 +37,7 @@ from PIL import Image
 mark("PIL import done")
 
 # ===================== XGO 狗 =====================
-sys.path.insert(0, "/home/pi/lib")
+sys.path.insert(0, os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), '..', 'lib'))
 from xgolib import XGO
 
 mark("xgolib import done")
@@ -46,8 +46,8 @@ mark("xgolib import done")
 # ===================== 常量 =====================
 AUTO_EXIT_SEC = 600       # 10分钟自动退出
 # 资源已迁移至 luwu-os/assets，彻底解耦 XGO-PI-CM5 依赖
-EXPR_PATH = "/home/pi/luwu-os/assets/expressions/dog_LM"
-MUSIC_PATH = "/home/pi/luwu-os/assets/music/Dream.mp3"
+EXPR_PATH = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "assets/expressions/dog_LM")
+MUSIC_PATH = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "assets/music/Dream.mp3")
 
 # 表情列表：(目录名, 帧数)
 EXPRESSIONS = [
@@ -61,8 +61,9 @@ EXPRESSIONS = [
 FRAME_DELAY = 0.01   # 帧间延迟(秒), 约 100fps
 
 # ===================== i18n =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({

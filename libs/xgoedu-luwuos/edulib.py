@@ -13,6 +13,9 @@ import subprocess
 # from keras.preprocessing import image
 # import _thread  使用_thread会报错，坑！
 
+# ── 统一路径（LUWU_ROOT 环境变量，默认 /opt/luwu-os）──
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+
 
 __versinon__ = '2.0.0'
 __last_modified__ = '2026/5/11'
@@ -209,7 +212,7 @@ class XGOEDU():
         self._label.setPixmap(self._canvas)
         self._label.show()
 
-        font_id = QFontDatabase.addApplicationFont("/home/pi/luwu-os/apps/ai/msyh.ttc")
+        font_id = QFontDatabase.addApplicationFont(f"{LUWU_ROOT}/apps/ai/msyh.ttc")
         families = QFontDatabase.applicationFontFamilies(font_id)
         self._font_family = families[0] if families else ""
 
@@ -226,21 +229,10 @@ class XGOEDU():
         self.picam2 = None
         self.camera_config = None
 
-        # ── Framebuffer 直接写入（绕过 QLabel，避免与 Launcher 窗口冲突）──
-        self._fb_fd = None
-        for fb_path in ("/dev/fb-spi", "/dev/fb1"):
-            try:
-                self._fb_fd = os.open(fb_path, os.O_RDWR)
-                print(f"[XGOEDU] framebuffer direct: {fb_path}")
-                break
-            except Exception as e:
-                print(f"[XGOEDU] fb open failed for {fb_path}: {e}")
-
         # ── gpio-keys 按键设备初始化 ──────────────────────────
         import evdev
         self._key_dev = None
         self._key_states = {"a": False, "b": False, "c": False, "d": False}
-        self._key_pressed = {"a": False, "b": False, "c": False, "d": False}
         self._key_map = {
             evdev.ecodes.KEY_LEFT: "a",
             evdev.ecodes.KEY_RIGHT: "b",
@@ -274,49 +266,11 @@ class XGOEDU():
         return QColor('white')
 
     def _flush(self):
-        """刷新显示：优先直接写 framebuffer，绕过 QLabel 避免与 Launcher 窗口冲突"""
-        if self._fb_fd is not None:
-            try:
-                from PySide6.QtGui import QImage
-                import numpy as np
-                img = self._canvas.toImage().convertToFormat(QImage.Format.Format_RGB888)
-                mv = img.constBits()
-                arr = np.array(mv, dtype=np.uint8).reshape((240, 320, 3)).copy()
-                # RGB888 → RGB565
-                r = (arr[:, :, 0].astype(np.uint16) >> 3)
-                g = (arr[:, :, 1].astype(np.uint16) >> 2)
-                b = (arr[:, :, 2].astype(np.uint16) >> 3)
-                rgb565 = (r << 11) | (g << 5) | b
-                os.lseek(self._fb_fd, 0, os.SEEK_SET)
-                os.write(self._fb_fd, rgb565.tobytes())
-                return
-            except Exception as e:
-                print(f"[XGOEDU] fb flush failed: {e}")
-        # Fallback: QLabel
         self._label.setPixmap(self._canvas)
         self._app.processEvents()
 
     def _show_pil(self, img):
-        """PIL Image → framebuffer 直接显示"""
-        if self._fb_fd is not None:
-            try:
-                import numpy as np
-                arr = np.array(img.convert("RGB"))
-                if arr.shape[0] != 240 or arr.shape[1] != 320:
-                    from PIL import Image as PILImage
-                    img = img.resize((320, 240), PILImage.LANCZOS)
-                    arr = np.array(img.convert("RGB"))
-                # RGB888 → RGB565
-                r = (arr[:, :, 0].astype(np.uint16) >> 3)
-                g = (arr[:, :, 1].astype(np.uint16) >> 2)
-                b = (arr[:, :, 2].astype(np.uint16) >> 3)
-                rgb565 = (r << 11) | (g << 5) | b
-                os.lseek(self._fb_fd, 0, os.SEEK_SET)
-                os.write(self._fb_fd, rgb565.tobytes())
-                return
-            except Exception as e:
-                print(f"[XGOEDU] fb _show_pil failed: {e}")
-        # Fallback: QLabel
+        """PIL Image → QPixmap 显示"""
         import numpy as np
         from PySide6.QtGui import QImage, QPixmap
         arr = np.array(img.convert("RGB"))
@@ -338,9 +292,7 @@ class XGOEDU():
             self.picam2 = Picamera2()
             self.camera_config = self.picam2.create_preview_configuration(
                 main={"size": (320, 240), "format": "RGB888"},  # 强制指定RGB格式
-                # ⚠️ 不在硬件层做 hflip：AprilTag/QR/face/yolo 等识别算法对镜像方向敏感，硬件镜像会导致 0 候选。
-                # 显示侧若需要自拍视角，由调用方在显示前自行 flip。
-                transform=Transform(hflip=0, vflip=0)
+                transform=Transform(hflip=1, vflip=0)
             )
             self.picam2.configure(self.camera_config)
             self.picam2.start()
@@ -368,14 +320,6 @@ class XGOEDU():
             print("[XGOEDU] GPIO 已释放")
         except Exception as e:
             print(f"[XGOEDU] GPIO 释放异常: {e}")
-        # 关闭 framebuffer
-        if self._fb_fd is not None:
-            try:
-                os.close(self._fb_fd)
-                self._fb_fd = None
-                print("[XGOEDU] framebuffer 已关闭")
-            except Exception as e:
-                print(f"[XGOEDU] fb close 异常: {e}")
         # 重置单例状态，允许下次重新初始化
         XGOEDU._initialized = False
         XGOEDU._instance = None
@@ -507,7 +451,7 @@ class XGOEDU():
     def lcd_picture(self, filename, x=0, y=0):
         from PySide6.QtGui import QPainter
         from PySide6.QtGui import QPixmap as QP
-        img_px = QP("/home/pi/xgoPictures/" + filename)
+        img_px = QP(f"{LUWU_ROOT}/xgo-media/pictures/" + filename)
         p = QPainter(self._canvas)
         p.drawPixmap(x, y, img_px)
         p.end()
@@ -619,8 +563,6 @@ class XGOEDU():
     返回值 False未按下, True按下
     '''
     def xgoButton(self, button):
-        # 边沿检测语义：按下瞬间返回 True 一次，事件被消费后再次调用返回 False
-        # 配合外层 while True 循环可避免按住期间重复触发
         from evdev import ecodes
         if self._key_dev is None:
             return False
@@ -633,55 +575,29 @@ class XGOEDU():
                     btn = self._key_map.get(event.code)
                     if btn is not None:
                         self._key_states[btn] = (event.value == 1)
-                        if event.value == 1:
-                            self._key_pressed[btn] = True
         except Exception:
             pass
-        if self._key_pressed.get(button, False):
-            self._key_pressed[button] = False
-            return True
-        return False
+        return self._key_states.get(button, False)
     #speaker
     '''
     filename 文件名 字符串
     通过 aplay 非阻塞播放（ALSA dmix 混音）
     '''
     def xgoSpeaker(self,filename):
-        path="/home/pi/xgoMusic/"
+        path = f"{LUWU_ROOT}/xgo-media/music/"
         subprocess.Popen(["aplay", path + filename],
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
 
-    '''
-    设置系统音量（0~100，整数百分比）
-    底层使用 ALSA amixer（WM8960 card 0），同时设置 Speaker 与 Playback。
-    新镜像走 ALSA dmix + dsnoop，未安装 PulseAudio，不能使用 pactl。
-    '''
-    def set_volume(self, volume):
-        try:
-            v = int(volume)
-        except (TypeError, ValueError):
-            return False
-        if v < 0:
-            v = 0
-        if v > 100:
-            v = 100
-        percent = "{}%".format(v)
-        for ctrl in ("Speaker", "Headphone", "Playback"):
-            subprocess.run(["amixer", "-c", "0", "sset", ctrl, percent],
-                           stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
-        return True
-
     def xgoVideoAudio(self,filename):
-        path="/home/pi/xgoVideos/"
+        path = f"{LUWU_ROOT}/xgo-media/videos/"
         time.sleep(0.2)  #音画速度同步了 但是时间轴可能不同步 这里调试一下
         subprocess.Popen(["mplayer", path + filename, "-novideo"],
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
 
     def xgoVideo(self,filename):
-        path="/home/pi/xgoVideos/"
+        path = f"{LUWU_ROOT}/xgo-media/videos/"
         x=threading.Thread(target=self.xgoVideoAudio,args=(filename,))
         x.start()
         global counter
@@ -723,7 +639,7 @@ class XGOEDU():
     seconds 录制时间S 字符串
     '''
     def xgoAudioRecord(self,filename="record",seconds=5):
-        path="/home/pi/xgoMusic/"
+        path = f"{LUWU_ROOT}/xgo-media/music/"
         # 如果文件夹不存在则创建
         if not os.path.exists(path):
             os.makedirs(path)
@@ -759,7 +675,7 @@ class XGOEDU():
             time.sleep(0.033)  # 约30fps
   #这里的seconds基本上相当于视频的两倍时长
     def xgoVideoRecord(self, filename="record", seconds=5):
-        path = "/home/pi/xgoVideos/"
+        path = f"{LUWU_ROOT}/xgo-media/videos/"
         # 如果文件夹不存在则创建
         if not os.path.exists(path):
             os.makedirs(path)
@@ -791,7 +707,7 @@ class XGOEDU():
         video_writer.release()
 
     def xgoTakePhoto(self, filename="photo"):
-        path = "/home/pi/xgoPictures/"
+        path = f"{LUWU_ROOT}/xgo-media/pictures/" if not filename.startswith('/') else ""
         self.camera_still = False
         time.sleep(0.6)
         
@@ -803,7 +719,9 @@ class XGOEDU():
         if image is None:
             print('xgoTakePhoto: capture failed, image is None')
             return
-        # 保存为JPEG（不再做软件镜像，open_camera 已不做 hflip）
+        # 镜像翻转（自拍模式）
+        image = cv2.flip(image, 1)
+        # 保存为JPEG
         cv2.imwrite(path + filename , image)
         
         # 显示预览
@@ -827,7 +745,7 @@ class XGOEDU():
         """
         print(f'[xgoTakePhotoHD] 开始拍照: filename={filename}, size={width}x{height}')
         
-        path = "/home/pi/xgoPictures/"
+        path = f"{LUWU_ROOT}/xgo-media/pictures/" if not filename.startswith('/') else ""
         # 如果文件夹不存在则创建
         if not os.path.exists(path):
             os.makedirs(path)
@@ -847,11 +765,7 @@ class XGOEDU():
         
         self.camera_still = False
         hd_picam = None
-
-        # 局部导入 Picamera2/Transform（与 open_camera 一致，避免模块顶部强依赖）
-        from picamera2 import Picamera2
-        from libcamera import Transform
-
+        
         try:
             # 先停止并关闭已有的 self.picam2（需要用不同分辨率重新配置）
             if self.picam2 is not None:
@@ -894,13 +808,15 @@ class XGOEDU():
             if image is not None:
                 print(f'[xgoTakePhotoHD] 拍照成功, 图像尺寸: {image.shape}')
                 
-                # 保存（摄像头输出 BGR，imwrite 直接写即可）
-                cv2.imwrite(photo_path, image)
+                # Picamera2 使用 RGB888 格式，hflip=0 时原始图像已经是正确方向，无需翻转
+                # 保存时需要转换为 BGR
+                image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(photo_path, image_bgr)
                 print(f'[xgoTakePhotoHD] 照片已保存: {photo_path}')
                 
-                # 缩放后显示预览（转换 BGR→RGB 给 PIL）
+                # 缩放后显示预览（image 已经是 RGB 格式）
                 preview = cv2.resize(image, (320, 240))
-                imgok = Image.fromarray(cv2.cvtColor(preview, cv2.COLOR_BGR2RGB))
+                imgok = Image.fromarray(preview)
                 self._show_pil(imgok)
                 
                 return photo_path
@@ -946,11 +862,11 @@ class XGOEDU():
         from PIL import Image, ImageDraw, ImageFont
         
         # 1. 初始化配置
-        font = ImageFont.truetype("/home/pi/luwu-os/apps/ai/msyh.ttc", 20)
+        font = ImageFont.truetype(f"{LUWU_ROOT}/apps/ai/msyh.ttc", 20)
         video_fps = 15
         preview_size = (320, 240)
-        photo_path = f"/home/pi/xgoPictures/{filename}.jpg"
-        video_path = f"/home/pi/xgoVideos/{filename}.mp4"
+        photo_path = f"{LUWU_ROOT}/xgo-media/pictures/{filename}.jpg"
+        video_path = f"{LUWU_ROOT}/xgo-media/videos/{filename}.mp4"
         
         # 2. 确保之前相机已关闭
         def safe_camera_shutdown():
@@ -1065,7 +981,7 @@ class XGOEDU():
     def posenetRecognition(self, target="camera"):
         '''骨骼识别 - 使用 cv2.dnn + MediaPipe ONNX 模型替代 mediapipe Python API'''
         import sys
-        sys.path.insert(0, '/home/pi/luwu-os/model')
+        sys.path.insert(0, f'{LUWU_ROOT}/model')
         try:
             from mp_persondet import MPPersonDet
             from mp_pose import MPPose
@@ -1074,10 +990,10 @@ class XGOEDU():
             return None
 
         if not hasattr(self, '_person_det') or self._person_det is None:
-            pdet_model = '/home/pi/luwu-os/model/person_detection_mediapipe_2023mar.onnx'
-            pose_model = '/home/pi/luwu-os/model/pose_estimation_mediapipe_2023mar.onnx'
+            pdet_model = f'{LUWU_ROOT}/model/person_detection_mediapipe_2023mar.onnx'
+            pose_model = f'{LUWU_ROOT}/model/pose_estimation_mediapipe_2023mar.onnx'
             if not os.path.exists(pdet_model) or not os.path.exists(pose_model):
-                print('[posenetRecognition] 缺少模型文件，请确认 /home/pi/luwu-os/model/ 目录')
+                print(f'[posenetRecognition] 缺少模型文件，请确认 {LUWU_ROOT}/model/ 目录')
                 return None
             self._person_det = MPPersonDet(pdet_model, scoreThreshold=0.5)
             self._pose_est   = MPPose(pose_model,     confThreshold=0.5)
@@ -1109,31 +1025,12 @@ class XGOEDU():
         # result: [bbox(2,2), landmarks(39,5), world_lm(39,3), mask, heatmap, conf]
         landmarks = result[1]  # shape (39, 5): x, y, z, visibility, presence
 
-        # 骨骼连接定义（MediaPipe 33 点 POSE_CONNECTIONS）
-        POSE_CONNECTIONS = [
-            (0, 1), (1, 2), (2, 3), (3, 7), (0, 4), (4, 5), (5, 6), (6, 8),
-            (9, 10), (11, 12), (11, 13), (13, 15), (15, 17), (15, 19), (15, 21),
-            (17, 19), (12, 14), (14, 16), (16, 18), (16, 20), (16, 22), (18, 20),
-            (11, 23), (12, 24), (23, 24), (23, 25), (24, 26), (25, 27), (26, 28),
-            (27, 29), (28, 30), (29, 31), (30, 32), (27, 31), (28, 32)
-        ]
-        GREEN = (0, 255, 0)
-        h, w = image_rgb.shape[:2]
-
-        # 绘制骨骼连线
-        for a, b in POSE_CONNECTIONS:
-            if (landmarks[a, 3] > 0.5 and landmarks[b, 3] > 0.5):
-                x1, y1 = int(landmarks[a, 0]), int(landmarks[a, 1])
-                x2, y2 = int(landmarks[b, 0]), int(landmarks[b, 1])
-                if 0 <= x1 < w and 0 <= y1 < h and 0 <= x2 < w and 0 <= y2 < h:
-                    cv2.line(image_rgb, (x1, y1), (x2, y2), GREEN, 2, cv2.LINE_AA)
-
         # 绘制关键点
         for i in range(33):
             x, y = int(landmarks[i, 0]), int(landmarks[i, 1])
             vis = landmarks[i, 3]
-            if vis > 0.5 and 0 <= x < w and 0 <= y < h:
-                cv2.circle(image_rgb, (x, y), 3, GREEN, -1)
+            if vis > 0.5 and 0 <= x < image_rgb.shape[1] and 0 <= y < image_rgb.shape[0]:
+                cv2.circle(image_rgb, (x, y), 3, (255, 255, 255), -1)
 
         # 计算关节角度（与原 mediapipe 版本相同的关节组合）
         joint_list = [[24, 26, 28], [23, 25, 27], [14, 12, 24], [13, 11, 23]]
@@ -1147,6 +1044,7 @@ class XGOEDU():
             angle = np.abs(radians * 180.0 / np.pi)
             angellist.append(angle if angle <= 180 else 360 - angle)
 
+        image_rgb = cv2.flip(image_rgb, 1)
         if angellist:
             ges = '|'.join(str(int(a)) for a in angellist[:4])
             cv2.putText(image_rgb, ges, (10, 220),
@@ -1170,10 +1068,13 @@ class XGOEDU():
             if image_bgr is None:
                 return None
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             image_bgr = cv2.imread(path + target)
             if image_bgr is None:
                 return None
+
+        # 水平镜像
+        image_bgr = cv2.flip(image_bgr, 1)
 
         # 单次 ONNX 推理（hands.run 需要 BGR 输入）
         datas = self.hand.run(image_bgr)
@@ -1208,7 +1109,7 @@ class XGOEDU():
         ret=''
         self.open_camera()
         if self.yolo==None:
-            self.yolo = yoloXgo('/home/pi/luwu-os/model/yolo_coco.onnx',
+            self.yolo = yoloXgo(f'{LUWU_ROOT}/model/yolo_coco.onnx',
             ['person','bicycle','car','motorbike','aeroplane','bus','train','truck','boat','traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack','umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','sofa','pottedplant','bed','diningtable','toilet','tvmonitor','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'],
             [352,352],0.66)
         if target=="camera":
@@ -1217,20 +1118,21 @@ class XGOEDU():
             if image is None:
                 print("摄像头读取帧失败")
                 return None
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 转为 RGB 供 ONNX 推理
-            image_for_yolo = image
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 如果需要RGB格式
         else:
-            image_for_yolo = np.array(Image.open(target))  # PIL 直接 RGB
-            image = cv2.cvtColor(image_for_yolo, cv2.COLOR_RGB2BGR)  # OpenCV 绘制需要 BGR
-        datas = self.yolo.run(image_for_yolo)
+            image=np.array(Image.open(target))
+        datas = self.yolo.run(image)
+        b,g,r = cv2.split(image)
+        image = cv2.merge((r,g,b))
+        image = cv2.flip(image,1)
         if datas:
             for data in datas:
-                XGOEDU.rectangle(self, image, data['xywh'], "#33cc00", 2)
-                xy = (data['xywh'][0], data['xywh'][1])
-                XGOEDU.text(self, image, data['classes'], xy, 1, "#ff0000", 2)
+                XGOEDU.rectangle(self,image,data['xywh'],"#33cc00",2)
+                xy= (data['xywh'][0], data['xywh'][1])
+                XGOEDU.text(self,image,data['classes'],xy,1,"#ff0000",2)
                 value_yolo = data['classes']
-                ret = (value_yolo, xy)
-        imgok = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+                ret=(value_yolo,xy)
+        imgok = Image.fromarray(image)
         self._show_pil(imgok)
         if ret=='':
             return None
@@ -1246,15 +1148,15 @@ class XGOEDU():
             self.face = face_detection(0.7)
         if target=="camera":
             self.open_camera()
-            image = self.picam2.capture_array()  # BGR
+            image = self.picam2.capture_array()
             if image is None:
                 print("摄像头读取帧失败")
                 return None
-            image_for_detect = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # face.run 需要 RGB
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 如果需要RGB格式    
         else:
-            image_for_detect = np.array(Image.open(target))  # PIL 直接 RGB
-            image = cv2.cvtColor(image_for_detect, cv2.COLOR_RGB2BGR)  # OpenCV 绘制需要 BGR
-        datas = self.face.run(image_for_detect)
+            image=np.array(Image.open(target))
+        image = cv2.flip(image,1)
+        datas = self.face.run(image)
         for data in datas:
             lefteye = str(data['left_eye'])
             righteye = str(data['right_eye'])
@@ -1262,19 +1164,19 @@ class XGOEDU():
             mouth = str(data['mouth'])
             leftear = str(data['left_ear'])
             rightear = str(data['right_ear'])
-            cv2.putText(image, 'lefteye', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-            cv2.putText(image, lefteye, (100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-            cv2.putText(image, 'righteye', (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            cv2.putText(image, righteye, (100, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            cv2.putText(image, 'nose', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            cv2.putText(image, nose, (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            cv2.putText(image, 'leftear', (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-            cv2.putText(image, leftear, (100, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-            cv2.putText(image, 'rightear', (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 0, 200), 2)
-            cv2.putText(image, rightear, (100, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 0, 200), 2)
-            XGOEDU.rectangle(self, image, data['rect'], "#33cc00", 2)
-            ret = data['rect']
-        imgok = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            cv2.putText(image,'lefteye',(10,30),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,0,0),2)
+            cv2.putText(image,lefteye,(100,30),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,0,0),2)
+            cv2.putText(image,'righteye',(10,50),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,255,0),2)
+            cv2.putText(image,righteye,(100,50),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,255,0),2)
+            cv2.putText(image,'nose',(10,70),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,0,255),2)
+            cv2.putText(image,nose,(100,70),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,0,255),2)
+            cv2.putText(image,'leftear',(10,90),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,255,0),2)
+            cv2.putText(image,leftear,(100,90),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,255,0),2)
+            cv2.putText(image,'rightear',(10,110),cv2.FONT_HERSHEY_SIMPLEX,0.7,(200,0,200),2)
+            cv2.putText(image,rightear,(100,110),cv2.FONT_HERSHEY_SIMPLEX,0.7,(200,0,200),2)
+            XGOEDU.rectangle(self,image,data['rect'],"#33cc00",2)
+            ret=data['rect']
+        imgok = Image.fromarray(image)
         self._show_pil(imgok)
         if ret=='':
             return None
@@ -1289,7 +1191,7 @@ class XGOEDU():
         min_confidence: 最低置信度阈值 (0~1)，低于此值沿用上一帧结果
         '''
         import onnxruntime as ort
-        EMOTION_MODEL = '/home/pi/luwu-os/model/emotion.onnx'
+        EMOTION_MODEL = f'{LUWU_ROOT}/model/emotion.onnx'
         EMOTION_LABELS = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
         LABEL_MAP = {
             'Angry': 'Angry', 'Disgust': 'Angry', 'Fear': 'Neutral',
@@ -1383,7 +1285,7 @@ class XGOEDU():
     '''
     def agesex(self, target="camera"):
         import onnxruntime as ort
-        AGESEX_MODEL = '/home/pi/luwu-os/model/gender_age.onnx'
+        AGESEX_MODEL = f'{LUWU_ROOT}/model/gender_age.onnx'
         ageList = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
         genderList = ['Male', 'Female']
         padding = 20
@@ -1449,6 +1351,7 @@ class XGOEDU():
             cv2.rectangle(image_disp, (x, y), (x + w, y + h), (0, 255, 0), 2)
             ret = (gender, age, (x, y))
 
+        image_disp = cv2.flip(image_disp, 1)
         imgok = Image.fromarray(cv2.cvtColor(image_disp, cv2.COLOR_BGR2RGB))
         self._show_pil(imgok)
 
@@ -1488,7 +1391,7 @@ class XGOEDU():
         token = self.fetch_token()
 
         speech_data = []
-        path="/home/pi/xgoMusic/"
+        path = f"{LUWU_ROOT}/xgo-media/music/"
         with open(path+AUDIO_FILE, 'rb') as speech_file:
             speech_data = speech_file.read()
 
@@ -1568,7 +1471,7 @@ class XGOEDU():
             result_str = err.read()
             has_error = True
 
-        path="/home/pi/xgoMusic/"
+        path = f"{LUWU_ROOT}/xgo-media/music/"
         save_file = "error.txt" if has_error else 'result.' + FORMAT
         with open(path+save_file, 'wb') as of:
             of.write(result_str)
@@ -1586,70 +1489,103 @@ class XGOEDU():
             img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(img)
         fontStyle = ImageFont.truetype(
-            "/home/pi/luwu-os/apps/ai/msyh.ttc", textSize, encoding="utf-8")
+            f"{LUWU_ROOT}/apps/ai/msyh.ttc", textSize, encoding="utf-8")
         draw.text(position, text, textColor, font=fontStyle)
         return cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
     
     def AprilTagRecognition(self, target="camera"):
         """
-        AprilTag码识别（OpenCV aruco 模块）
+        AprilTag码识别（使用OpenCV aruco模块）
         返回: 识别到的第一个Tag ID，没有则返回None
         """
-        # 缓存 detector 参数（参数不变，避免每次重复创建）
-        if not hasattr(self, '_apriltag_params'):
-            params = cv2.aruco.DetectorParameters()
-            params.adaptiveThreshWinSizeMin = 3
-            params.adaptiveThreshWinSizeMax = 53
-            params.adaptiveThreshWinSizeStep = 4
-            params.minMarkerPerimeterRate = 0.02
-            params.polygonalApproxAccuracyRate = 0.08
-            params.errorCorrectionRate = 0.8
-            self._apriltag_params = params
-            self._apriltag_dicts = [
-                cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11),
-                cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_25h9),
-                cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_16h5),
-            ]
-
+        # 支持多种AprilTag字典
+        apriltag_dicts = [
+            cv2.aruco.DICT_APRILTAG_36h11,
+            cv2.aruco.DICT_APRILTAG_25h9,
+            cv2.aruco.DICT_APRILTAG_16h5,
+            cv2.aruco.DICT_APRILTAG_36h10
+        ]
+        
         if target == "camera":
             self.open_camera()
-            image = self.picam2.capture_array()
+            # 使用 640x480 高分辨率提升识别率
+            self.picam2.stop()
+            from libcamera import Transform
+            camera_config = self.picam2.create_preview_configuration(
+                main={"size": (640, 480), "format": "RGB888"},
+                transform=Transform(hflip=1, vflip=0)
+            )
+            self.picam2.configure(camera_config)
+            self.picam2.start()
+            time.sleep(0.5)
+            # 多帧重试提升识别率
+            ids = None
+            corners = None
+            image = None
+            for _ in range(5):
+                image = self.picam2.capture_array()
+                if image is None:
+                    continue
+                # camera输出为BGR，先转RGB（与旧版cv2.VideoCapture行为一致）
+                image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+                parameters = cv2.aruco.DetectorParameters()
+                for dict_type in apriltag_dicts:
+                    aruco_dict = cv2.aruco.getPredefinedDictionary(dict_type)
+                    detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
+                    corners, ids, rejected = detector.detectMarkers(gray)
+                    if ids is not None:
+                        break
+                if ids is not None:
+                    image = image_rgb
+                    break
+            # 恢复 320x240 配置
+            self.picam2.stop()
+            self.picam2.configure(self.camera_config)
+            self.picam2.start()
+            time.sleep(0.3)
             if image is None:
+                print("摄像头读取帧失败")
                 return None
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             image = np.array(Image.open(path + target).convert('RGB'))
-
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-        # 逐个字典检测，找到第一个就停
-        ids, corners = None, None
-        for aruco_dict in self._apriltag_dicts:
-            detector = cv2.aruco.ArucoDetector(aruco_dict, self._apriltag_params)
-            corners, ids, _ = detector.detectMarkers(gray)
-            if ids is not None:
-                break
-
+            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            parameters = cv2.aruco.DetectorParameters()
+            ids = None
+            corners = None
+            for dict_type in apriltag_dicts:
+                aruco_dict = cv2.aruco.getPredefinedDictionary(dict_type)
+                detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
+                corners, ids, rejected = detector.detectMarkers(gray)
+                if ids is not None:
+                    break
+        
         result = None
         if ids is not None:
-            for i in range(len(ids)):
-                tag_id = int(ids[i][0])
-                pts = corners[i][0].astype(int)
+            for i, corner in enumerate(corners):
+                tag_id = ids[i][0]
+                pts = corner[0].astype(int)
+                
+                # 绘制边框
                 for j in range(4):
                     pt1 = tuple(pts[j])
                     pt2 = tuple(pts[(j + 1) % 4])
                     cv2.line(image, pt1, pt2, (0, 255, 0), 2)
+                
+                # 绘制中心点
                 center = pts.mean(axis=0).astype(int)
                 cv2.circle(image, tuple(center), 5, (255, 0, 0), -1)
-                cv2.putText(image, f"ID:{tag_id}", (int(center[0]) - 20, int(center[1]) - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+                cv2.putText(image, f"ID:{tag_id}", (center[0] - 20, center[1] - 20),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+                
                 if result is None:
                     result = tag_id
-
-        if target == "camera":
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        # image 已是 RGB，直接显示
         imgok = Image.fromarray(image)
         self._show_pil(imgok)
+        
         return result
 
     def AprilTagDetection(self, marker_length=5, target="camera"):
@@ -1698,7 +1634,7 @@ class XGOEDU():
             corners = None
             matched_family = None
             image = None
-            for _ in range(2):
+            for _ in range(5):
                 image = self.picam2.capture_array()
                 if image is None:
                     continue
@@ -1715,7 +1651,7 @@ class XGOEDU():
             if image is None:
                 return None
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             image = np.array(Image.open(path + target).convert('RGB'))
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             ids = None
@@ -1825,8 +1761,9 @@ class XGOEDU():
                 image = self.picam2.capture_array()
                 if image is None:
                     continue
+                # open_camera 使用 hflip=1，QR码需要原始方向才能正确解码
+                image = cv2.flip(image, 1)
                 # 灰度化提升 pyzbar 识别率
-
                 gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
                 barcodes = pyzbar.decode(gray)
                 if barcodes:
@@ -1835,7 +1772,7 @@ class XGOEDU():
                 print("摄像头读取帧失败")
                 return None
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             image = np.array(Image.open(path + target))
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             barcodes = pyzbar.decode(gray)
@@ -1889,7 +1826,7 @@ class XGOEDU():
                 return None
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # 转换为RGB
         else:
-            path = "/home/pi/xgoPictures/"
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             frame = np.array(Image.open(path + target).convert('RGB'))
     
         # 图像处理
@@ -1948,7 +1885,7 @@ class XGOEDU():
                 return None
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         else:
-            path = "/home/pi/xgoPictures/"
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             frame = np.array(Image.open(path + target).convert('RGB'))
 
         # 第二步：转换到 HSV 颜色空间
@@ -2066,7 +2003,7 @@ class XGOEDU():
             frame = self.picam2.capture_array()
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         else:
-            path = "/home/pi/xgoPictures/"
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             frame = np.array(Image.open(path + target).convert('RGB'))
         
         orig_height, orig_width = frame.shape[:2]
@@ -2250,28 +2187,51 @@ class XGOEDU():
     def cap_color_mask(self, position=None, scale=25, h_error=20, s_limit=[90, 255], v_limit=[90, 230]):
         if position is None:
             position = [160, 100]
+        count = 0
         self.open_camera()
         
-        # 图像采集
-        image = self.picam2.capture_array()  # Picamera2默认输出BGR
-        
-        # 颜色空间处理
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        h, s, v = cv2.split(hsv)
-        
-        # 颜色采样
-        color = np.mean(h[position[1]:position[1] + scale, position[0]:position[0] + scale])
-        
-        color_lower = [float(max(color - h_error, 0)), s_limit[0], v_limit[0]]
-        color_upper = [float(min(color + h_error, 255)), s_limit[1], v_limit[1]]
-        return [color_lower, color_upper]
+        while True:
+            if self.xgoButton("c"):   
+                break
+                
+            # 图像采集（统一使用image变量）
+            image = self.picam2.capture_array()  # Picamera2默认输出BGR
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 转为RGB用于显示
+            
+            # 颜色空间处理（保持BGR用于HSV转换）
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+            h, s, v = cv2.split(hsv)
+            
+            # 颜色采样
+            color = np.mean(h[position[1]:position[1] + scale, position[0]:position[0] + scale])
+            
+            if self.xgoButton("b") and count == 0:
+                count += 1
+                color_lower = [max(color - h_error, 0), s_limit[0], v_limit[0]]
+                color_upper = [min(color + h_error, 255), s_limit[1], v_limit[1]]
+                return [color_lower, color_upper]
+    
+            # 绘制界面（使用RGB图像）
+            if count == 0:
+                cv2.rectangle(image_rgb, 
+                             (position[0], position[1]), 
+                             (position[0] + scale, position[1] + scale),
+                             (255, 255, 255), 2)
+                cv2.putText(image_rgb, 'press button B', 
+                           (40, 40), cv2.FONT_HERSHEY_SIMPLEX, 
+                           0.7, (255, 0, 0), 2)  # RGB格式的红色
+            
+            # 显示（直接使用RGB）
+            imgok = Image.fromarray(image_rgb)
+            self._show_pil(imgok)
     
     def filter_img(self,frame,color):
-        # frame 为 BGR（OpenCV 原生格式）
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        b,g,r = cv2.split(frame)
+        frame_bgr = cv2.merge((r,g,b))
+        hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
         if isinstance(color, list):
-            color_lower = np.array(color[0], dtype=np.uint8)
-            color_upper = np.array(color[1], dtype=np.uint8)
+            color_lower = np.array(color[0])
+            color_upper = np.array(color[1])
         else:
             color_upper, color_lower = get_color_mask(color)
         mask = cv2.inRange(hsv, color_lower, color_upper)
@@ -2282,11 +2242,11 @@ class XGOEDU():
         x=y=ra=0
         if target=="camera":
             self.open_camera()
-            image = self.picam2.capture_array()  # BGR
+            image = self.picam2.capture_array()
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 如果需要RGB格式
         else:
-            path="/home/pi/xgoPictures/"
+            path=LUWU_ROOT + "/xgo-media/pictures/"
             image=np.array(Image.open(path+target))
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # PIL(RGB) → BGR
 
         frame_mask=self.filter_img(image, color_mask)
         
@@ -2294,13 +2254,14 @@ class XGOEDU():
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
         
         circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, 20, param1=p1, param2=p2, minRadius=minR,maxRadius=maxR)
+        b,g,r = cv2.split(image)
+        image = cv2.merge((r,g,b))
         if circles is not None and len(circles[0]) == 1:
             param = circles[0][0]
             x, y, ra = int(param[0]), int(param[1]), int(param[2])
             cv2.circle(image, (x, y), ra, (255, 255, 255), 2)
             cv2.circle(image, (x, y), 2, (255, 255, 255), 2)
-        # 显示前转换 BGR→RGB（camera 分支为 BGR，file 分支也已转 BGR）
-        imgok = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        imgok = Image.fromarray(image)
         self._show_pil(imgok)
         return x,y,ra
 
@@ -2313,19 +2274,19 @@ class DemoError(Exception):
 
 class hands():
     """手势识别 - 使用 cv2.dnn + MediaPipe ONNX 模型替代 mediapipe Python API"""
-    _PALM_MODEL = '/home/pi/luwu-os/model/palm_detection_mediapipe_2023feb.onnx'
-    _HAND_MODEL = '/home/pi/luwu-os/model/handpose_estimation_mediapipe_2023feb.onnx'
+    _PALM_MODEL = f'{LUWU_ROOT}/model/palm_detection_mediapipe_2023feb.onnx'
+    _HAND_MODEL = f'{LUWU_ROOT}/model/handpose_estimation_mediapipe_2023feb.onnx'
 
     def __init__(self, model_complexity, max_num_hands, min_detection_confidence, min_tracking_confidence):
         import sys
-        sys.path.insert(0, '/home/pi/luwu-os/model')
+        sys.path.insert(0, f'{LUWU_ROOT}/model')
         try:
             from mp_palmdet import MPPalmDet
             from mp_handpose import MPHandPose
         except ImportError as e:
-            raise ImportError(f'缺少辅助脚本: {e}，请确认 /home/pi/luwu-os/model/ 中有 mp_palmdet.py / mp_handpose.py')
+            raise ImportError(f'缺少辅助脚本: {e}，请确认 {LUWU_ROOT}/model/ 中有 mp_palmdet.py / mp_handpose.py')
         if not os.path.exists(self._PALM_MODEL) or not os.path.exists(self._HAND_MODEL):
-            raise FileNotFoundError('缺少手势识别模型文件，请确认 /home/pi/luwu-os/model/ 目录')
+            raise FileNotFoundError(f'缺少手势识别模型文件，请确认 {LUWU_ROOT}/model/ 目录')
         self.max_num_hands = max_num_hands
         self.min_detection_confidence = min_detection_confidence
         self._palm_det  = MPPalmDet(self._PALM_MODEL,  scoreThreshold=min_detection_confidence)
@@ -2535,7 +2496,7 @@ class yoloXgo():
 
 class face_detection():
     """人脸检测 - 使用 cv2.FaceDetectorYN (YuNet ONNX) 替代 MediaPipe"""
-    _MODEL_PATH = '/home/pi/luwu-os/model/face_detection_yunet_2023mar.onnx'
+    _MODEL_PATH = f'{LUWU_ROOT}/model/face_detection_yunet_2023mar.onnx'
 
     def __init__(self, min_detection_confidence=0.7):
         self.min_detection_confidence = min_detection_confidence

@@ -6,8 +6,21 @@ set -e
 
 echo "=== Luwu OS 系统配置部署 ==="
 
+# 0a. 拷贝项目到 /opt/luwu-os（路径与用户名无关）
+echo "[0a/14] 部署项目到 /opt/luwu-os ..."
+mkdir -p /opt/luwu-os
+rm -rf /opt/luwu-os.old 2>/dev/null
+[ -d /opt/luwu-os ] && mv /opt/luwu-os /opt/luwu-os.old
+cp -r /home/pi/luwu-os /opt/luwu-os
+chown -R luwu:luwu /opt/luwu-os
+chmod -R 755 /opt/luwu-os
+# 创建 xgo-media 子目录
+mkdir -p /opt/luwu-os/xgo-media/{music,pictures,videos}
+chown -R luwu:luwu /opt/luwu-os/xgo-media
+echo "  ✓ 项目已部署到 /opt/luwu-os"
+
 # 0. 系统依赖
-echo "[0/12] 安装系统依赖 ..."
+echo "[1/14] 安装系统依赖 ..."
 apt install -y \
     python3-pip python3-pyside6 python3-numpy python3-picamera2 python3-evdev \
     python3-flask python3-flask-socketio python3-opencv \
@@ -25,12 +38,12 @@ else
 fi
 
 # 1. /boot/firmware/config.txt
-echo "[1/12] 部署 /boot/firmware/config.txt ..."
+echo "[2/14] 部署 /boot/firmware/config.txt ..."
 cp boot-config.txt /boot/firmware/config.txt
 echo "  ✓ 已写入"
 
 # 2. gpio-keys 设备树覆盖层
-echo "[2/12] 编译并部署 gpio-keys 设备树覆盖层 ..."
+echo "[3/14] 编译并部署 gpio-keys 设备树覆盖层 ..."
 if ! command -v dtc &>/dev/null; then
     echo "  ! dtc 未安装，正在安装 device-tree-compiler ..."
     apt install -y device-tree-compiler
@@ -39,7 +52,7 @@ dtc -@ -I dts -O dtb -o /boot/firmware/overlays/luwu-keys.dtbo luwu-keys.dts
 echo "  ✓ luwu-keys.dtbo 已部署"
 
 # 3. udev 规则 (fb-spi 软链接)
-echo "[3/12] 部署 udev 规则 ..."
+echo "[4/14] 部署 udev 规则 ..."
 cp 99-fb-spi.rules /etc/udev/rules.d/
 cp 99-gamepad-no-mouse.rules /etc/udev/rules.d/
 udevadm control --reload-rules
@@ -48,7 +61,7 @@ udevadm trigger --subsystem-match=input
 echo "  ✓ 已生效 (fb-spi + 蓝牙手柄触摸板屏蔽)"
 
 # 4. ALSA 音频配置 (dmix + dsnoop + 默认音量)
-echo "[4/12] 部署 ALSA 音频配置 ..."
+echo "[5/14] 部署 ALSA 音频配置 ..."
 cp asound.conf /etc/asound.conf
 # 恢复混音器状态（啸叫修复 + 默认音量 71%）
 if [ -f asound.state ]; then
@@ -61,7 +74,7 @@ fi
 echo "  ✓ asound.conf 已写入"
 
 # 5. systemd 服务
-echo "[5/12] 部署 systemd 服务 ..."
+echo "[6/14] 部署 systemd 服务 ..."
 cp luwu-splash.service /etc/systemd/system/
 cp luwu-launcher.service /etc/systemd/system/
 systemctl daemon-reload
@@ -70,19 +83,19 @@ systemctl enable luwu-launcher.service
 echo "  ✓ 已启用"
 
 # 5b. CM4 硬件自动识别服务
-echo "[5b/12] 部署 CM4 硬件自动识别服务 ..."
+echo "[7/14] 部署 CM4 硬件自动识别服务 ..."
 cp luwu-hw-autoconf.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable luwu-hw-autoconf.service
 echo "  ✓ luwu-hw-autoconf.service 已启用 (开机自动检测 CM4 新/老硬件并切换 config.txt)"
 
 # 6. 开机画面脚本权限
-echo "[6/12] 设置开机画面脚本权限 ..."
+echo "[8/14] 设置开机画面脚本权限 ..."
 chmod +x luwu-splash.sh
 echo "  ✓ 已设置"
 
 # 7. ext4 文件系统加固 — 防止断电丢文件
-echo "[7/12] 文件系统加固 ..."
+echo "[9/14] 文件系统加固 ..."
 tune2fs -c 5 /dev/mmcblk0p2
 echo "  ✓ fsck 每5次挂载自动执行"
 
@@ -99,7 +112,7 @@ fi
 echo "  ✓ commit=1 (fstab) 已设置"
 
 # 8. 硬件看门狗 — 系统卡死自动重启
-echo "[8/12] 硬件看门狗 ..."
+echo "[10/14] 硬件看门狗 ..."
 apt install -y watchdog
 cat > /etc/watchdog.conf << 'WDOG'
 watchdog-device = /dev/watchdog
@@ -114,14 +127,14 @@ systemctl start watchdog
 echo "  ✓ 看门狗已启用 (15秒超时)"
 
 # 9. 持久化系统日志 — 出问题可追溯
-echo "[9/12] 持久化系统日志 ..."
+echo "[11/14] 持久化系统日志 ..."
 mkdir -p /var/log/journal
 sed -i 's/#Storage=auto/Storage=persistent/' /etc/systemd/journald.conf
 systemctl restart systemd-journald
 echo "  ✓ 日志持久化已配置"
 
 # 10. 欠压+电池联合监控 — 分级响应防误关机
-echo "[10/12] 欠压+电池监控 ..."
+echo "[12/14] 欠压+电池监控 ..."
 cp luwu-undervolt-monitor.py /usr/local/bin/
 chmod +x /usr/local/bin/luwu-undervolt-monitor.py
 cp luwu-undervolt.service /etc/systemd/system/
@@ -131,5 +144,5 @@ systemctl start luwu-undervolt.service
 echo "  ✓ 欠压+电池监控已启用 (电池>10%忽略, 5~10%延迟关, <5%立即关)"
 
 # 11. 完成
-echo "[12/12] 部署完成。必须重启以加载新的设备树和防护配置: sudo reboot"
+echo "[14/14] 部署完成。必须重启以加载新的设备树和防护配置: sudo reboot"
 echo "=== 完毕 ==="

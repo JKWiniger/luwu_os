@@ -37,8 +37,9 @@ from PySide6.QtWidgets import (
 mark("PySide6 import done")
 
 # ===================== 主题 =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 
 from libs.theme import (  # noqa: E402
     apply_app_palette, Asset as T_Asset, Color as T_Color,
@@ -57,7 +58,7 @@ if _APP_DIR not in sys.path:
 
 # mapping_server 和 qr_page 统一从 bluetooth_gamepad 目录导入
 # 与蓝牙页面共享同一个 mapping_server 模块实例，避免端口/全局状态冲突
-_BT_GAMEPAD_DIR = "/home/pi/luwu-os/apps/bluetooth_gamepad"
+_BT_GAMEPAD_DIR = os.path.join(_LUWU_ROOT, "apps/bluetooth_gamepad")
 if _BT_GAMEPAD_DIR not in sys.path:
     sys.path.insert(0, _BT_GAMEPAD_DIR)
 import mapping_server  # noqa: E402
@@ -97,7 +98,7 @@ _T = _Translator({
 AUTO_EXIT_SEC = 1800  # 30 分钟无操作自动退出
 _LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
 DEMO_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_gamepad.png")
-_APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
+_APP_BG_IMAGE = os.path.join(_LUWU_ROOT, "assets/images/app_bg.png")
 
 # ===================== XGO 单例 =====================
 _xgo_instance = None
@@ -148,7 +149,7 @@ class ControllerThread(threading.Thread):
 
     def run(self):
         try:
-            gp_dir = "/home/pi/luwu-os/libs/gamepad_config"
+            gp_dir = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "libs/gamepad_config")
             if gp_dir not in sys.path:
                 sys.path.insert(0, gp_dir)
             import gamepad_controller as gc

@@ -41,14 +41,15 @@ from picamera2 import Picamera2
 mark("PySide6 imports done")
 
 # 导入 ONNX 手部模块
-sys.path.insert(0, '/home/pi/luwu-os/model')
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+sys.path.insert(0, os.path.join(_LUWU_ROOT, 'model'))
 from mp_palmdet import MPPalmDet
 from mp_handpose import MPHandPose
 
 mark("onnx model imports done")
 
 # 导入 XGO 机器狗库
-sys.path.insert(0, '/home/pi/lib')
+sys.path.insert(0, os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), '..', 'lib'))
 try:
     from xgolib import XGO
     mark("xgolib import done")
@@ -60,8 +61,9 @@ except Exception as _e:
 CAM_W, CAM_H = 320, 240
 
 # ===================== i18n =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({
@@ -79,8 +81,8 @@ try:
 except Exception:
     _T = lambda k, *a: k
 
-PALM_MODEL = '/home/pi/luwu-os/model/palm_detection_mediapipe_2023feb.onnx'
-HAND_MODEL = '/home/pi/luwu-os/model/handpose_estimation_mediapipe_2023feb.onnx'
+PALM_MODEL = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), 'model/palm_detection_mediapipe_2023feb.onnx')
+HAND_MODEL = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), 'model/handpose_estimation_mediapipe_2023feb.onnx')
 
 # 手部关键点连接（用于绘制骨架），基于 MediaPipe 21 点模型
 HAND_CONNECTIONS = [

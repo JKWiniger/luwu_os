@@ -27,8 +27,9 @@ from PySide6.QtGui import QKeyEvent, QPainter, QColor, QFont, QPen, QBrush, QLin
 from PySide6.QtWidgets import QApplication, QWidget, QLabel
 
 # ---- luwu-os libs ----
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if LUWU_ROOT not in sys.path:
+    sys.path.insert(0, LUWU_ROOT)
 from libs.ui.frame import AppFrame
 from libs.theme import apply_app_palette, Asset, Color, Spacing
 

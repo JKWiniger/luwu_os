@@ -6,8 +6,13 @@
 #include <QDebug>
 #include <QFile>
 #include <cmath>
+#include <cstdlib>
 
-static constexpr const char *ASSET_DIR = "/home/pi/luwu-os/launcher/assets/";
+static QString assetDir() {
+    const char *root = getenv("LUWU_ROOT");
+    if (!root) root = "/opt/luwu-os";
+    return QString(root) + "/launcher/assets/";
+}
 
 const CardData CARDS[CARD_COUNT] = {
     {"无线网络",   "WiFi",     "card_network.png",  "apps/network/main.py"},
@@ -134,12 +139,12 @@ GalleryView::GalleryView(QWidget *parent)
 void GalleryView::loadImages() {
     QSize fallback(180, 230);
     for (int i = 0; i < CARD_COUNT; ++i) {
-        QString path = QString(ASSET_DIR) + CARDS[i].imageFile;
+        QString path = assetDir() + CARDS[i].imageFile;
         QPixmap pix = loadCardImage(path, fallback);
         cardImages[i]->setPixmap(pix);
     }
     // 背景图
-    QString bgPath = QString(ASSET_DIR) + "bg_macos.png";
+    QString bgPath = assetDir() + "bg_macos.png";
     QPixmap bgPix(bgPath);
     if (!bgPix.isNull()) {
         bgLabel->setPixmap(bgPix);
@@ -148,7 +153,7 @@ void GalleryView::loadImages() {
 
     // 四角图标：左上=左切 右上=右切 左下=返回 右下=确认
     auto loadCornerIcon = [&](QLabel *label, const QString &file) {
-        QPixmap pix(QString(ASSET_DIR) + file);
+        QPixmap pix(assetDir() + file);
         if (!pix.isNull()) label->setPixmap(pix);
     };
     loadCornerIcon(cornerTL, "icon_left.png");
@@ -160,7 +165,9 @@ void GalleryView::loadImages() {
 int GalleryView::selectedIndex() const { return currentIndex; }
 
 QString GalleryView::selectedAppPath() const {
-    return QString("/home/pi/luwu-os/") + CARDS[currentIndex].appPath;
+    const char *root = getenv("LUWU_ROOT");
+    if (!root) root = "/opt/luwu-os";
+    return QString(root) + "/" + CARDS[currentIndex].appPath;
 }
 
 void GalleryView::moveSelection(int delta) {

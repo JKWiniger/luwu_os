@@ -20,8 +20,9 @@ PORT = 5000
 
 # ===== i18n =====
 import sys as _sys
-if "/home/pi/luwu-os" not in _sys.path:
-    _sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in _sys.path:
+    _sys.path.insert(0, _LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator, get_lang as _get_lang
     _T = _Translator({
@@ -311,7 +312,7 @@ def _get_web_langs():
         return {}
 
 # 全屏背景底图（与启动页一致）
-_APP_BG_IMAGE_PATH = "/home/pi/luwu-os/assets/images/app_bg.png"
+_APP_BG_IMAGE_PATH = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "assets/images/app_bg.png")
 _APP_BG_PIL = None
 try:
     if os.path.exists(_APP_BG_IMAGE_PATH):

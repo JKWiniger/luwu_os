@@ -49,14 +49,15 @@ except ImportError:
     PAHO_V2 = False
 
 # ===================== 狗库 =====================
-sys.path.insert(0, "/home/pi/lib")
+sys.path.insert(0, os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), '..', 'lib'))
 from xgolib import XGO
 
 mark("xgolib import done")
 
 # ===================== i18n =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({
@@ -115,7 +116,7 @@ from libs.ui import AppFrame  # noqa: E402
 
 _LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
 DEMO_GROUP_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_group.png")
-_APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
+_APP_BG_IMAGE = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "assets/images/app_bg.png")
 
 # ===================== 常量 =====================
 MQTT_BROKER = "broker.emqx.io"

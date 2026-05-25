@@ -1,6 +1,6 @@
 #pragma once
 // Luwu OS launcher 国际化（极简实现）
-// 读取 /home/pi/luwu-os/configs/language.ini，返回 "cn" 或 "en"
+// 读取 LUWU_ROOT/configs/language.ini（默认 /opt/luwu-os），返回 "cn" 或 "en"
 // 业务侧通过 LUWU_TR(cnText, enText) 宏选择当前语言文本。
 #include <QString>
 

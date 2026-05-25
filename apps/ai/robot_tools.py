@@ -13,6 +13,13 @@ import requests
 from typing import Dict, List, Optional, Any
 
 # =============================================================
+# 统一路径根
+# =============================================================
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+_XGO_PICTURES = os.path.join(_LUWU_ROOT, "xgo-media/pictures")
+_XGO_MUSIC = os.path.join(_LUWU_ROOT, "xgo-media/music")
+
+# =============================================================
 # XGO 硬件实例初始化
 # =============================================================
 
@@ -238,7 +245,7 @@ COMMON_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "xgo_display_picture",
-            "description": "在XGO屏幕上显示本地图片(位于/home/pi/xgoPictures/目录)",
+            "description": "在XGO屏幕上显示本地图片(位于xgo-media/pictures/目录)",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -254,7 +261,7 @@ COMMON_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "xgo_speak",
-            "description": "XGO播放本地音频文件(位于/home/pi/Music/目录)",
+            "description": "XGO播放本地音频文件(位于xgo-media/music/目录)",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1002,7 +1009,7 @@ def _execute_photo_understand(args: Dict, api_key: str) -> str:
     try:
         import cv2
         
-        photo_path = "/home/pi/xgoPictures/voice_chat_photo.jpg"
+        photo_path = os.path.join(_XGO_PICTURES, "voice_chat_photo.jpg")
         
         # 显示拍照状态
         try:
@@ -1918,7 +1925,7 @@ def _execute_speak(args: Dict) -> str:
     filename = args.get("filename", "")
     
     try:
-        os.system(f"mplayer /home/pi/Music/{filename}")
+        os.system(f"mplayer {_XGO_MUSIC}/{filename}")
         return f"🔊 XGO播放音频: {filename}"
     except Exception as e:
         return f"❌ 播放音频失败: {str(e)}"

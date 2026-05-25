@@ -22,7 +22,8 @@ def mark(name: str):
 mark("python entry")
 
 # ---- 添加 ydlidar SDK 路径（已迁移至 luwu-os/libs/ydlidar_sdk，解耦 XGO-PI-CM5）----
-sys.path.insert(0, '/home/pi/luwu-os/libs/ydlidar_sdk')
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+sys.path.insert(0, os.path.join(LUWU_ROOT, 'libs/ydlidar_sdk'))
 import ydlidar
 
 # ---- PySide6 ----
@@ -36,8 +37,8 @@ from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxL
 mark("imports done")
 
 # ===================== i18n + 主题 =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+if LUWU_ROOT not in sys.path:
+    sys.path.insert(0, LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({
@@ -65,7 +66,7 @@ from libs.theme import (  # noqa: E402
 )
 from libs.ui import AppFrame  # noqa: E402
 
-_APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
+_APP_BG_IMAGE = os.path.join(LUWU_ROOT, "assets/images/app_bg.png")
 
 # ===================== 常量 =====================
 AUTO_EXIT_SEC = 120

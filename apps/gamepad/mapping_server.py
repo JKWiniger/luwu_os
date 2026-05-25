@@ -16,7 +16,8 @@ import queue
 from flask import Flask, request, jsonify, send_from_directory, Response
 
 # 手柄事件广播模块
-_GP_DIR = '/home/pi/luwu-os/libs/gamepad_config'
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+_GP_DIR = os.path.join(LUWU_ROOT, 'libs/gamepad_config')
 if _GP_DIR not in sys.path:
     sys.path.insert(0, _GP_DIR)
 try:
@@ -25,7 +26,7 @@ except ImportError:
     _get_event_queue = None
 
 # 配置文件路径
-MAPPINGS_FILE = "/home/pi/luwu-os/libs/gamepad_config/mappings.json"
+MAPPINGS_FILE = os.path.join(LUWU_ROOT, "libs/gamepad_config/mappings.json")
 # TEMPLATE_DIR 已随文件迁移到 gamepad/ 目录，无需修改
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 

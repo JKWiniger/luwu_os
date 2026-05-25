@@ -72,8 +72,9 @@ from PySide6.QtWidgets import QApplication, QStackedWidget
 mark("PySide6 import done")
 
 # ---- luwu-os 主题层 ----
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 from libs.theme import apply_app_palette  # noqa: E402
 from libs.i18n import Translator as _Translator  # noqa: E402
 
@@ -104,7 +105,7 @@ def _import_joystick_page():
     if _joystick_page_cls is not None:
         return _joystick_page_cls
     # 从现有 joystick app 导入页面类
-    _js_dir = "/home/pi/luwu-os/apps/joystick"
+    _js_dir = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "apps/joystick")
     if _js_dir not in sys.path:
         sys.path.insert(0, _js_dir)
     # 注意：导入 joystick/main.py 会执行其模块级代码但不会启动 QApplication
@@ -123,7 +124,7 @@ def _import_bt_page():
     global _bt_page_cls
     if _bt_page_cls is not None:
         return _bt_page_cls
-    _bt_dir = "/home/pi/luwu-os/apps/bluetooth_gamepad"
+    _bt_dir = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "apps/bluetooth_gamepad")
     if _bt_dir not in sys.path:
         sys.path.insert(0, _bt_dir)
     import importlib.util

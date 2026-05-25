@@ -44,23 +44,24 @@ from state_machine import StateMachine, State
 # ===== Constants =====
 SCREEN_W, SCREEN_H = 320, 240
 BG_COLOR = (15, 21, 46)
-DING_WAV = "/home/pi/luwu-os/assets/music/ding.wav"  # 资源已迁移，解耦 XGO-PI-CM5
+DING_WAV = os.environ.get("LUWU_ROOT", "/opt/luwu-os") + "/assets/music/ding.wav"  # 资源已迁移，解耦 XGO-PI-CM5
 AUTO_EXIT_SEC = 600  # 10 minutes auto exit
 
 # Loading 页 PIL 绘制使用的字体路径（优先 app 本地 msyh.ttc，后退系统字体）
 _AI_FONT_CANDIDATES = [
     os.path.join(APP_DIR, "msyh.ttc"),
-    "/home/pi/luwu-os/assets/fonts/msyh.ttc",
+    os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "assets/fonts/msyh.ttc"),
     "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
 ]
 _LOADING_FONT_PATH = next((p for p in _AI_FONT_CANDIDATES if os.path.exists(p)), "")
 
 # Loading / 启动页背景图（全屏底图）
-_APP_BG_IMAGE_PATH = "/home/pi/luwu-os/assets/images/app_bg.png"
+_APP_BG_IMAGE_PATH = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "assets/images/app_bg.png")
 
 # ===== i18n =====
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator
     from libs.theme import Asset as T_Asset

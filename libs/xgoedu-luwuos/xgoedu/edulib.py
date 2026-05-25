@@ -13,6 +13,9 @@ import subprocess
 # from keras.preprocessing import image
 # import _thread  使用_thread会报错，坑！
 
+# ── 统一路径（LUWU_ROOT 环境变量，默认 /opt/luwu-os）──
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+
 
 __versinon__ = '2.0.0'
 __last_modified__ = '2026/5/11'
@@ -209,7 +212,7 @@ class XGOEDU():
         self._label.setPixmap(self._canvas)
         self._label.show()
 
-        font_id = QFontDatabase.addApplicationFont("/home/pi/luwu-os/apps/ai/msyh.ttc")
+        font_id = QFontDatabase.addApplicationFont(f"{LUWU_ROOT}/apps/ai/msyh.ttc")
         families = QFontDatabase.applicationFontFamilies(font_id)
         self._font_family = families[0] if families else ""
 
@@ -448,7 +451,7 @@ class XGOEDU():
     def lcd_picture(self, filename, x=0, y=0):
         from PySide6.QtGui import QPainter
         from PySide6.QtGui import QPixmap as QP
-        img_px = QP("/home/pi/xgoPictures/" + filename)
+        img_px = QP(f"{LUWU_ROOT}/xgo-media/pictures/" + filename)
         p = QPainter(self._canvas)
         p.drawPixmap(x, y, img_px)
         p.end()
@@ -581,20 +584,20 @@ class XGOEDU():
     通过 aplay 非阻塞播放（ALSA dmix 混音）
     '''
     def xgoSpeaker(self,filename):
-        path="/home/pi/xgoMusic/"
+        path = f"{LUWU_ROOT}/xgo-media/music/"
         subprocess.Popen(["aplay", path + filename],
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
 
     def xgoVideoAudio(self,filename):
-        path="/home/pi/xgoVideos/"
+        path = f"{LUWU_ROOT}/xgo-media/videos/"
         time.sleep(0.2)  #音画速度同步了 但是时间轴可能不同步 这里调试一下
         subprocess.Popen(["mplayer", path + filename, "-novideo"],
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
 
     def xgoVideo(self,filename):
-        path="/home/pi/xgoVideos/"
+        path = f"{LUWU_ROOT}/xgo-media/videos/"
         x=threading.Thread(target=self.xgoVideoAudio,args=(filename,))
         x.start()
         global counter
@@ -636,7 +639,7 @@ class XGOEDU():
     seconds 录制时间S 字符串
     '''
     def xgoAudioRecord(self,filename="record",seconds=5):
-        path="/home/pi/xgoMusic/"
+        path = f"{LUWU_ROOT}/xgo-media/music/"
         # 如果文件夹不存在则创建
         if not os.path.exists(path):
             os.makedirs(path)
@@ -672,7 +675,7 @@ class XGOEDU():
             time.sleep(0.033)  # 约30fps
   #这里的seconds基本上相当于视频的两倍时长
     def xgoVideoRecord(self, filename="record", seconds=5):
-        path = "/home/pi/xgoVideos/"
+        path = f"{LUWU_ROOT}/xgo-media/videos/"
         # 如果文件夹不存在则创建
         if not os.path.exists(path):
             os.makedirs(path)
@@ -704,7 +707,7 @@ class XGOEDU():
         video_writer.release()
 
     def xgoTakePhoto(self, filename="photo"):
-        path = "/home/pi/xgoPictures/" if not filename.startswith('/') else ""
+        path = f"{LUWU_ROOT}/xgo-media/pictures/" if not filename.startswith('/') else ""
         self.camera_still = False
         time.sleep(0.6)
         
@@ -742,7 +745,7 @@ class XGOEDU():
         """
         print(f'[xgoTakePhotoHD] 开始拍照: filename={filename}, size={width}x{height}')
         
-        path = "/home/pi/xgoPictures/" if not filename.startswith('/') else ""
+        path = f"{LUWU_ROOT}/xgo-media/pictures/" if not filename.startswith('/') else ""
         # 如果文件夹不存在则创建
         if not os.path.exists(path):
             os.makedirs(path)
@@ -859,11 +862,11 @@ class XGOEDU():
         from PIL import Image, ImageDraw, ImageFont
         
         # 1. 初始化配置
-        font = ImageFont.truetype("/home/pi/luwu-os/apps/ai/msyh.ttc", 20)
+        font = ImageFont.truetype(f"{LUWU_ROOT}/apps/ai/msyh.ttc", 20)
         video_fps = 15
         preview_size = (320, 240)
-        photo_path = f"/home/pi/xgoPictures/{filename}.jpg"
-        video_path = f"/home/pi/xgoVideos/{filename}.mp4"
+        photo_path = f"{LUWU_ROOT}/xgo-media/pictures/{filename}.jpg"
+        video_path = f"{LUWU_ROOT}/xgo-media/videos/{filename}.mp4"
         
         # 2. 确保之前相机已关闭
         def safe_camera_shutdown():
@@ -978,7 +981,7 @@ class XGOEDU():
     def posenetRecognition(self, target="camera"):
         '''骨骼识别 - 使用 cv2.dnn + MediaPipe ONNX 模型替代 mediapipe Python API'''
         import sys
-        sys.path.insert(0, '/home/pi/luwu-os/model')
+        sys.path.insert(0, f'{LUWU_ROOT}/model')
         try:
             from mp_persondet import MPPersonDet
             from mp_pose import MPPose
@@ -987,10 +990,10 @@ class XGOEDU():
             return None
 
         if not hasattr(self, '_person_det') or self._person_det is None:
-            pdet_model = '/home/pi/luwu-os/model/person_detection_mediapipe_2023mar.onnx'
-            pose_model = '/home/pi/luwu-os/model/pose_estimation_mediapipe_2023mar.onnx'
+            pdet_model = f'{LUWU_ROOT}/model/person_detection_mediapipe_2023mar.onnx'
+            pose_model = f'{LUWU_ROOT}/model/pose_estimation_mediapipe_2023mar.onnx'
             if not os.path.exists(pdet_model) or not os.path.exists(pose_model):
-                print('[posenetRecognition] 缺少模型文件，请确认 /home/pi/luwu-os/model/ 目录')
+                print(f'[posenetRecognition] 缺少模型文件，请确认 {LUWU_ROOT}/model/ 目录')
                 return None
             self._person_det = MPPersonDet(pdet_model, scoreThreshold=0.5)
             self._pose_est   = MPPose(pose_model,     confThreshold=0.5)
@@ -1065,7 +1068,7 @@ class XGOEDU():
             if image_bgr is None:
                 return None
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             image_bgr = cv2.imread(path + target)
             if image_bgr is None:
                 return None
@@ -1106,7 +1109,7 @@ class XGOEDU():
         ret=''
         self.open_camera()
         if self.yolo==None:
-            self.yolo = yoloXgo('/home/pi/luwu-os/model/yolo_coco.onnx',
+            self.yolo = yoloXgo(f'{LUWU_ROOT}/model/yolo_coco.onnx',
             ['person','bicycle','car','motorbike','aeroplane','bus','train','truck','boat','traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack','umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','sofa','pottedplant','bed','diningtable','toilet','tvmonitor','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'],
             [352,352],0.66)
         if target=="camera":
@@ -1188,7 +1191,7 @@ class XGOEDU():
         min_confidence: 最低置信度阈值 (0~1)，低于此值沿用上一帧结果
         '''
         import onnxruntime as ort
-        EMOTION_MODEL = '/home/pi/luwu-os/model/emotion.onnx'
+        EMOTION_MODEL = f'{LUWU_ROOT}/model/emotion.onnx'
         EMOTION_LABELS = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
         LABEL_MAP = {
             'Angry': 'Angry', 'Disgust': 'Angry', 'Fear': 'Neutral',
@@ -1282,7 +1285,7 @@ class XGOEDU():
     '''
     def agesex(self, target="camera"):
         import onnxruntime as ort
-        AGESEX_MODEL = '/home/pi/luwu-os/model/gender_age.onnx'
+        AGESEX_MODEL = f'{LUWU_ROOT}/model/gender_age.onnx'
         ageList = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
         genderList = ['Male', 'Female']
         padding = 20
@@ -1388,7 +1391,7 @@ class XGOEDU():
         token = self.fetch_token()
 
         speech_data = []
-        path="/home/pi/xgoMusic/"
+        path = f"{LUWU_ROOT}/xgo-media/music/"
         with open(path+AUDIO_FILE, 'rb') as speech_file:
             speech_data = speech_file.read()
 
@@ -1468,7 +1471,7 @@ class XGOEDU():
             result_str = err.read()
             has_error = True
 
-        path="/home/pi/xgoMusic/"
+        path = f"{LUWU_ROOT}/xgo-media/music/"
         save_file = "error.txt" if has_error else 'result.' + FORMAT
         with open(path+save_file, 'wb') as of:
             of.write(result_str)
@@ -1486,7 +1489,7 @@ class XGOEDU():
             img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(img)
         fontStyle = ImageFont.truetype(
-            "/home/pi/luwu-os/apps/ai/msyh.ttc", textSize, encoding="utf-8")
+            f"{LUWU_ROOT}/apps/ai/msyh.ttc", textSize, encoding="utf-8")
         draw.text(position, text, textColor, font=fontStyle)
         return cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
     
@@ -1545,7 +1548,7 @@ class XGOEDU():
                 print("摄像头读取帧失败")
                 return None
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             image = np.array(Image.open(path + target).convert('RGB'))
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             parameters = cv2.aruco.DetectorParameters()
@@ -1648,7 +1651,7 @@ class XGOEDU():
             if image is None:
                 return None
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             image = np.array(Image.open(path + target).convert('RGB'))
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             ids = None
@@ -1769,7 +1772,7 @@ class XGOEDU():
                 print("摄像头读取帧失败")
                 return None
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             image = np.array(Image.open(path + target))
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             barcodes = pyzbar.decode(gray)
@@ -1823,7 +1826,7 @@ class XGOEDU():
                 return None
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # 转换为RGB
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             frame = np.array(Image.open(path + target).convert('RGB'))
     
         # 图像处理
@@ -1882,7 +1885,7 @@ class XGOEDU():
                 return None
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             frame = np.array(Image.open(path + target).convert('RGB'))
 
         # 第二步：转换到 HSV 颜色空间
@@ -2000,7 +2003,7 @@ class XGOEDU():
             frame = self.picam2.capture_array()
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         else:
-            path = "/home/pi/xgoPictures/" if not target.startswith('/') else ""
+            path = f"{LUWU_ROOT}/xgo-media/pictures/" if not target.startswith('/') else ""
             frame = np.array(Image.open(path + target).convert('RGB'))
         
         orig_height, orig_width = frame.shape[:2]
@@ -2242,7 +2245,7 @@ class XGOEDU():
             image = self.picam2.capture_array()
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 如果需要RGB格式
         else:
-            path="/home/pi/xgoPictures/"
+            path=LUWU_ROOT + "/xgo-media/pictures/"
             image=np.array(Image.open(path+target))
 
         frame_mask=self.filter_img(image, color_mask)
@@ -2271,19 +2274,19 @@ class DemoError(Exception):
 
 class hands():
     """手势识别 - 使用 cv2.dnn + MediaPipe ONNX 模型替代 mediapipe Python API"""
-    _PALM_MODEL = '/home/pi/luwu-os/model/palm_detection_mediapipe_2023feb.onnx'
-    _HAND_MODEL = '/home/pi/luwu-os/model/handpose_estimation_mediapipe_2023feb.onnx'
+    _PALM_MODEL = f'{LUWU_ROOT}/model/palm_detection_mediapipe_2023feb.onnx'
+    _HAND_MODEL = f'{LUWU_ROOT}/model/handpose_estimation_mediapipe_2023feb.onnx'
 
     def __init__(self, model_complexity, max_num_hands, min_detection_confidence, min_tracking_confidence):
         import sys
-        sys.path.insert(0, '/home/pi/luwu-os/model')
+        sys.path.insert(0, f'{LUWU_ROOT}/model')
         try:
             from mp_palmdet import MPPalmDet
             from mp_handpose import MPHandPose
         except ImportError as e:
-            raise ImportError(f'缺少辅助脚本: {e}，请确认 /home/pi/luwu-os/model/ 中有 mp_palmdet.py / mp_handpose.py')
+            raise ImportError(f'缺少辅助脚本: {e}，请确认 {LUWU_ROOT}/model/ 中有 mp_palmdet.py / mp_handpose.py')
         if not os.path.exists(self._PALM_MODEL) or not os.path.exists(self._HAND_MODEL):
-            raise FileNotFoundError('缺少手势识别模型文件，请确认 /home/pi/luwu-os/model/ 目录')
+            raise FileNotFoundError(f'缺少手势识别模型文件，请确认 {LUWU_ROOT}/model/ 目录')
         self.max_num_hands = max_num_hands
         self.min_detection_confidence = min_detection_confidence
         self._palm_det  = MPPalmDet(self._PALM_MODEL,  scoreThreshold=min_detection_confidence)
@@ -2493,7 +2496,7 @@ class yoloXgo():
 
 class face_detection():
     """人脸检测 - 使用 cv2.FaceDetectorYN (YuNet ONNX) 替代 MediaPipe"""
-    _MODEL_PATH = '/home/pi/luwu-os/model/face_detection_yunet_2023mar.onnx'
+    _MODEL_PATH = f'{LUWU_ROOT}/model/face_detection_yunet_2023mar.onnx'
 
     def __init__(self, min_detection_confidence=0.7):
         self.min_detection_confidence = min_detection_confidence

@@ -7,7 +7,11 @@ FIFO_PATH="/tmp/splash.fifo"
 
 # 策略 1：通过 slave 模式的 FIFO 发 quit 命令，让 mplayer 自己停
 if [ -p "$FIFO_PATH" ]; then
-    echo "quit" > "$FIFO_PATH" 2>/dev/null || true
+    echo "quit" > "$FIFO_PATH" 2>/dev/null &
+    FIFO_PID=$!
+    # 最多等 1 秒，超时就杀掉 echo 进程防止阻塞
+    (sleep 1; kill $FIFO_PID 2>/dev/null) &
+    wait $FIFO_PID 2>/dev/null
 fi
 
 # 策略 2：等待 mplayer 退出（最多 3 秒）

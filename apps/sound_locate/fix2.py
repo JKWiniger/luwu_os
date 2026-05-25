@@ -1,5 +1,7 @@
 import sys
-with open('/home/pi/luwu-os/apps/sound_locate/main.py', 'r') as f:
+import os
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+with open(os.path.join(LUWU_ROOT, 'apps/sound_locate/main.py'), 'r') as f:
     code = f.read()
 
 # add corrected+cxdir to debug output
@@ -15,6 +17,6 @@ new_debug = '''                if _debug_frame % 10 == 0:
 assert old_debug in code, 'old debug not found'
 code = code.replace(old_debug, new_debug)
 
-with open('/home/pi/luwu-os/apps/sound_locate/main.py', 'w') as f:
+with open(os.path.join(LUWU_ROOT, 'apps/sound_locate/main.py'), 'w') as f:
     f.write(code)
 print('done')

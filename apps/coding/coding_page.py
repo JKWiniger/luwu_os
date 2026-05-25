@@ -5,7 +5,7 @@ import time
 import threading
 
 # 确保能找到 luwu-os 全局库
-LUWU_ROOT = "/home/pi/luwu-os"
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
 if LUWU_ROOT not in sys.path:
     sys.path.insert(0, LUWU_ROOT)
 

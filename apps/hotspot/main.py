@@ -34,8 +34,9 @@ from PySide6.QtGui import QKeyEvent, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QFrame
 
 # ---- 主题层 ----
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if LUWU_ROOT not in sys.path:
+    sys.path.insert(0, LUWU_ROOT)
 from libs.theme import (  # noqa: E402
     apply_app_palette, Asset as T_Asset, Color as T_Color,
     Spacing, qss as T_qss,
@@ -47,11 +48,11 @@ mark("PySide6 imports done")
 # ===================== 常量 =====================
 AUTO_EXIT_SEC = 300                       # 5 分钟自动退出页面（保留热点）
 HOTSPOT_CONN_NAME = "LuwuHotspot"         # 固定连接名，便于复用
-SSID_FILE = Path("/home/pi/luwu-os/configs/hotspot_ssid.txt")
+SSID_FILE = Path(LUWU_ROOT) / "configs" / "hotspot_ssid.txt"
 WLAN_IFACE = "wlan0"
 _LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
 DEMO_HOTSPOT_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_hotspot.png")
-_APP_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
+_APP_BG_IMAGE = os.path.join(LUWU_ROOT, "assets/images/app_bg.png")
 
 
 # ===================== 工具函数 =====================

@@ -11,7 +11,7 @@ import time
 import importlib.util
 
 FIFO_PATH = "/tmp/luwu_preload.fifo"
-LUWU_ROOT  = "/home/pi/luwu-os"
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
 
 t_start = time.monotonic()
 

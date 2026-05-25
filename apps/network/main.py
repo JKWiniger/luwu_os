@@ -32,7 +32,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
 # Configuration
 # ========================================================================
 # 接入 luwu-os 全局 i18n（去除 XGO-PI-CM5 依赖）
-LUWU_ROOT = "/home/pi/luwu-os"
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
 if LUWU_ROOT not in sys.path:
     sys.path.insert(0, LUWU_ROOT)
 try:
@@ -50,7 +50,7 @@ from libs.theme import (
     Asset as T_Asset,
 )
 
-LANGUAGE_INI = "/home/pi/luwu-os/configs/language.ini"
+LANGUAGE_INI = os.path.join(LUWU_ROOT, "configs/language.ini")
 FONT_PATH = T_Asset.font_path or _I18N_FONT_PATH or "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"
 KEYS_FIFO = "/tmp/luwu_keys.fifo"
 

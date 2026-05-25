@@ -43,8 +43,9 @@ from PySide6.QtWidgets import (
 mark("imports done")
 
 # ===================== i18n =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({
@@ -101,7 +102,7 @@ except Exception:
         return COLOR_LABELS_CN.get(c, c)
 
 # ===================== XGO 库 =====================
-sys.path.insert(0, "/home/pi/lib")
+sys.path.insert(0, os.environ.get("LUWU_ROOT", "/opt/luwu-os") + "/../lib")
 
 
 def _init_dog():

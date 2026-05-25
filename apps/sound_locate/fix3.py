@@ -1,4 +1,6 @@
-with open('/home/pi/luwu-os/apps/sound_locate/main.py', 'r') as f:
+import os
+LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+with open(os.path.join(LUWU_ROOT, 'apps/sound_locate/main.py'), 'r') as f:
     code = f.read()
 
 # Find _on_energy and replace
@@ -58,6 +60,6 @@ new_method = '''    def _on_energy(self, left_db: float, right_db: float, xdir: 
 
 code = code[:old_start] + new_method + code[old_end:]
 
-with open('/home/pi/luwu-os/apps/sound_locate/main.py', 'w') as f:
+with open(os.path.join(LUWU_ROOT, 'apps/sound_locate/main.py'), 'w') as f:
     f.write(code)
 print('done')

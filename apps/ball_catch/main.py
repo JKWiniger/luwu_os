@@ -40,8 +40,9 @@ from xgolib import XGO
 mark("imports done")
 
 # ===================== i18n =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({
@@ -103,7 +104,7 @@ COLOR_RANGES = {
 COLOR_NAMES = {"red": "红色", "green": "绿色", "blue": "蓝色"}
 COLORS = ["red", "green", "blue"]
 
-VAR_DIR = "/home/pi/luwu-os/apps/ball_catch"
+VAR_DIR = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "apps/ball_catch")
 
 
 def save_var(value, filename):

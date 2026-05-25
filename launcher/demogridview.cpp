@@ -8,8 +8,13 @@
 #include <QDebug>
 #include <QGraphicsDropShadowEffect>
 #include <QStringList>
+#include <cstdlib>
 
-static constexpr const char *ASSET_DIR = "/home/pi/luwu-os/launcher/assets/";
+static QString assetDir() {
+    const char *root = getenv("LUWU_ROOT");
+    if (!root) root = "/opt/luwu-os";
+    return QString(root) + "/launcher/assets/";
+}
 
 // 示例程序列表：中文名 + 英文名 + 颜色 + appPath + iconFile + compat
 // compat 为表达式，语法详见 demogridview.h 顶部说明：
@@ -252,7 +257,7 @@ void DemoGridView::retranslate() {
 
 void DemoGridView::loadImages() {
     // 背景图
-    QString bgPath = QString(ASSET_DIR) + "bg_macos.png";
+    QString bgPath = assetDir() + "bg_macos.png";
     QPixmap bgPix(bgPath);
     if (!bgPix.isNull()) {
         bgLabel->setPixmap(bgPix);
@@ -261,7 +266,7 @@ void DemoGridView::loadImages() {
 
     // 加载图标（优先真实 PNG，否则占位生成）
     for (int i = 0; i < demoItems.size(); ++i) {
-        QPixmap icon(QString(ASSET_DIR) + demoItems[i].iconFile);
+        QPixmap icon(assetDir() + demoItems[i].iconFile);
         if (icon.isNull()) {
             QColor color(demoItems[i].color);
             icon = makePlaceholderIcon(color, itemW);
@@ -271,7 +276,7 @@ void DemoGridView::loadImages() {
 
     // 四角图标
     auto loadCornerIcon = [&](QLabel *label, const QString &file) {
-        QPixmap pix(QString(ASSET_DIR) + file);
+        QPixmap pix(assetDir() + file);
         if (!pix.isNull()) label->setPixmap(pix);
     };
     loadCornerIcon(cornerTL, "icon_left.png");

@@ -18,6 +18,7 @@
 #include <QCursor>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <cstdlib>
 #include "keyfilter.h"
 #include "galleryview.h"
 #include "demogridview.h"
@@ -34,13 +35,20 @@ static bool isMouseConnected() {
     return false;
 }
 
+// 统一路径根（LUWU_ROOT 环境变量，默认 /opt/luwu-os）
+static QString luwuRoot() {
+    const char *root = getenv("LUWU_ROOT");
+    if (!root) root = "/opt/luwu-os";
+    return QString(root);
+}
+
 // 记住用户上次在主菜单选中的卡片索引，下次启动自动恢复
-static constexpr const char *LAST_CARD_FILE = "/home/pi/luwu-os/configs/last_card";
+static constexpr const char *LAST_CARD_FILE_REL = "/configs/last_card";
 
 static void saveLastCardIndex(int idx) {
     // 只记录图形化编程(1)和AI交互(2)，配网/示例/设置不需要记住
     if (idx != 1 && idx != 2) return;
-    QFile f(LAST_CARD_FILE);
+    QFile f(luwuRoot() + LAST_CARD_FILE_REL);
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         f.write(QByteArray::number(idx));
         f.close();
@@ -48,7 +56,7 @@ static void saveLastCardIndex(int idx) {
 }
 
 static int loadLastCardIndex() {
-    QFile f(LAST_CARD_FILE);
+    QFile f(luwuRoot() + LAST_CARD_FILE_REL);
     if (f.open(QIODevice::ReadOnly)) {
         bool ok = false;
         int idx = f.readAll().trimmed().toInt(&ok);
@@ -64,7 +72,7 @@ static int loadLastCardIndex() {
 // ========================================================================
 // 配置常量
 // ========================================================================
-static constexpr const char *PRELOAD_SCRIPT = "/home/pi/luwu-os/apps/demo_page/preload_app.py";
+static constexpr const char *PRELOAD_SCRIPT_REL = "/apps/demo_page/preload_app.py";
 static constexpr const char *FIFO_PATH = "/tmp/luwu_preload.fifo";
 static constexpr const char *KEYS_FIFO = "/tmp/luwu_keys.fifo";
 
@@ -118,7 +126,7 @@ int main(int argc, char *argv[]) {
         env.insert("PYTHONUNBUFFERED", "1");
         preloadProc->setProcessEnvironment(env);
         preloadProc->setProgram("python3");
-        preloadProc->setArguments({PRELOAD_SCRIPT});
+        preloadProc->setArguments({luwuRoot() + PRELOAD_SCRIPT_REL});
         preloadProc->start();
 
         qint64 t = QDateTime::currentMSecsSinceEpoch();
@@ -330,13 +338,13 @@ int main(int argc, char *argv[]) {
             detectProc->deleteLater();
         });
     detectProc->setProgram("python3");
-    detectProc->setArguments({"/home/pi/luwu-os/configs/detect_device.py"});
+    detectProc->setArguments({luwuRoot() + "/configs/detect_device.py"});
     detectProc->start();
     detectTimeout->start(2500); // 脚本内部超时 1.5s，这里再留 1s 宽余
 
     // --- 语言配置文件监听：切换后自动刷新桌面/Demo 文字 ---
     auto *langWatcher = new QFileSystemWatcher(&stack);
-    const QString langIniPath = QStringLiteral("/home/pi/luwu-os/configs/language.ini");
+    const QString langIniPath = luwuRoot() + QStringLiteral("/configs/language.ini");
     if (QFile::exists(langIniPath)) {
         langWatcher->addPath(langIniPath);
     }
@@ -354,7 +362,7 @@ int main(int argc, char *argv[]) {
     // --- 设备配置文件监听：device.ini 变更后自动重建 demo 列表 ---
     // 开源用户可手动 echo xgorider > configs/device.ini 即时验证 Rider 视图
     auto *devWatcher = new QFileSystemWatcher(&stack);
-    const QString devIniPath = QStringLiteral("/home/pi/luwu-os/configs/device.ini");
+    const QString devIniPath = luwuRoot() + QStringLiteral("/configs/device.ini");
     if (QFile::exists(devIniPath)) {
         devWatcher->addPath(devIniPath);
     }

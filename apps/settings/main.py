@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 APP_DIR = Path(__file__).resolve().parent
 PICS_DIR = APP_DIR / "pics"
 # 全局唯一语言配置（统一接入 libs/i18n）
-LUWU_ROOT = Path("/home/pi/luwu-os")
+LUWU_ROOT = Path(os.environ.get("LUWU_ROOT", "/opt/luwu-os"))
 
 # 主题层 & 组件层
 if str(LUWU_ROOT) not in sys.path:

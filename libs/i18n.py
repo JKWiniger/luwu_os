@@ -2,7 +2,7 @@
 """
 Luwu OS 全局国际化（i18n）公共库。
 
-- 全局唯一语言配置：/home/pi/luwu-os/configs/language.ini
+- 全局唯一语言配置：LUWU_ROOT/configs/language.ini
   文件内容只有 "cn" 或 "en" 一行纯文本。
 - 字体路径优先 luwu-os/model/msyh.ttc，fallback 到系统中文字体。
 - 任意 PySide6 App 通过 from libs.i18n import get_lang, t, FONT_PATH 接入。
@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 # ---- 路径常量 ----
-LUWU_ROOT = Path("/home/pi/luwu-os")
+LUWU_ROOT = Path(os.environ.get("LUWU_ROOT", "/opt/luwu-os"))
 LANGUAGE_INI = LUWU_ROOT / "configs" / "language.ini"
 
 # 兼容旧的 settings 内 language.ini（一次性迁移）

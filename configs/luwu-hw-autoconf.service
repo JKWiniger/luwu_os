@@ -6,7 +6,7 @@ Wants=network.target
 [Service]
 Type=oneshot
 ExecStartPre=/bin/sleep 2
-ExecStart=/usr/bin/python3 /home/pi/luwu-os/configs/hardware_autoconf.py
+ExecStart=/usr/bin/python3 /opt/luwu-os/configs/hardware_autoconf.py
 RemainAfterExit=yes
 StandardOutput=journal
 StandardError=journal

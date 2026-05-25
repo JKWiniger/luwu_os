@@ -41,12 +41,13 @@ from picamera2 import Picamera2
 from concurrent.futures import ThreadPoolExecutor
 
 # ---- 狗库 ----
-sys.path.insert(0, "/home/pi/lib")
+sys.path.insert(0, os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), '..', 'lib'))
 from xgolib import XGO, XGO_RIDER  # noqa: E402
 
 # ---- 主题层 ----
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+_LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 from libs.theme import (  # noqa: E402
     apply_app_palette, Asset as T_Asset, Color as T_Color,
     Spacing, Radius, qss as T_qss,
@@ -63,8 +64,8 @@ HTTP_PORT = 8080
 AUTO_EXIT_SEC = 300  # 5 分钟无操作自动退出
 
 # ===================== i18n =====================
-if "/home/pi/luwu-os" not in sys.path:
-    sys.path.insert(0, "/home/pi/luwu-os")
+if _LUWU_ROOT not in sys.path:
+    sys.path.insert(0, _LUWU_ROOT)
 try:
     from libs.i18n import Translator as _Translator
     _T = _Translator({
@@ -332,7 +333,7 @@ def run_flask():
 # ===================== 资源路径 =====================
 _LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
 DEMO_RC_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_rc.png")
-_RC_BG_IMAGE = "/home/pi/luwu-os/assets/images/app_bg.png"
+_RC_BG_IMAGE = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "assets/images/app_bg.png")
 
 
 # ===================== PySide6 页面 =====================

@@ -8,12 +8,12 @@ After=local-fs.target
 [Service]
 Type=simple
 # 用 luwu 运行（luwu 在 video 组可访问 /dev/fb0，且 launcher 的 kill-splash.sh 以 luwu 运行可以杀掉它）
-User=luwu
+# User=luwu  # 已移除，默认以 root 运行
 # 防止 mplayer 尝试读取 TTY
 StandardInput=null
 StandardOutput=journal
 StandardError=journal
-ExecStart=/home/pi/luwu-os/configs/luwu-splash.sh
+ExecStart=/opt/luwu-os/configs/luwu-splash.sh
 Restart=no
 KillMode=process
 TimeoutStopSec=3

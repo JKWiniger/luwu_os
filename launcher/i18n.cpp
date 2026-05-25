@@ -1,12 +1,17 @@
 #include "i18n.h"
 #include <QFile>
+#include <cstdlib>
 
 namespace luwu {
 
-static constexpr const char *LANG_INI = "/home/pi/luwu-os/configs/language.ini";
+static QString langIniPath() {
+    const char *root = getenv("LUWU_ROOT");
+    if (!root) root = "/opt/luwu-os";
+    return QString(root) + "/configs/language.ini";
+}
 
 QString currentLang() {
-    QFile f(LANG_INI);
+    QFile f(langIniPath());
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
         return QStringLiteral("cn");
     }

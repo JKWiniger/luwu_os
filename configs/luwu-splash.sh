@@ -4,8 +4,9 @@
 # 通过 FIFO 与 mplayer 通信，支持优雅退出
 
 FB_DEV="/dev/fb-spi"
-BOOT_VIDEO="/home/pi/luwu-os/launcher/assets/boot_splash.mp4"
-BOOT_IMAGE="/home/pi/luwu-os/launcher/assets/bg_macos.png"
+LUWU_ROOT="${LUWU_ROOT:-/opt/luwu-os}"
+BOOT_VIDEO="$LUWU_ROOT/launcher/assets/boot_splash.mp4"
+BOOT_IMAGE="$LUWU_ROOT/launcher/assets/bg_macos.png"
 FIFO_PATH="/tmp/splash.fifo"
 MPLAYER_PID=""
 
