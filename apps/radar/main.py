@@ -46,6 +46,7 @@ try:
             "title": "雷达扫描",
             "init": "正在初始化雷达...",
             "corner_exit": "退出",
+            "corner_link": "链接",
             "radar_disconnected": "雷达未连接",
             "radar_connected": "雷达已连接",
         },
@@ -53,6 +54,7 @@ try:
             "title": "Lidar Scan",
             "init": "Initializing lidar...",
             "corner_exit": "Exit",
+            "corner_link": "Link",
             "radar_disconnected": "Lidar not connected",
             "radar_connected": "Lidar connected",
         },
@@ -413,6 +415,7 @@ class RadarPage(AppFrame):
         # ---- 角标（修正按键：launcher 中 C = Key_Back）----
         self.setCornerHints(
             bl=(_T("corner_exit"), T_Asset.icon_back),
+            br=(_T("corner_link"), T_Asset.icon_enter),
         )
 
         # ---- 自动退出 ----
