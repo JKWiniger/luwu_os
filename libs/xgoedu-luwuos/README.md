@@ -97,7 +97,7 @@ edu.lcd_arc(20, 20, 100, 100, 0, 180, color=(255, 255, 0), width=2)
 # 根据圆心画圆
 edu.lcd_round(160, 120, 50, color="WHITE", width=2)
 
-# 显示 jpg 图片（图片放在 /home/pi/xgoPictures/）
+# 显示 jpg 图片（图片放在 /opt/luwu-os/xgoPictures/）
 edu.lcd_picture("my_image.jpg", x=0, y=0)
 
 # 流式排版长文本（自动换行、翻页）
@@ -218,10 +218,10 @@ if edu.xgoButton("a"):
 ### 音频
 
 ```python
-# 播放 wav 文件（文件放在 /home/pi/xgoMusic/）
+# 播放 wav 文件（文件放在 /opt/luwu-os/xgoMusic/）
 edu.xgoSpeaker("sound.wav")
 
-# 录音（保存在 /home/pi/xgoMusic/）
+# 录音（保存在 /opt/luwu-os/xgoMusic/）
 edu.xgoAudioRecord("recording.wav", seconds=5)
 
 # 百度语音识别

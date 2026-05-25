@@ -1,16 +1,16 @@
 {
-	"BUILD_DIR" : "/home/pi/luwu-os/launcher/build/luwu_launcher_autogen",
-	"CMAKE_BINARY_DIR" : "/home/pi/luwu-os/launcher/build",
-	"CMAKE_CURRENT_BINARY_DIR" : "/home/pi/luwu-os/launcher/build",
-	"CMAKE_CURRENT_SOURCE_DIR" : "/home/pi/luwu-os/launcher",
+	"BUILD_DIR" : "/opt/luwu-os/launcher/build/luwu_launcher_autogen",
+	"CMAKE_BINARY_DIR" : "/opt/luwu-os/launcher/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/opt/luwu-os/launcher/build",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/opt/luwu-os/launcher",
 	"CMAKE_EXECUTABLE" : "/usr/bin/cmake",
 	"CMAKE_LIST_FILES" : 
 	[
-		"/home/pi/luwu-os/launcher/CMakeLists.txt",
-		"/home/pi/luwu-os/launcher/build/CMakeFiles/3.31.6/CMakeSystem.cmake",
+		"/opt/luwu-os/launcher/CMakeLists.txt",
+		"/opt/luwu-os/launcher/build/CMakeFiles/3.31.6/CMakeSystem.cmake",
 		"/usr/share/cmake-3.31/Modules/CMakeSystemSpecificInitialize.cmake",
 		"/usr/share/cmake-3.31/Modules/Platform/Linux-Initialize.cmake",
-		"/home/pi/luwu-os/launcher/build/CMakeFiles/3.31.6/CMakeCXXCompiler.cmake",
+		"/opt/luwu-os/launcher/build/CMakeFiles/3.31.6/CMakeCXXCompiler.cmake",
 		"/usr/share/cmake-3.31/Modules/CMakeSystemSpecificInformation.cmake",
 		"/usr/share/cmake-3.31/Modules/CMakeGenericSystem.cmake",
 		"/usr/share/cmake-3.31/Modules/CMakeInitializeConfigs.cmake",
@@ -224,52 +224,47 @@
 		"/usr/lib/aarch64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsPlugins.cmake",
 		"/usr/lib/aarch64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsVersionlessAliasTargets.cmake"
 	],
-	"CMAKE_SOURCE_DIR" : "/home/pi/luwu-os/launcher",
+	"CMAKE_SOURCE_DIR" : "/opt/luwu-os/launcher",
 	"CROSS_CONFIG" : false,
-	"DEP_FILE" : "/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/deps",
+	"DEP_FILE" : "/opt/luwu-os/launcher/build/luwu_launcher_autogen/deps",
 	"DEP_FILE_RULE_NAME" : "luwu_launcher_autogen/timestamp",
 	"HEADERS" : 
 	[
 		[
-			"/home/pi/luwu-os/launcher/demogridview.h",
+			"/opt/luwu-os/launcher/demogridview.h",
 			"Mu",
 			"EWIEGA46WW/moc_demogridview.cpp",
 			null
 		],
 		[
-			"/home/pi/luwu-os/launcher/devicetable.h",
+			"/opt/luwu-os/launcher/devicetable.h",
 			"Mu",
 			"EWIEGA46WW/moc_devicetable.cpp",
 			null
 		],
 		[
-			"/home/pi/luwu-os/launcher/galleryview.h",
+			"/opt/luwu-os/launcher/galleryview.h",
 			"Mu",
 			"EWIEGA46WW/moc_galleryview.cpp",
 			null
 		],
+		[ "/opt/luwu-os/launcher/i18n.h", "Mu", "EWIEGA46WW/moc_i18n.cpp", null ],
 		[
-			"/home/pi/luwu-os/launcher/i18n.h",
-			"Mu",
-			"EWIEGA46WW/moc_i18n.cpp",
-			null
-		],
-		[
-			"/home/pi/luwu-os/launcher/keyfilter.h",
+			"/opt/luwu-os/launcher/keyfilter.h",
 			"Mu",
 			"EWIEGA46WW/moc_keyfilter.cpp",
 			null
 		],
 		[
-			"/home/pi/luwu-os/launcher/statusbar.h",
+			"/opt/luwu-os/launcher/statusbar.h",
 			"Mu",
 			"EWIEGA46WW/moc_statusbar.cpp",
 			null
 		]
 	],
 	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
-	"INCLUDE_DIR" : "/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/include",
-	"MOC_COMPILATION_FILE" : "/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/mocs_compilation.cpp",
+	"INCLUDE_DIR" : "/opt/luwu-os/launcher/build/luwu_launcher_autogen/include",
+	"MOC_COMPILATION_FILE" : "/opt/luwu-os/launcher/build/luwu_launcher_autogen/mocs_compilation.cpp",
 	"MOC_DEFINITIONS" : [ "QT_CORE_LIB", "QT_GUI_LIB", "QT_NO_DEBUG", "QT_WIDGETS_LIB" ],
 	"MOC_DEPEND_FILTERS" : 
 	[
@@ -312,24 +307,24 @@
 		"-c",
 		"/usr/share/cmake-3.31/Modules/CMakeCXXCompilerABI.cpp"
 	],
-	"MOC_PREDEFS_FILE" : "/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/moc_predefs.h",
+	"MOC_PREDEFS_FILE" : "/opt/luwu-os/launcher/build/luwu_launcher_autogen/moc_predefs.h",
 	"MOC_RELAXED_MODE" : false,
 	"MOC_SKIP" : [],
 	"MULTI_CONFIG" : false,
 	"PARALLEL" : 1,
-	"PARSE_CACHE_FILE" : "/home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/ParseCache.txt",
+	"PARSE_CACHE_FILE" : "/opt/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/ParseCache.txt",
 	"QT_MOC_EXECUTABLE" : "/usr/lib/qt6/libexec/moc",
 	"QT_UIC_EXECUTABLE" : "",
 	"QT_VERSION_MAJOR" : 6,
 	"QT_VERSION_MINOR" : 8,
-	"SETTINGS_FILE" : "/home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/AutogenUsed.txt",
+	"SETTINGS_FILE" : "/opt/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/AutogenUsed.txt",
 	"SOURCES" : 
 	[
-		[ "/home/pi/luwu-os/launcher/demogridview.cpp", "Mu", null ],
-		[ "/home/pi/luwu-os/launcher/galleryview.cpp", "Mu", null ],
-		[ "/home/pi/luwu-os/launcher/i18n.cpp", "Mu", null ],
-		[ "/home/pi/luwu-os/launcher/main.cpp", "Mu", null ],
-		[ "/home/pi/luwu-os/launcher/statusbar.cpp", "Mu", null ]
+		[ "/opt/luwu-os/launcher/demogridview.cpp", "Mu", null ],
+		[ "/opt/luwu-os/launcher/galleryview.cpp", "Mu", null ],
+		[ "/opt/luwu-os/launcher/i18n.cpp", "Mu", null ],
+		[ "/opt/luwu-os/launcher/main.cpp", "Mu", null ],
+		[ "/opt/luwu-os/launcher/statusbar.cpp", "Mu", null ]
 	],
 	"USE_BETTER_GRAPH" : true,
 	"VERBOSITY" : 0

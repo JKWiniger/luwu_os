@@ -1,6 +1,5 @@
-CMakeFiles/luwu_launcher.dir/i18n.cpp.o: \
- /home/pi/luwu-os/launcher/i18n.cpp /usr/include/stdc-predef.h \
- /home/pi/luwu-os/launcher/i18n.h \
+CMakeFiles/luwu_launcher.dir/i18n.cpp.o: /opt/luwu-os/launcher/i18n.cpp \
+ /usr/include/stdc-predef.h /opt/luwu-os/launcher/i18n.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QString \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qstring.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qchar.h \

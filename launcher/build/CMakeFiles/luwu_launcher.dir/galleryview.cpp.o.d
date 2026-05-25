@@ -1,6 +1,6 @@
 CMakeFiles/luwu_launcher.dir/galleryview.cpp.o: \
- /home/pi/luwu-os/launcher/galleryview.cpp /usr/include/stdc-predef.h \
- /home/pi/luwu-os/launcher/galleryview.h \
+ /opt/luwu-os/launcher/galleryview.cpp /usr/include/stdc-predef.h \
+ /opt/luwu-os/launcher/galleryview.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QWidget \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qwidget.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qtwidgetsglobal.h \
@@ -404,7 +404,7 @@ CMakeFiles/luwu_launcher.dir/galleryview.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qrect.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QPixmap \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qpixmap.h \
- /home/pi/luwu-os/launcher/i18n.h \
+ /opt/luwu-os/launcher/i18n.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QString \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qstring.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QPainter \

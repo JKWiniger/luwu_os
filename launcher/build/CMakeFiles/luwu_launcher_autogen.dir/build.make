@@ -53,10 +53,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/pi/luwu-os/launcher
+CMAKE_SOURCE_DIR = /opt/luwu-os/launcher
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/pi/luwu-os/launcher/build
+CMAKE_BINARY_DIR = /opt/luwu-os/launcher/build
 
 # Utility rule file for luwu_launcher_autogen.
 
@@ -70,9 +70,9 @@ CMakeFiles/luwu_launcher_autogen: luwu_launcher_autogen/timestamp
 
 luwu_launcher_autogen/timestamp: /usr/lib/qt6/libexec/moc
 luwu_launcher_autogen/timestamp: CMakeFiles/luwu_launcher_autogen.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/pi/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic MOC for target luwu_launcher"
-	/usr/bin/cmake -E cmake_autogen /home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/AutogenInfo.json Release
-	/usr/bin/cmake -E touch /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/timestamp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/opt/luwu-os/launcher/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic MOC for target luwu_launcher"
+	/usr/bin/cmake -E cmake_autogen /opt/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/AutogenInfo.json Release
+	/usr/bin/cmake -E touch /opt/luwu-os/launcher/build/luwu_launcher_autogen/timestamp
 
 CMakeFiles/luwu_launcher_autogen.dir/codegen:
 .PHONY : CMakeFiles/luwu_launcher_autogen.dir/codegen
@@ -91,6 +91,6 @@ CMakeFiles/luwu_launcher_autogen.dir/clean:
 .PHONY : CMakeFiles/luwu_launcher_autogen.dir/clean
 
 CMakeFiles/luwu_launcher_autogen.dir/depend:
-	cd /home/pi/luwu-os/launcher/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/pi/luwu-os/launcher /home/pi/luwu-os/launcher /home/pi/luwu-os/launcher/build /home/pi/luwu-os/launcher/build /home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/DependInfo.cmake "--color=$(COLOR)"
+	cd /opt/luwu-os/launcher/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /opt/luwu-os/launcher /opt/luwu-os/launcher /opt/luwu-os/launcher/build /opt/luwu-os/launcher/build /opt/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir/DependInfo.cmake "--color=$(COLOR)"
 .PHONY : CMakeFiles/luwu_launcher_autogen.dir/depend
 

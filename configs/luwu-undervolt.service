@@ -5,7 +5,7 @@ Wants=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/luwu-undervolt-monitor.py
+ExecStart=/opt/luwu-os/configs/luwu-undervolt-monitor.py
 Restart=always
 RestartSec=5
 StandardOutput=journal

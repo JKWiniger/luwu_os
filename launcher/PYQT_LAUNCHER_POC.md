@@ -11,7 +11,7 @@
 现有一批 Python 写的示例程序（如 `XGO-PI-CM5/common/demos/run_blockly.py`），
 它们基于 PIL + 自研 LCD 驱动直写 framebuffer。后续计划把 GUI 统一到 Qt：
 
-- **主 launcher** 用 Qt C++（就是当前 `/home/pi/qt-hello`）
+- **主 launcher** 用 Qt C++（就是当前 `/opt/luwu-os/qt-hello`）
 - **每个功能页面**用 **独立 PySide6 进程**，通过按键触发启动，退出后回到 launcher
 - 未来接 HDMI 标准桌面时，依托 `/dev/fb-spi` udev 软链接规范，应用层零改动
 
@@ -148,7 +148,7 @@ self.keys = {"A": 24, "B": 23, "C": 17, "D": 22}
 sudo apt install -y python3-pyside6
 
 # 2. 构建
-cd /home/pi/qt-hello/build && cmake --build .
+cd /opt/luwu-os/qt-hello/build && cmake --build .
 
 # 3. 重启服务
 sudo systemctl restart qt-hello.service

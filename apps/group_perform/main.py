@@ -697,7 +697,7 @@ def action_executor():
             time.sleep(0.05)
 
     force_kill_all_mplayer()
-    music_path = "/home/pi/RaspberryPi-CM5/common/music/dog.mp3"
+    music_path = os.path.join(_LUWU_ROOT, "xgo-media/music/dog.mp3")
     with proc_lock:
         try:
             proc = Popen(

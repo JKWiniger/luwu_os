@@ -308,9 +308,9 @@ luwu-undervolt-monitor.py (systemd 服务，单一写入者)
 |------|------|
 | `/usr/local/bin/luwu-undervolt-monitor.py` | 联合监控 Python 脚本（单文件，含电池读取 + 欠压判断 + 分级关机） |
 | `/etc/systemd/system/luwu-undervolt.service` | systemd 服务（开机自启，自动重启） |
-| `/home/pi/luwu-os/configs/luwu-undervolt-monitor.py` | install.sh 部署源 |
-| `/home/pi/luwu-os/configs/luwu-undervolt.service` | install.sh 部署源 |
-| `/home/pi/luwu-os/launcher/statusbar.cpp` | Qt 状态栏，读 `/tmp/luwu_battery_level` 显示电量 |
+| `/opt/luwu-os/luwu-os/configs/luwu-undervolt-monitor.py` | install.sh 部署源 |
+| `/opt/luwu-os/luwu-os/configs/luwu-undervolt.service` | install.sh 部署源 |
+| `/opt/luwu-os/luwu-os/launcher/statusbar.cpp` | Qt 状态栏，读 `/tmp/luwu_battery_level` 显示电量 |
 
 ### 其他防护层（已在 install.sh 中部署）
 
@@ -367,25 +367,25 @@ CM5 电源+电池 → vcgencmd + xgolib   → /tmp/luwu_battery_level → 多 Ap
 | 文件 | 说明 |
 |------|------|
 | `/boot/firmware/config.txt` | 硬件配置（overlay + 风扇温控 + UART）|
-| `/home/pi/luwu-os/configs/boot-config.txt` | config.txt 模板，install.sh 部署 |
-| `/home/pi/luwu-os/configs/install.sh` | 一键部署脚本（依赖 + overlay + udev + ALSA + systemd）|
-| `/home/pi/luwu-os/configs/luwu-keys.dts` | gpio-keys 设备树源文件 |
-| `/home/pi/luwu-os/configs/luwu-launcher.service` | Luwu OS 桌面启动器 systemd 服务 |
-| `/home/pi/luwu-os/configs/99-fb-spi.rules` | udev 规则（/dev/fb-spi 软链接）|
-| `/home/pi/xgoedu/xgoedu/edulib.py` | 老镜像教育库（`pip install xgoedu`），依赖 xgoscreen/PIL，仅老镜像使用 |
-| `/home/pi/xgoedu-luwuos/xgoedu/edulib.py` | 新镜像教育库（`pip install xgoedu-luwuos`），用 PySide6 QPainter 替代 PIL 绘图 |
-| `/home/pi/lib/xgolib_dog.py` | 机器狗运动库，保留不变 |
-| `/home/pi/lib/xgoscreen/` | 老 LCD spidev 驱动，已废弃，被 fbtft + PySide6 替代 |
+| `/opt/luwu-os/luwu-os/configs/boot-config.txt` | config.txt 模板，install.sh 部署 |
+| `/opt/luwu-os/luwu-os/configs/install.sh` | 一键部署脚本（依赖 + overlay + udev + ALSA + systemd）|
+| `/opt/luwu-os/luwu-os/configs/luwu-keys.dts` | gpio-keys 设备树源文件 |
+| `/opt/luwu-os/luwu-os/configs/luwu-launcher.service` | Luwu OS 桌面启动器 systemd 服务 |
+| `/opt/luwu-os/luwu-os/configs/99-fb-spi.rules` | udev 规则（/dev/fb-spi 软链接）|
+| `/opt/luwu-os/xgoedu/xgoedu/edulib.py` | 老镜像教育库（`pip install xgoedu`），依赖 xgoscreen/PIL，仅老镜像使用 |
+| `/opt/luwu-os/xgoedu-luwuos/xgoedu/edulib.py` | 新镜像教育库（`pip install xgoedu-luwuos`），用 PySide6 QPainter 替代 PIL 绘图 |
+| `/opt/luwu-os/lib/xgolib_dog.py` | 机器狗运动库，保留不变 |
+| `/opt/luwu-os/lib/xgoscreen/` | 老 LCD spidev 驱动，已废弃，被 fbtft + PySide6 替代 |
 | `/etc/asound.conf` | ALSA dmix/dsnoop 配置，多 App 音频共享 |
 | `/var/lib/alsa/asound.state` | 混音器持久化状态（啸叫修复 + 默认音量）|
 | `/usr/local/bin/luwu-undervolt-monitor.py` | 欠压+电池联合监控脚本（Python，systemd 服务）|
 | `/etc/systemd/system/luwu-undervolt.service` | 欠压监控 systemd 服务 |
-| `/home/pi/luwu-os/configs/luwu-undervolt-monitor.py` | 监控脚本 install.sh 部署源 |
-| `/home/pi/luwu-os/configs/luwu-undervolt.service` | 监控服务 install.sh 部署源 |
-| `/home/pi/luwu-os/launcher/statusbar.cpp` | Qt 状态栏（时间+电池，读 `/tmp/luwu_battery_level`）|
-| `/home/pi/luwu-os/launcher/statusbar.h` | 状态栏头文件 |
-| `/home/pi/luwu-os/configs/hardware_autoconf.py` | CM4 硬件自动识别脚本（就地运行，无需 cp）|
-| `/home/pi/luwu-os/configs/luwu-hw-autoconf.service` | 硬件自动识别 systemd 服务 install.sh 部署源 |
+| `/opt/luwu-os/luwu-os/configs/luwu-undervolt-monitor.py` | 监控脚本 install.sh 部署源 |
+| `/opt/luwu-os/luwu-os/configs/luwu-undervolt.service` | 监控服务 install.sh 部署源 |
+| `/opt/luwu-os/luwu-os/launcher/statusbar.cpp` | Qt 状态栏（时间+电池，读 `/tmp/luwu_battery_level`）|
+| `/opt/luwu-os/luwu-os/launcher/statusbar.h` | 状态栏头文件 |
+| `/opt/luwu-os/luwu-os/configs/hardware_autoconf.py` | CM4 硬件自动识别脚本（就地运行，无需 cp）|
+| `/opt/luwu-os/luwu-os/configs/luwu-hw-autoconf.service` | 硬件自动识别 systemd 服务 install.sh 部署源 |
 
 ---
 
@@ -416,10 +416,10 @@ CM5 电源+电池 → vcgencmd + xgolib   → /tmp/luwu_battery_level → 多 Ap
 
 | 文件 | 用途 |
 |------|------|
-| `/home/pi/luwu-os/configs/hardware_autoconf.py` | 自动识别脚本（源文件，就地运行） |
-| `/home/pi/luwu-os/configs/luwu-hw-autoconf.service` | systemd 服务（`After=multi-user.target`，桌面启动后延迟 2 秒执行） |
-| `/home/pi/luwu-os/configs/boot-config.txt` | 新 CM4/CM5 配置模板 |
-| `/home/pi/luwu-os/configs/cm4-old.config` | 老 CM4 配置模板 |
+| `/opt/luwu-os/luwu-os/configs/hardware_autoconf.py` | 自动识别脚本（源文件，就地运行） |
+| `/opt/luwu-os/luwu-os/configs/luwu-hw-autoconf.service` | systemd 服务（`After=multi-user.target`，桌面启动后延迟 2 秒执行） |
+| `/opt/luwu-os/luwu-os/configs/boot-config.txt` | 新 CM4/CM5 配置模板 |
+| `/opt/luwu-os/luwu-os/configs/cm4-old.config` | 老 CM4 配置模板 |
 | `/tmp/luwu_hw_autoconf.log` | 运行日志（每次开机追加） |
 | `/tmp/luwu_hw_autoconf_switched` | 防循环标记（tmpfs，断电自动清除） |
 

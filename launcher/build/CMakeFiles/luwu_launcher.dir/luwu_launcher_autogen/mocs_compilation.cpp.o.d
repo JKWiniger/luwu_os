@@ -1,8 +1,8 @@
 CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o: \
- /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/mocs_compilation.cpp \
+ /opt/luwu-os/launcher/build/luwu_launcher_autogen/mocs_compilation.cpp \
  /usr/include/stdc-predef.h \
- /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/moc_demogridview.cpp \
- /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/../../../demogridview.h \
+ /opt/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/moc_demogridview.cpp \
+ /opt/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/../../../demogridview.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QWidget \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qwidget.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qtwidgetsglobal.h \
@@ -406,14 +406,14 @@ CMakeFiles/luwu_launcher.dir/luwu_launcher_autogen/mocs_compilation.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qpen.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qtextoption.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qtmochelpers.h \
- /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/moc_galleryview.cpp \
- /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/../../../galleryview.h \
+ /opt/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/moc_galleryview.cpp \
+ /opt/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/../../../galleryview.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QTimer \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qtimer.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qbasictimer.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QPixmap \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qpixmap.h \
- /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/moc_statusbar.cpp \
- /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/../../../statusbar.h \
+ /opt/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/moc_statusbar.cpp \
+ /opt/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/../../../statusbar.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QColor \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qcolor.h

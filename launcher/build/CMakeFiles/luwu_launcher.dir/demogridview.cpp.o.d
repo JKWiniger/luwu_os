@@ -1,6 +1,6 @@
 CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: \
- /home/pi/luwu-os/launcher/demogridview.cpp /usr/include/stdc-predef.h \
- /home/pi/luwu-os/launcher/demogridview.h \
+ /opt/luwu-os/launcher/demogridview.cpp /usr/include/stdc-predef.h \
+ /opt/luwu-os/launcher/demogridview.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QWidget \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qwidget.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qtwidgetsglobal.h \
@@ -399,7 +399,7 @@ CMakeFiles/luwu_launcher.dir/demogridview.cpp.o: \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qvector.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QRect \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qrect.h \
- /home/pi/luwu-os/launcher/devicetable.h /home/pi/luwu-os/launcher/i18n.h \
+ /opt/luwu-os/launcher/devicetable.h /opt/luwu-os/launcher/i18n.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QString \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qstring.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QPainter \

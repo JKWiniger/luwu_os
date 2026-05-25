@@ -53,10 +53,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/pi/luwu-os/launcher
+CMAKE_SOURCE_DIR = /opt/luwu-os/launcher
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/pi/luwu-os/launcher/build
+CMAKE_BINARY_DIR = /opt/luwu-os/launcher/build
 
 # Utility rule file for luwu_launcher_autogen_timestamp_deps.
 
@@ -81,6 +81,6 @@ CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir/clean:
 .PHONY : CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir/clean
 
 CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir/depend:
-	cd /home/pi/luwu-os/launcher/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/pi/luwu-os/launcher /home/pi/luwu-os/launcher /home/pi/luwu-os/launcher/build /home/pi/luwu-os/launcher/build /home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir/DependInfo.cmake "--color=$(COLOR)"
+	cd /opt/luwu-os/launcher/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /opt/luwu-os/launcher /opt/luwu-os/launcher /opt/luwu-os/launcher/build /opt/luwu-os/launcher/build /opt/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir/DependInfo.cmake "--color=$(COLOR)"
 .PHONY : CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir/depend
 

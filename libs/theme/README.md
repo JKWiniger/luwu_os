@@ -34,7 +34,7 @@ libs/
 ```python
 import sys
 from pathlib import Path
-LUWU_ROOT = Path("/home/pi/luwu-os")
+LUWU_ROOT = Path("/opt/luwu-os/luwu-os")
 if str(LUWU_ROOT) not in sys.path:
     sys.path.insert(0, str(LUWU_ROOT))
 
@@ -190,7 +190,7 @@ language / contact / download / time / shutdown / reboot）全部继承 `AppFram
 
 ### 10 · 改造已有 app 的检查清单
 
-- [ ] 顶部加 `sys.path.insert(0, "/home/pi/luwu-os")` + `from libs.theme import ...` + `from libs.ui import ...`
+- [ ] 顶部加 `sys.path.insert(0, "/opt/luwu-os/luwu-os")` + `from libs.theme import ...` + `from libs.ui import ...`
 - [ ] 所有 `class XxxPage(QWidget)` → `class XxxPage(AppFrame)`
 - [ ] 删除 `self.setStyleSheet("background-color: #...;")`
 - [ ] 删除手写的 `corner_tl/tr/bl/br QLabel` 及其 `resizeEvent` 定位

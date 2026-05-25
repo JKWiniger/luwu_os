@@ -2,7 +2,7 @@
 """Luwu OS 电池低电量关机监控"""
 import subprocess, time, os
 
-CHECK = 30
+CHECK = 60
 SHUTDOWN_THRESHOLD = 9
 XGO = None
 

@@ -16,8 +16,8 @@ from typing import Dict, List, Optional, Any
 # 统一路径根
 # =============================================================
 _LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
-_XGO_PICTURES = os.path.join(_LUWU_ROOT, "xgo-media/pictures")
-_XGO_MUSIC = os.path.join(_LUWU_ROOT, "xgo-media/music")
+_XGO_PICTURES = os.path.join(_LUWU_ROOT, "xgo-media/xgoPictures")
+_XGO_MUSIC = os.path.join(_LUWU_ROOT, "xgo-media/xgoMusic")
 
 # =============================================================
 # XGO 硬件实例初始化
@@ -245,7 +245,7 @@ COMMON_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "xgo_display_picture",
-            "description": "在XGO屏幕上显示本地图片(位于xgo-media/pictures/目录)",
+            "description": "在XGO屏幕上显示本地图片(位于xgo-media/xgoPictures/目录)",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -261,7 +261,7 @@ COMMON_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "xgo_speak",
-            "description": "XGO播放本地音频文件(位于xgo-media/music/目录)",
+            "description": "XGO播放本地音频文件(位于xgo-media/xgoMusic/目录)",
             "parameters": {
                 "type": "object",
                 "properties": {

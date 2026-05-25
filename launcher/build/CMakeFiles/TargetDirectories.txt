@@ -1,5 +1,5 @@
-/home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher.dir
-/home/pi/luwu-os/launcher/build/CMakeFiles/edit_cache.dir
-/home/pi/luwu-os/launcher/build/CMakeFiles/rebuild_cache.dir
-/home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir
-/home/pi/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir
+/opt/luwu-os/launcher/build/CMakeFiles/luwu_launcher.dir
+/opt/luwu-os/launcher/build/CMakeFiles/edit_cache.dir
+/opt/luwu-os/launcher/build/CMakeFiles/rebuild_cache.dir
+/opt/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen_timestamp_deps.dir
+/opt/luwu-os/launcher/build/CMakeFiles/luwu_launcher_autogen.dir

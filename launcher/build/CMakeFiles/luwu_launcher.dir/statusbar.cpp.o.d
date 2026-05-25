@@ -1,6 +1,6 @@
 CMakeFiles/luwu_launcher.dir/statusbar.cpp.o: \
- /home/pi/luwu-os/launcher/statusbar.cpp /usr/include/stdc-predef.h \
- /home/pi/luwu-os/launcher/statusbar.h \
+ /opt/luwu-os/launcher/statusbar.cpp /usr/include/stdc-predef.h \
+ /opt/luwu-os/launcher/statusbar.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QWidget \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qwidget.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qtwidgetsglobal.h \

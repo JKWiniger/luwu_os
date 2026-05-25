@@ -1,5 +1,5 @@
-/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/moc_statusbar.cpp: /home/pi/luwu-os/launcher/statusbar.h \
-  /home/pi/luwu-os/launcher/build/luwu_launcher_autogen/moc_predefs.h \
+/opt/luwu-os/launcher/build/luwu_launcher_autogen/EWIEGA46WW/moc_statusbar.cpp: /opt/luwu-os/launcher/statusbar.h \
+  /opt/luwu-os/launcher/build/luwu_launcher_autogen/moc_predefs.h \
   /usr/include/aarch64-linux-gnu/bits/atomic_wide_counter.h \
   /usr/include/aarch64-linux-gnu/bits/byteswap.h \
   /usr/include/aarch64-linux-gnu/bits/cpu-set.h \

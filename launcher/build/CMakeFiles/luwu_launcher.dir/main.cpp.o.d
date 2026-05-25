@@ -1,5 +1,5 @@
-CMakeFiles/luwu_launcher.dir/main.cpp.o: \
- /home/pi/luwu-os/launcher/main.cpp /usr/include/stdc-predef.h \
+CMakeFiles/luwu_launcher.dir/main.cpp.o: /opt/luwu-os/launcher/main.cpp \
+ /usr/include/stdc-predef.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QApplication \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qapplication.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qtwidgetsglobal.h \
@@ -493,15 +493,14 @@ CMakeFiles/luwu_launcher.dir/main.cpp.o: \
  /usr/include/aarch64-linux-gnu/bits/statx-generic.h \
  /usr/include/aarch64-linux-gnu/bits/types/struct_statx_timestamp.h \
  /usr/include/aarch64-linux-gnu/bits/types/struct_statx.h \
- /home/pi/luwu-os/launcher/keyfilter.h \
+ /opt/luwu-os/launcher/keyfilter.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QObject \
- /home/pi/luwu-os/launcher/galleryview.h \
+ /opt/luwu-os/launcher/galleryview.h \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/QWidget \
  /usr/include/aarch64-linux-gnu/qt6/QtWidgets/qwidget.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QVector \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/qvector.h \
  /usr/include/aarch64-linux-gnu/qt6/QtCore/QRect \
- /home/pi/luwu-os/launcher/demogridview.h \
- /home/pi/luwu-os/launcher/statusbar.h \
+ /opt/luwu-os/launcher/demogridview.h /opt/luwu-os/launcher/statusbar.h \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/QColor \
  /usr/include/aarch64-linux-gnu/qt6/QtGui/qcolor.h

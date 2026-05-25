@@ -8,10 +8,12 @@ echo "=== Luwu OS 系统配置部署 ==="
 
 # 0a. 拷贝项目到 /opt/luwu-os（路径与用户名无关）
 echo "[0a/14] 部署项目到 /opt/luwu-os ..."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 mkdir -p /opt/luwu-os
 rm -rf /opt/luwu-os.old 2>/dev/null
 [ -d /opt/luwu-os ] && mv /opt/luwu-os /opt/luwu-os.old
-cp -r /home/pi/luwu-os /opt/luwu-os
+cp -r "$PROJECT_DIR" /opt/luwu-os
 chown -R luwu:luwu /opt/luwu-os
 chmod -R 755 /opt/luwu-os
 # 创建 xgo-media 子目录
@@ -29,9 +31,8 @@ echo "  ✓ 系统依赖已安装"
 
 # 0b. pip 依赖（apt 中没有的包 / 本地开发包）
 echo "[0b/12] 安装 pip 依赖 ..."
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ -f "$SCRIPT_DIR/../requirements.txt" ]; then
-    pip3 install --break-system-packages -r "$SCRIPT_DIR/../requirements.txt" || echo "  ! pip 依赖安装警告（非致命）"
+if [ -f "$PROJECT_DIR/requirements.txt" ]; then
+    pip3 install --break-system-packages -r "$PROJECT_DIR/requirements.txt" || echo "  ! pip 依赖安装警告（非致命）"
     echo "  ✓ pip 依赖已安装"
 else
     echo "  ! requirements.txt 未找到，跳过"
@@ -135,8 +136,7 @@ echo "  ✓ 日志持久化已配置"
 
 # 10. 欠压+电池联合监控 — 分级响应防误关机
 echo "[12/14] 欠压+电池监控 ..."
-cp luwu-undervolt-monitor.py /usr/local/bin/
-chmod +x /usr/local/bin/luwu-undervolt-monitor.py
+chmod +x /opt/luwu-os/configs/luwu-undervolt-monitor.py
 cp luwu-undervolt.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable luwu-undervolt.service

@@ -2,7 +2,7 @@
 
 ## 目标
 
-- 项目路径从 `/home/pi/luwu-os` → `/opt/luwu-os`
+- 项目路径从 `/opt/luwu-os/luwu-os` → `/opt/luwu-os`
 - systemd 服务从 `User=luwu` → 默认 root（用户名无关）
 - 解决镜像刷机时用户改用户名导致服务启动失败的问题
 
@@ -17,7 +17,7 @@ import os
 LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
 ```
 
-开发时：`export LUWU_ROOT=/home/pi/luwu-os`
+开发时：`export LUWU_ROOT=/opt/luwu-os/luwu-os`
 
 ### 2. 需要改的文件
 
@@ -49,9 +49,9 @@ xgoedu 产生的媒体文件统一纳入项目内：
 
 ```
 /opt/luwu-os/xgo-media/
-├── music/      # 原 /home/pi/xgoMusic/
-├── pictures/   # 原 /home/pi/xgoPictures/
-└── videos/     # 原 /home/pi/xgoVideos/
+├── music/      # 原 /opt/luwu-os/xgoMusic/
+├── pictures/   # 原 /opt/luwu-os/xgoPictures/
+└── videos/     # 原 /opt/luwu-os/xgoVideos/
 ```
 
 ### 4. systemd 服务改动
@@ -78,14 +78,14 @@ Restart=no
 
 ```bash
 # 拷贝项目到 /opt
-cp -r /home/pi/luwu-os /opt/luwu-os
+cp -r /opt/luwu-os/luwu-os /opt/luwu-os
 chown -R luwu:luwu /opt/luwu-os
 chmod -R 755 /opt/luwu-os
 ```
 
 ## 注意事项
 
-- 开发时设置环境变量 `LUWU_ROOT=/home/pi/luwu-os` 即可在原路径调试
+- 开发时设置环境变量 `LUWU_ROOT=/opt/luwu-os/luwu-os` 即可在原路径调试
 - root 运行服务写入 `/opt` 无权限问题
 - 用户数据（`lock.json`）仍在 `$HOME/.xgo-blockly/`，用 `os.path.expanduser()` 获取
 - 不涉及 launcher C++ 源码改动（路径由 systemd `ExecStart` 控制）

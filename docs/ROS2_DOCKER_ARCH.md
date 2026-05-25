@@ -141,7 +141,7 @@ graph TB
 docker run -d --name ros2-robot \
   --network host \
   --restart unless-stopped \
-  -v /home/pi/ros2_ws:/ros2_ws \
+  -v /opt/luwu-os/ros2_ws:/ros2_ws \
   osrf/ros:jazzy-ros-base \
   ros2 launch robot_brain bringup.launch.py
 ```

@@ -28,7 +28,7 @@ events:
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.out"
       
       The CXX compiler identification is GNU, found in:
-        /home/pi/luwu-os/launcher/build/CMakeFiles/3.31.6/CompilerIdCXX/a.out
+        /opt/luwu-os/launcher/build/CMakeFiles/3.31.6/CompilerIdCXX/a.out
       
   -
     kind: "try_compile-v1"
@@ -39,8 +39,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp"
-      binary: "/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp"
+      source: "/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp"
+      binary: "/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -50,11 +50,11 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: '/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp'
+        Change Dir: '/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp'
         
         Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_9696d/fast
         /usr/bin/gmake  -f CMakeFiles/cmTC_9696d.dir/build.make CMakeFiles/cmTC_9696d.dir/build
-        gmake[1]: Entering directory '/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp'
+        gmake[1]: Entering directory '/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp'
         Building CXX object CMakeFiles/cmTC_9696d.dir/CMakeCXXCompilerABI.cpp.o
         /usr/bin/c++   -v -o CMakeFiles/cmTC_9696d.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-3.31/Modules/CMakeCXXCompilerABI.cpp
         Using built-in specs.
@@ -116,7 +116,7 @@ events:
         GNU ld (GNU Binutils for Debian) 2.44
         COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_9696d' '-foffload-options=-l_GCC_m' '-shared-libgcc' '-mlittle-endian' '-mabi=lp64' '-dumpdir' 'cmTC_9696d.'
         /usr/bin/c++  -v -Wl,-v CMakeFiles/cmTC_9696d.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_9696d
-        gmake[1]: Leaving directory '/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp'
+        gmake[1]: Leaving directory '/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp'
         
       exitCode: 0
   -
@@ -157,11 +157,11 @@ events:
       Parsed CXX implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(\\.[a-z]+)?|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(\\.[a-z]+)?))("|,| |$)]
-        ignore line: [Change Dir: '/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp']
+        ignore line: [Change Dir: '/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp']
         ignore line: []
         ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_9696d/fast]
         ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_9696d.dir/build.make CMakeFiles/cmTC_9696d.dir/build]
-        ignore line: [gmake[1]: Entering directory '/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp']
+        ignore line: [gmake[1]: Entering directory '/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-isSTmp']
         ignore line: [Building CXX object CMakeFiles/cmTC_9696d.dir/CMakeCXXCompilerABI.cpp.o]
         ignore line: [/usr/bin/c++   -v -o CMakeFiles/cmTC_9696d.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-3.31/Modules/CMakeCXXCompilerABI.cpp]
         ignore line: [Using built-in specs.]
@@ -308,8 +308,8 @@ events:
     checks:
       - "Performing Test CMAKE_HAVE_LIBC_PTHREAD"
     directories:
-      source: "/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF"
-      binary: "/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF"
+      source: "/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF"
+      binary: "/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -319,17 +319,17 @@ events:
       variable: "CMAKE_HAVE_LIBC_PTHREAD"
       cached: true
       stdout: |
-        Change Dir: '/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF'
+        Change Dir: '/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF'
         
         Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_f1d62/fast
         /usr/bin/gmake  -f CMakeFiles/cmTC_f1d62.dir/build.make CMakeFiles/cmTC_f1d62.dir/build
-        gmake[1]: 进入目录“/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF”
+        gmake[1]: 进入目录“/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF”
         Building CXX object CMakeFiles/cmTC_f1d62.dir/src.cxx.o
-        /usr/bin/c++ -DCMAKE_HAVE_LIBC_PTHREAD   -o CMakeFiles/cmTC_f1d62.dir/src.cxx.o -c /home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF/src.cxx
+        /usr/bin/c++ -DCMAKE_HAVE_LIBC_PTHREAD   -o CMakeFiles/cmTC_f1d62.dir/src.cxx.o -c /opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF/src.cxx
         Linking CXX executable cmTC_f1d62
         /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_f1d62.dir/link.txt --verbose=1
         /usr/bin/c++ CMakeFiles/cmTC_f1d62.dir/src.cxx.o -o cmTC_f1d62
-        gmake[1]: 离开目录“/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF”
+        gmake[1]: 离开目录“/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-3rliWF”
         
       exitCode: 0
   -
@@ -351,8 +351,8 @@ events:
     checks:
       - "Performing Test HAVE_STDATOMIC"
     directories:
-      source: "/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n"
-      binary: "/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n"
+      source: "/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n"
+      binary: "/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -362,17 +362,17 @@ events:
       variable: "HAVE_STDATOMIC"
       cached: true
       stdout: |
-        Change Dir: '/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n'
+        Change Dir: '/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n'
         
         Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_5faa5/fast
         /usr/bin/gmake  -f CMakeFiles/cmTC_5faa5.dir/build.make CMakeFiles/cmTC_5faa5.dir/build
-        gmake[1]: 进入目录“/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n”
+        gmake[1]: 进入目录“/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n”
         Building CXX object CMakeFiles/cmTC_5faa5.dir/src.cxx.o
-        /usr/bin/c++ -DHAVE_STDATOMIC   -o CMakeFiles/cmTC_5faa5.dir/src.cxx.o -c /home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n/src.cxx
+        /usr/bin/c++ -DHAVE_STDATOMIC   -o CMakeFiles/cmTC_5faa5.dir/src.cxx.o -c /opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n/src.cxx
         Linking CXX executable cmTC_5faa5
         /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_5faa5.dir/link.txt --verbose=1
         /usr/bin/c++ CMakeFiles/cmTC_5faa5.dir/src.cxx.o -o cmTC_5faa5
-        gmake[1]: 离开目录“/home/pi/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n”
+        gmake[1]: 离开目录“/opt/luwu-os/launcher/build/CMakeFiles/CMakeScratch/TryCompile-kg0w8n”
         
       exitCode: 0
 ...

@@ -1,19 +1,19 @@
 luwu_launcher_autogen/timestamp: \
-	/home/pi/luwu-os/launcher/CMakeLists.txt \
-	/home/pi/luwu-os/launcher/build/CMakeFiles/3.31.6/CMakeCXXCompiler.cmake \
-	/home/pi/luwu-os/launcher/build/CMakeFiles/3.31.6/CMakeSystem.cmake \
-	/home/pi/luwu-os/launcher/build/luwu_launcher_autogen/moc_predefs.h \
-	/home/pi/luwu-os/launcher/demogridview.cpp \
-	/home/pi/luwu-os/launcher/demogridview.h \
-	/home/pi/luwu-os/launcher/devicetable.h \
-	/home/pi/luwu-os/launcher/galleryview.cpp \
-	/home/pi/luwu-os/launcher/galleryview.h \
-	/home/pi/luwu-os/launcher/i18n.cpp \
-	/home/pi/luwu-os/launcher/i18n.h \
-	/home/pi/luwu-os/launcher/keyfilter.h \
-	/home/pi/luwu-os/launcher/main.cpp \
-	/home/pi/luwu-os/launcher/statusbar.cpp \
-	/home/pi/luwu-os/launcher/statusbar.h \
+	/opt/luwu-os/launcher/CMakeLists.txt \
+	/opt/luwu-os/launcher/build/CMakeFiles/3.31.6/CMakeCXXCompiler.cmake \
+	/opt/luwu-os/launcher/build/CMakeFiles/3.31.6/CMakeSystem.cmake \
+	/opt/luwu-os/launcher/build/luwu_launcher_autogen/moc_predefs.h \
+	/opt/luwu-os/launcher/demogridview.cpp \
+	/opt/luwu-os/launcher/demogridview.h \
+	/opt/luwu-os/launcher/devicetable.h \
+	/opt/luwu-os/launcher/galleryview.cpp \
+	/opt/luwu-os/launcher/galleryview.h \
+	/opt/luwu-os/launcher/i18n.cpp \
+	/opt/luwu-os/launcher/i18n.h \
+	/opt/luwu-os/launcher/keyfilter.h \
+	/opt/luwu-os/launcher/main.cpp \
+	/opt/luwu-os/launcher/statusbar.cpp \
+	/opt/luwu-os/launcher/statusbar.h \
 	/usr/include/aarch64-linux-gnu/bits/atomic_wide_counter.h \
 	/usr/include/aarch64-linux-gnu/bits/byteswap.h \
 	/usr/include/aarch64-linux-gnu/bits/cpu-set.h \
