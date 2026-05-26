@@ -341,9 +341,9 @@ class JoystickPage(AppFrame):
         except Exception as e:
             print(f"[joystick] Keys FIFO error: {e}", flush=True)
 
-    def _on_key_fifo(self, fd: int):
+    def _on_key_fifo(self, *args):  # pip/apt PySide6 compatible
         try:
-            data = os.read(fd, 32)
+            data = os.read(self._keys_fd, 32)
             if not data:
                 return
             for line in data.decode().strip().split('\n'):

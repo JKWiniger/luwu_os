@@ -24,7 +24,7 @@ echo "  ✓ 项目已部署到 /opt/luwu-os"
 # 0. 系统依赖
 echo "[1/14] 安装系统依赖 ..."
 apt install -y \
-    python3-pip python3-pyside6 python3-numpy python3-picamera2 python3-evdev \
+    python3-pip  python3-numpy python3-picamera2 python3-evdev \
     python3-flask python3-flask-socketio python3-opencv \
     mplayer alsa-utils ffmpeg libzbar0t64 portaudio19-dev
 echo "  ✓ 系统依赖已安装"
