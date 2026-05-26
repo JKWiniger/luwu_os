@@ -34,7 +34,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(ROOT, "mappings.json")
 
 # ── 手柄识别 ──────────────────────────────────────────────────────
-GAMEPAD_KEYWORDS = ["xbox", "microsoft", "wireless controller", "controller", "tl_", "8bitdo", "ipega", "gamepad", "bm769"]
+GAMEPAD_KEYWORDS = ["xbox", "microsoft", "wireless controller", "controller", "tl_", "8bitdo", "ipega", "gamepad", "joystick", "bm769"]
 
 # evdev 按键码 → 按钮索引
 # 支持 PS4 DualShock4 / Xbox / 通用手柄（多种 code 映射同一 index）
@@ -134,6 +134,7 @@ HOLD = {
 AXIS_FUNC = {
     "rider_axis_x", "rider_axis_yaw", "rider_roll_axis",
     "axis_x", "axis_y", "axis_yaw",
+    "turn_axis", "rider_turn_axis",
 }
 
 
@@ -143,6 +144,8 @@ class XGOController:
         self.device_type = None   # "xgorider" / "xgomini" / "xgolite"
         self.mapping = {}         # {"button_0": "stop", "axis_1": "rider_axis_x", ...}
         self._held = set()        # 当前持续按住的按钮索引集合
+        self._axis_held = set()   # 当前轴触发的 hold 动作集合
+        self._axis_fired = set()  # 轴触发的 one-shot 动作防重复
         self._axes = {}           # {轴索引: 值}
         self._height = 90         # 当前车身高度（用于增减控制）
         self._step_control = 70   # 步幅 (40/70/100 循环)
@@ -164,9 +167,9 @@ class XGOController:
 
     def _init_xgo(self):
         try:
-            import xgolib
+            from xgolib import XGO
             log.info("正在初始化 xgolib（自动识别设备）...")
-            self.xgo = xgolib.XGO()
+            self.xgo = XGO()
             fw = getattr(self.xgo, "version", "")
             if fw and fw[0] == "R":
                 self.device_type = "xgorider"
@@ -296,7 +299,7 @@ class XGOController:
 
         xgo = self.xgo
         is_rider = (self.device_type == "xgorider")
-        log.info(f"CALL func={func_id}, axis_val={axis_val}, xgo={'✓' if xgo else '✗ None'}, type={self.device_type}")
+        log.debug(f"CALL func={func_id}, axis_val={axis_val}, xgo={'✓' if xgo else '✗ None'}, type={self.device_type}")
         if not xgo:
             log.warning(f"  xgo=None, 无法执行 {func_id}（仅日志输出）")
 
@@ -334,6 +337,16 @@ class XGOController:
             v = -(axis_val or 0) * 100
             if xgo: xgo.turn(v)
             log.debug(f"axis_yaw {v:.1f}")
+
+        elif func_id == "turn_axis":
+            v = -(axis_val or 0) * 100
+            if xgo: xgo.turn(v)
+            log.debug(f"turn_axis {v:.1f}")
+
+        elif func_id == "rider_turn_axis":
+            v = (axis_val or 0) * 360
+            if xgo: xgo.rider_turn(v) if is_rider else xgo.turn(v)
+            log.debug(f"rider_turn_axis {v:.0f}")
 
         # ── 持续按住移动 ──
         elif func_id == "rider_forward":
@@ -670,15 +683,41 @@ class XGOController:
         self._axes[axis_idx] = value
         key = f"axis_{axis_idx}"
         func = self.mapping.get(key, "none")
+        DEADZONE = 0.12
+
         if func in AXIS_FUNC:
-            DEADZONE = 0.12
             v = value if abs(value) > DEADZONE else 0.0
             if self.mapping.get(f"{key}_reversed", False):
                 v = -v
             # 只在超出死区时打日志，避免刷屏
             if abs(value) > DEADZONE:
-                log.info(f"AXIS {key}={value:+.3f} → func={func}, v={v:+.3f}")
+                log.debug(f"AXIS {key}={value:+.3f} → func={func}, v={v:+.3f}")
             self._call(func, axis_val=v)
+
+        elif func in HOLD:
+            # 轴触发 hold 动作：超出阈值 → 持续执行，回死区 → 停止
+            outside = abs(value) > 0.3
+            if outside and func not in self._axis_held:
+                self._axis_held.add(func)
+                log.info(f"AXIS {key}={value:+.3f} → HOLD 开始: {func}")
+                self._call(func)
+            elif not outside and func in self._axis_held:
+                self._axis_held.discard(func)
+                still_active = bool(self._axis_held)
+                if not still_active and not self._held:
+                    log.info(f"AXIS {key} → HOLD 释放，停止移动")
+                    self._stop_movement()
+                else:
+                    log.info(f"AXIS {key} → HOLD 释放 {func}（仍有其他运动源）")
+
+        elif func in ONE_SHOT:
+            # 轴触发 one-shot 动作：跨过阈值时触发一次，需回中才能再次触发
+            if abs(value) > 0.5 and func not in self._axis_fired:
+                self._axis_fired.add(func)
+                log.info(f"AXIS {key}={value:+.3f} → ONE_SHOT 触发: {func}")
+                self._call(func)
+            elif abs(value) < 0.2:
+                self._axis_fired.discard(func)
 
     # ── BLE GATT 手柄路径 ──────────────────────────────────────
 

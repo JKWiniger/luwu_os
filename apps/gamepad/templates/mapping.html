@@ -110,7 +110,7 @@
 
 <script>
 // ── 全局状态 ──
-let currentDevice = 'xgomini';
+let currentDevice = '';
 let currentMapping = {};
 let buttonNames = {};
 let axisNames = {};
@@ -119,6 +119,7 @@ let holdActions = [];
 let axisActions = [];
 let actionNames = {};
 let devices = [];
+let deviceNames = {};
 
 // ── 校准状态 ──
 let calRunning = false;
@@ -130,14 +131,34 @@ let calResults = {};         // {button_0: {expected:0, got:1, match:false}, ...
 let calPaused = false;       // 是否暂停（等用户按或者超时中）
 let calCurrentKey = null;
 
+// ── 按模式获取设备列表和名称 ──
+function getDevicesByMode(mode) {
+  if (mode === 'joystick') {
+    return {
+      devices: ['joystick_xgomini', 'joystick_xgolite', 'joystick_xgorider'],
+      names: { joystick_xgomini:'2.4G-MINI', joystick_xgolite:'2.4G-LITE', joystick_xgorider:'2.4G-RIDER' },
+    };
+  }
+  return {
+    devices: ['xgomini', 'xgolite', 'xgorider'],
+    names: { xgomini:'BT-MINI', xgolite:'BT-LITE', xgorider:'BT-RIDER' },
+  };
+}
+
 // ── 初始化 ──
 async function init() {
   try {
     const resp = await fetch('/api/info');
     const data = await resp.json();
+
+    // 根据手柄当前模式选择设备列表
+    const modeInfo = getDevicesByMode(data.mode || 'bluetooth');
+    devices = modeInfo.devices;
+    deviceNames = modeInfo.names;
+    currentDevice = devices[0];
+
     buttonNames = data.buttons || {};
     axisNames = data.axes || {};
-    devices = data.devices || ['xgomini', 'xgolite', 'xgorider'];
     const devAvail = (data.available && data.available[currentDevice]) || {};
     oneShotActions = devAvail.one_shot || [];
     holdActions = devAvail.hold || [];
@@ -152,9 +173,8 @@ async function init() {
 
 function renderDeviceTabs() {
   const tabs = document.getElementById('deviceTabs');
-  const names = { xgomini:'XGO-MINI', xgolite:'XGO-LITE', xgorider:'XGO-RIDER' };
   tabs.innerHTML = devices.map(d =>
-    `<button class="${d === currentDevice ? 'active' : ''}" onclick="switchDevice('${d}')">${names[d] || d}</button>`
+    `<button class="${d === currentDevice ? 'active' : ''}" onclick="switchDevice('${d}')">${deviceNames[d] || d}</button>`
   ).join('');
 }
 
@@ -220,8 +240,10 @@ function renderMapping() {
 function renderSelect(key, currentValue, type) {
   let actions;
   if (type === 'axis') {
+    // 轴只能映射到轴类型动作（接收连续值 -1.0~1.0，提供比例控制）
     actions = axisActions;
   } else {
+    // 按钮可映射到一次性动作或按住动作
     actions = [...oneShotActions];
     for (const a of holdActions) { if (!actions.includes(a)) actions.push(a); }
   }

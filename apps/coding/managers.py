@@ -10,6 +10,21 @@ import re
 import urllib.request
 import traceback
 
+# --- 启动日志（stdout → launcher QProcess::ForwardedChannels → journal） ---
+_M_TRACE_FILE = "/tmp/coding_startup.log"
+_M_T0 = time.monotonic()
+
+def _mtrace(msg):
+    """输出带毫秒偏移的启动日志到 stdout 和文件。"""
+    elapsed = (time.monotonic() - _M_T0) * 1000
+    line = f"[coding][+{elapsed:7.1f}ms] {msg}"
+    print(line, flush=True)
+    try:
+        with open(_M_TRACE_FILE, "a") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
 from config import (
     BLOCKLY_PYTHON, BLOCKLY_SERVICES_DIR, BLOCKLY_PROJECTS_DIR,
     kill_blockly_service,
@@ -28,24 +43,28 @@ class BlocklyServiceManager:
 
     def start(self):
         """在独立线程中启动 Blockly 服务。"""
+        _mtrace("BlocklyServiceManager.start enter")
         if not os.path.exists(BLOCKLY_PYTHON):
-            print(f"[coding] ERROR: venv not found at {BLOCKLY_PYTHON}", flush=True)
+            _mtrace(f"ERROR: venv not found at {BLOCKLY_PYTHON}")
             return
 
         # 验证 xgo_blockly 已安装
+        _mtrace("verifying xgo_blockly import...")
         try:
             result = subprocess.run(
                 [BLOCKLY_PYTHON, "-c", "import xgo_blockly"],
                 capture_output=True, text=True, timeout=10,
             )
             if result.returncode != 0:
-                print("[coding] ERROR: xgo_blockly not installed in venv", flush=True)
+                err = result.stderr.strip() if result.stderr else "(no stderr)"
+                out = result.stdout.strip()[:200] if result.stdout else ""
+                _mtrace(f"ERROR: xgo_blockly import failed rc={result.returncode} stderr={err} stdout={out}")
                 return
-            print("[coding] xgo_blockly verified OK", flush=True)
+            _mtrace("xgo_blockly verified OK")
         except Exception as e:
-            print(f"[coding] verification warning: {e}", flush=True)
+            _mtrace(f"verification exception: {e}")
 
-        print(f"[coding] starting xgo_blockly via {BLOCKLY_PYTHON}", flush=True)
+        _mtrace(f"spawning Popen: {BLOCKLY_PYTHON} -m xgo_blockly.cli --port 80")
 
         child_env = os.environ.copy()
         child_env.pop("FLASK_ENV", None)
@@ -60,7 +79,7 @@ class BlocklyServiceManager:
                 env=child_env,
             )
             self.is_running = True
-            print(f"[coding] Blockly service started PID={self.process.pid}", flush=True)
+            _mtrace(f"Popen started PID={self.process.pid}, now blocking on wait()")
 
             # 阻塞等待进程结束
             return_code = self.process.wait()
@@ -223,10 +242,23 @@ class UpgradeManager:
         self._check_thread = None
         self._upgrade_thread = None
         self._winning_mirror = None  # 版本检查竞速胜出的镜像索引
+        self._cancel_flag = threading.Event()
+        self._pip_process = None  # pip 子进程引用，用于取消时杀死
 
     def set_service_manager(self, sm):
         """绑定 BlocklyServiceManager，用于升级后重启服务。"""
         self._service_manager = sm
+
+    def cancel(self):
+        """取消正在进行的升级（线程安全）。"""
+        self._cancel_flag.set()
+        with self._lock:
+            if self._pip_process and self._pip_process.poll() is None:
+                try:
+                    self._pip_process.kill()
+                    print("[coding] upgrade: pip process killed by user", flush=True)
+                except Exception as e:
+                    print(f"[coding] upgrade: failed to kill pip: {e}", flush=True)
 
     @staticmethod
     def get_current_version():
@@ -323,20 +355,26 @@ class UpgradeManager:
         self._check_thread.start()
 
     def _do_check(self):
+        _mtrace("UpgradeManager._do_check enter")
         with self._lock:
             self.status = self.STATUS_CHECKING
         try:
             current = self.get_current_version()
+            _mtrace(f"_do_check: current={current}")
             latest, winner_idx = self.get_latest_version_parallel()
+            _mtrace(f"_do_check: latest={latest} winner={winner_idx}")
             with self._lock:
                 self.current_version = current
                 self.latest_version = latest
                 self._winning_mirror = winner_idx
                 if latest and current and current != 'unknown' and self._compare_versions(current, latest):
                     self.status = self.STATUS_AVAILABLE
+                    _mtrace("_do_check done: AVAILABLE (update found)")
                 else:
                     self.status = self.STATUS_NO_UPDATE
-        except Exception:
+                    _mtrace("_do_check done: NO_UPDATE")
+        except Exception as e:
+            _mtrace(f"_do_check exception: {e}")
             with self._lock:
                 if self.status == self.STATUS_CHECKING:
                     self.status = self.STATUS_IDLE
@@ -345,6 +383,8 @@ class UpgradeManager:
         """开始升级（后台线程）。"""
         if self.status != self.STATUS_AVAILABLE:
             return
+        self._cancel_flag.clear()
+        self._pip_process = None
         self._upgrade_thread = threading.Thread(target=self._do_upgrade, daemon=True)
         self._upgrade_thread.start()
 
@@ -373,13 +413,21 @@ class UpgradeManager:
             mirror_order.insert(0, self._winning_mirror)
 
         for idx in mirror_order:
+            # 检查取消标志
+            if self._cancel_flag.is_set():
+                print("[coding] upgrade: cancelled by user", flush=True)
+                with self._lock:
+                    self.status = self.STATUS_FAILED
+                    self.message = ''
+                return
+
             mirror = self.PYPI_MIRRORS[idx]
             with self._lock:
                 self.message = f"{mirror['name']}源"
 
             cmd = [
                 sys.executable, '-m', 'pip', 'install', '--upgrade',
-                '--no-cache-dir', '--user', '--break-system-packages',
+                '--no-cache-dir', '--break-system-packages',
             ]
             if mirror['index']:
                 cmd.extend(['-i', mirror['index'], '--trusted-host', mirror['trusted_host']])
@@ -387,19 +435,39 @@ class UpgradeManager:
 
             print(f"[coding] upgrade: pip install via {mirror['name']} → {target}", flush=True)
             try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-                if result.returncode == 0:
+                self._pip_process = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+                try:
+                    stdout, stderr = self._pip_process.communicate(timeout=600)
+                except subprocess.TimeoutExpired:
+                    self._pip_process.kill()
+                    self._pip_process.communicate()
+                    print(f"[coding] upgrade: {mirror['name']} timeout after 600s", flush=True)
+                    self._pip_process = None
+                    continue
+
+                rc = self._pip_process.returncode
+                self._pip_process = None
+
+                if self._cancel_flag.is_set():
+                    print("[coding] upgrade: cancelled by user", flush=True)
+                    with self._lock:
+                        self.status = self.STATUS_FAILED
+                        self.message = ''
+                    return
+
+                if rc == 0:
                     print(f"[coding] upgrade: {mirror['name']} install OK", flush=True)
                     success = True
                     break
                 else:
-                    print(f"[coding] upgrade: {mirror['name']} failed rc={result.returncode}", flush=True)
-                    if result.stderr:
-                        print(f"[coding] pip stderr: {result.stderr[-300:]}", flush=True)
-            except subprocess.TimeoutExpired:
-                print(f"[coding] upgrade: {mirror['name']} timeout after 600s", flush=True)
+                    print(f"[coding] upgrade: {mirror['name']} failed rc={rc}", flush=True)
+                    if stderr:
+                        print(f"[coding] pip stderr: {stderr[-300:]}", flush=True)
             except Exception as e:
                 print(f"[coding] upgrade: {mirror['name']} exception: {e}", flush=True)
+                self._pip_process = None
 
         if not success:
             with self._lock:

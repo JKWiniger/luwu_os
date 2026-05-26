@@ -16,8 +16,7 @@ import queue
 from flask import Flask, request, jsonify, send_from_directory, Response
 
 # 手柄事件广播模块
-LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
-_GP_DIR = os.path.join(LUWU_ROOT, 'libs/gamepad_config')
+_GP_DIR = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), 'libs/gamepad_config')
 if _GP_DIR not in sys.path:
     sys.path.insert(0, _GP_DIR)
 try:
@@ -26,7 +25,7 @@ except ImportError:
     _get_event_queue = None
 
 # 配置文件路径
-MAPPINGS_FILE = os.path.join(LUWU_ROOT, "libs/gamepad_config/mappings.json")
+MAPPINGS_FILE = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "libs/gamepad_config/mappings.json")
 # TEMPLATE_DIR 已随文件迁移到 gamepad/ 目录，无需修改
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 
@@ -71,7 +70,7 @@ DOG_ACTION_NAMES = {
     255: "复位",
 }
 DOG_HOLD = ["forward", "back", "left", "right", "turn_left", "turn_right", "roll_left", "roll_right"]
-DOG_AXIS = ["none", "axis_x", "axis_y", "axis_yaw"]
+DOG_AXIS = ["none", "axis_x", "axis_y", "axis_yaw", "turn_axis"] + DOG_HOLD
 
 # --- Rider 专用 ---
 RIDER_ONE_SHOT = _COMMON_ONE_SHOT + [
@@ -95,7 +94,7 @@ RIDER_ACTION_NAMES = {
     4: "四方蛇形", 5: "升降旋转", 6: "圆周晃动",
 }
 RIDER_HOLD = ["rider_forward", "rider_back", "rider_turn_left", "rider_turn_right", "roll_left", "roll_right"]
-RIDER_AXIS = ["none", "rider_axis_x", "rider_axis_yaw", "rider_roll_axis"]
+RIDER_AXIS = ["none", "rider_axis_x", "rider_axis_yaw", "rider_roll_axis", "rider_turn_axis"] + RIDER_HOLD
 
 # 生成完整的 action_1 到 action_255 列表（用于按键映射下拉框）
 def _action_options(device):
@@ -110,28 +109,39 @@ def _action_options(device):
 
 def _get_device_actions(device):
     """根据设备类型返回可用的功能列表"""
-    if device in ("xgomini", "xgolite"):
+    # 去掉 joystick_ 前缀获取基础设备类型
+    base = device.removeprefix("joystick_") if device.startswith("joystick_") else device
+    if base in ("xgomini", "xgolite"):
         return {
-            "one_shot": DOG_ONE_SHOT + _action_options(device),
+            "one_shot": DOG_ONE_SHOT + _action_options(base),
             "hold": DOG_HOLD,
             "axis": DOG_AXIS,
             "action_names": DOG_ACTION_NAMES,
         }
     else:  # xgorider
         return {
-            "one_shot": RIDER_ONE_SHOT + _action_options(device),
+            "one_shot": RIDER_ONE_SHOT + _action_options(base),
             "hold": RIDER_HOLD,
             "axis": RIDER_AXIS,
             "action_names": RIDER_ACTION_NAMES,
         }
 
-# 按钮名称（基于 BSP-S11/BM769 BLE 手柄校准结果）
-# HID 标准 btn1-4 = LB/RB/Back/Start；面键补偿 btn5-8 = B/A/Y/X
+# ── 当前模式（由调用方在 start_server 前设置）──
+_current_mode = "bluetooth"  # "joystick" or "bluetooth"
+
+
+def set_mode(mode: str):
+    """设置当前手柄模式，在 start_server 前调用"""
+    global _current_mode
+    _current_mode = mode
+
+# 按钮名称
 BUTTON_NAMES = {
-    0: "btn_0", 1: "LB (左肩键)", 2: "RB (右肩键)",
-    3: "Back (视图)", 4: "Start (菜单)",
-    5: "B 键", 6: "A 键", 7: "Y 键", 8: "X 键",
-    9: "L3 (左摇杆按)", 10: "R3 (右摇杆按)", 11: "btn_11",
+    0: "A 键", 1: "B 键", 2: "X 键", 3: "Y 键",
+    4: "LB (左肩键)", 5: "RB (右肩键)",
+    6: "LT (左扳机-轴)", 7: "RT (右扳机-轴)",
+    8: "Back (视图)", 9: "Start (菜单)",
+    10: "L3 (左摇杆按)", 11: "R3 (右摇杆按)",
     12: "十字键 上", 13: "十字键 下",
     14: "十字键 左", 15: "十字键 右",
 }
@@ -214,16 +224,18 @@ def save_mappings():
 def get_info():
     """获取完整配置信息（按钮名、可用动作、所有设备映射）"""
     all_mappings = _load_mappings()
-    # 为每个设备类型返回各自的可用动作
+    # 为每个设备类型返回各自的可用动作（含 joystick_ 前缀变体）
     available_by_device = {}
     for d in DEVICE_TYPES:
         available_by_device[d] = _get_device_actions(d)
+        available_by_device[f"joystick_{d}"] = _get_device_actions(f"joystick_{d}")
     return jsonify({
         "mappings": all_mappings,
         "available": available_by_device,
         "buttons": BUTTON_NAMES,
         "axes": AXIS_NAMES,
         "devices": DEVICE_TYPES,
+        "mode": _current_mode,
     })
 
 
@@ -305,13 +317,13 @@ def start_server(port=8088):
 
 
 def stop_server():
-    """真正停止 Flask，向自身发送 /shutdown 请求"""
+    """真正停止 Flask，向自身发送 /shutdown 请求触发 werkzeug 退出"""
     global _server_running
     _server_running = False
     try:
         import urllib.request
         urllib.request.urlopen(
-            f"http://127.0.0.1:{_server_port}/shutdown", timeout=2
+            f"http://127.0.0.1:{_server_port}/shutdown", timeout=0.3
         )
     except Exception:
         pass

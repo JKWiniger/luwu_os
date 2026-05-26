@@ -8,13 +8,13 @@
 
 按键：
   - C 键（Key_Back）：退出
-  - D 键（Key_Return）：切换模式（joystick ↔ 蓝牙）
-  - A 键（Key_Left）：键位映射 QR 页
+  - A 键（Key_Left）：键位映射 QR 页（子页面处理）
 """
 import os
 import sys
 import time
 import signal
+import threading
 
 # ===================== 阶段计时 =====================
 T0 = time.monotonic()
@@ -141,8 +141,7 @@ def _import_bt_page():
 class GamepadApp(QStackedWidget):
     """统一手柄控制应用，使用 QStackedWidget 管理两种页面。
 
-    通过 eventFilter 拦截子页面的 C/D 按键，确保模式切换和
-    退出操作由 GamepadApp 统一处理。
+    通过 eventFilter 拦截子页面的 C 按键，确保退出操作由 GamepadApp 统一处理。
     """
 
     def __init__(self):
@@ -164,7 +163,7 @@ class GamepadApp(QStackedWidget):
         # 30 分钟无操作自动退出
         QTimer.singleShot(1800 * 1000, self.close)
 
-    # ── eventFilter：拦截子页面 C/D 键 ────────────────────────
+    # ── eventFilter：拦截子页面 C 键 ────────────────────────
 
     def eventFilter(self, watched, event):
         if event.type() == QEvent.Type.KeyPress:
@@ -175,14 +174,9 @@ class GamepadApp(QStackedWidget):
                     print("[gamepad] C -> exit", flush=True)
                     self._do_close()
                 return True  # 消费事件，子页面不处理
+            # D 键不再切换模式，自动检测即可（插2.4G=joystick，否则=蓝牙）
             elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                # 仅在 joystick 模式下 D 键切换为蓝牙模式；
-                # 蓝牙模式下放行，让子页面处理重新扫描
-                if self._mode == "joystick":
-                    print(f"[gamepad] D -> toggle mode (current={self._mode})",
-                          flush=True)
-                    self._toggle_mode()
-                    return True  # 消费事件
+                pass  # 忽略，蓝牙页面自行处理重新扫描
         return super().eventFilter(watched, event)
 
     # ── 页面切换 ──────────────────────────────────────────────
@@ -225,29 +219,39 @@ class GamepadApp(QStackedWidget):
         self._bt_page.setFocus()
         mark("bluetooth page active")
 
-    def _toggle_mode(self):
-        """D 键切换模式"""
-        if self._mode == "joystick":
-            self._activate_bluetooth()
-        else:
-            self._activate_joystick()
-
     def _do_close(self):
-        """安全退出"""
+        """安全退出（加硬兜底，不依赖 Qt event loop）"""
+        mark("_do_close enter")
+        print("[gamepad] C -> exit, doing close+quit", flush=True)
+
+        # ★ 硬兜底：threading.Timer 不依赖 Qt event loop，0.5s 后必杀
+        threading.Timer(0.5, lambda: os._exit(0)).start()
+
+        # 优雅路径：尝试正常清理
+        print("[gamepad] _do_close -> calling self.close()", flush=True)
         self.close()
+        print("[gamepad] _do_close -> self.close() returned", flush=True)
+        print("[gamepad] _do_close -> calling quit()", flush=True)
         QApplication.instance().quit()
+        print("[gamepad] _do_close -> quit() returned", flush=True)
 
     # ── 清理 ──────────────────────────────────────────────────
 
     def closeEvent(self, ev):
-        print("[gamepad] closing", flush=True)
+        mark("GamepadApp.closeEvent enter")
         if self._joystick_page:
+            print("[gamepad] closeEvent -> closing joystick page", flush=True)
             self._joystick_page.removeEventFilter(self)
             self._joystick_page.close()
+            print("[gamepad] closeEvent -> joystick page closed", flush=True)
         if self._bt_page:
+            print("[gamepad] closeEvent -> closing bt page", flush=True)
             self._bt_page.removeEventFilter(self)
             self._bt_page.close()
+            print("[gamepad] closeEvent -> bt page closed", flush=True)
+        print("[gamepad] closeEvent -> super().closeEvent", flush=True)
         super().closeEvent(ev)
+        print("[gamepad] closeEvent -> done", flush=True)
 
 
 # ===================== 入口 =====================

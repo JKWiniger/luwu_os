@@ -28,7 +28,7 @@ def mark(name: str):
 mark("python entry")
 
 # ===================== PySide6 =====================
-from PySide6.QtCore import Qt, QTimer, Signal, QThread
+from PySide6.QtCore import Qt, QTimer, Signal, QThread, QSocketNotifier
 from PySide6.QtGui import QKeyEvent, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QFrame,
@@ -56,11 +56,11 @@ _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 if _APP_DIR not in sys.path:
     sys.path.insert(0, _APP_DIR)
 
-# mapping_server 和 qr_page 统一从 bluetooth_gamepad 目录导入
+# mapping_server 和 qr_page 统一从 gamepad 目录导入
 # 与蓝牙页面共享同一个 mapping_server 模块实例，避免端口/全局状态冲突
-_BT_GAMEPAD_DIR = os.path.join(_LUWU_ROOT, "apps/bluetooth_gamepad")
-if _BT_GAMEPAD_DIR not in sys.path:
-    sys.path.insert(0, _BT_GAMEPAD_DIR)
+_GAMEPAD_DIR = os.path.join(_LUWU_ROOT, "apps/gamepad")
+if _GAMEPAD_DIR not in sys.path:
+    sys.path.insert(0, _GAMEPAD_DIR)
 import mapping_server  # noqa: E402
 from qr_page import QRMappingPage  # noqa: E402
 
@@ -99,6 +99,7 @@ AUTO_EXIT_SEC = 1800  # 30 分钟无操作自动退出
 _LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
 DEMO_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_gamepad.png")
 _APP_BG_IMAGE = os.path.join(_LUWU_ROOT, "assets/images/app_bg.png")
+KEYS_FIFO = "/tmp/luwu_keys.fifo"  # launcher 通过此 FIFO 转发物理按键
 
 # ===================== XGO 单例 =====================
 _xgo_instance = None
@@ -111,9 +112,9 @@ def _ensure_xgo():
     if _xgo_instance is not None:
         return _xgo_instance, _xgo_device_type
     try:
-        import xgolib
+        from xgolib import XGO
         print("[joystick] initializing xgolib (one-time)...", flush=True)
-        _xgo_instance = xgolib.XGO()
+        _xgo_instance = XGO()
         fw = getattr(_xgo_instance, "version", "")
         if fw and fw[0] == "R":
             _xgo_device_type = "xgorider"
@@ -131,7 +132,7 @@ def _ensure_xgo():
 
 # ===================== 控制器线程 =====================
 class ControllerThread(threading.Thread):
-    """后台运行 gamepad_controller.py 中的 XGOController"""
+    """后台运行 JoystickController（2.4G 模式通过 /dev/input/js* 读取手柄）"""
 
     def __init__(self):
         super().__init__(daemon=True, name="joystick-gamepad-ctrl")
@@ -141,79 +142,93 @@ class ControllerThread(threading.Thread):
     @property
     def connected(self) -> bool:
         c = self._controller
-        return c is not None and c._running and c._gamepad_dev is not None
+        if c is None or not c._running:
+            return False
+        # JoystickController 通过 _js_reader.connected 判断连接状态
+        if hasattr(c, '_js_reader') and c._js_reader is not None:
+            return c._js_reader.connected
+        return False
 
     @property
     def device_name(self) -> str:
         return self._device_name
 
     def run(self):
+        mark("ControllerThread.run() enter")
         try:
+            print("[joystick] ControllerThread -> importing gamepad_controller...", flush=True)
             gp_dir = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "libs/gamepad_config")
             if gp_dir not in sys.path:
                 sys.path.insert(0, gp_dir)
             import gamepad_controller as gc
             gc.CONFIG_FILE = os.path.join(gp_dir, "mappings.json")
-            self._controller = gc.XGOController()
+            print("[joystick] ControllerThread -> gamepad_controller imported", flush=True)
+
+            # 导入 JoystickController（通过 /dev/input/js* 读取 2.4G 手柄）
+            _gamepad_dir = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "apps/gamepad")
+            if _gamepad_dir not in sys.path:
+                sys.path.insert(0, _gamepad_dir)
+            print("[joystick] ControllerThread -> importing JoystickController...", flush=True)
+            from joystick_adapter import JoystickController
+            print("[joystick] ControllerThread -> JoystickController imported", flush=True)
+
+            print("[joystick] ControllerThread -> creating JoystickController(js_id=0)...", flush=True)
+            self._controller = JoystickController(js_id=0)
+            print("[joystick] ControllerThread -> JoystickController created", flush=True)
+
+            # 注入全局 xgolib 单例
             xgo, dev_type = _ensure_xgo()
-            if xgo:
+            if xgo is not None:
                 self._controller.xgo = xgo
                 self._controller.device_type = dev_type
+                print(f"[joystick] ControllerThread -> xgolib ready: {dev_type}", flush=True)
             else:
-                self._controller._init_xgo()
-            self._controller._load_mapping()
-            self._controller._running = True
-            self._controller._start_config_watcher()
-            self._run_gamepad_loop()
+                self._controller.xgo = False
+                self._controller.device_type = "none"
+                print("[joystick] ControllerThread -> xgolib unavailable, xgo=False", flush=True)
+
+            # 注入 FIFO fd，让 ControllerThread 主循环直接检查按键（不依赖 Qt QSocketNotifier）
+            self._controller._keys_fifo_fd = self._open_keys_fifo()
+
+            self._device_name = "2.4G Joystick"
+            print("[joystick] ControllerThread -> calling _controller.run()...", flush=True)
+            mark("_controller.run() start")
+            self._controller.run()  # 内部会处理 _load_mapping / _start_config_watcher / JS 轮询
+            print("[joystick] ControllerThread -> _controller.run() returned", flush=True)
         except Exception as e:
             print(f"[joystick] controller error: {e}", flush=True)
             import traceback
             traceback.print_exc()
 
-    def _run_gamepad_loop(self):
-        c = self._controller
-        import gamepad_controller as gc
-        while c._running:
-            dev = c._find_gamepad()
-            if not dev:
-                self._device_name = ""
-                gc.log.warning("未找到手柄，2 秒后重试...")
-                time.sleep(2)
-                continue
-            self._device_name = dev.name
-            c._gamepad_dev = dev
-            if c._is_ble_gatt_gamepad(dev.name):
-                gc.log.info(f"检测到 BLE GATT 手柄: {dev.name}，启用 BLE 路径")
-                try:
-                    c._run_ble_loop(dev)
-                except Exception as e:
-                    gc.log.error(f"[BLE] 循环异常: {e}")
-                    time.sleep(1)
-            else:
-                try:
-                    c._run_evdev_loop(dev)
-                except Exception as e:
-                    gc.log.error(f"[evdev] 循环异常: {e}")
-                    time.sleep(1)
-            c._gamepad_dev = None
-            self._device_name = ""
-            c._stop_movement()
-            time.sleep(1)
+    @staticmethod
+    def _open_keys_fifo():
+        """打开 launcher 的按键转发 FIFO，非阻塞"""
+        try:
+            fd = os.open(KEYS_FIFO, os.O_RDONLY | os.O_NONBLOCK)
+            print(f"[joystick] ControllerThread -> Keys FIFO fd={fd} opened", flush=True)
+            return fd
+        except Exception as e:
+            print(f"[joystick] ControllerThread -> Keys FIFO open failed: {e}", flush=True)
+            return -1
 
     def stop(self):
+        print("[joystick] ControllerThread.stop() enter", flush=True)
         c = self._controller
         if not c:
+            print("[joystick] ControllerThread.stop() -> no controller, return", flush=True)
             return
         try:
+            print("[joystick] ControllerThread.stop() -> set _running=False", flush=True)
             c._running = False
-            c._stop_movement()
-            if c._gamepad_dev:
-                try:
-                    c._gamepad_dev.close()
-                except Exception:
-                    pass
-                c._gamepad_dev = None
+            # 先停 joystick reader（关闭 fd 可立即解除 read_loop 阻塞）
+            if hasattr(c, '_js_reader') and c._js_reader:
+                print("[joystick] ControllerThread.stop() -> stop js_reader", flush=True)
+                c._js_reader.stop()
+                print("[joystick] ControllerThread.stop() -> js_reader stopped", flush=True)
+            # _stop_movement() 内部 xgo.stop() 是串口阻塞调用，
+            # 不在此处等待，交给 ControllerThread 后台线程的 run() 清理
             self._device_name = ""
+            print("[joystick] ControllerThread.stop() -> done", flush=True)
         except Exception as e:
             print(f"[joystick] controller stop error: {e}", flush=True)
 
@@ -304,11 +319,43 @@ class JoystickPage(AppFrame):
         self.setCornerHints(
             tl=(_T("hint_mapping"), T_Asset.icon_left),
             bl=(_T("hint_exit"), T_Asset.icon_back),
-            br=(_T("hint_bt"), T_Asset.icon_enter),
         )
 
         QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
         QTimer.singleShot(200, self._start_controller)
+
+        # ---- 监听 launcher 转发的物理按键（C/A/D 等）----
+        self._keys_fd = -1
+        self._keys_notifier = None
+        self._setup_keys_fifo()
+
+    # ---- launcher FIFO 按键转发 ----
+    def _setup_keys_fifo(self):
+        try:
+            self._keys_fd = os.open(KEYS_FIFO, os.O_RDONLY | os.O_NONBLOCK)
+            self._keys_notifier = QSocketNotifier(
+                self._keys_fd, QSocketNotifier.Type.Read, self
+            )
+            self._keys_notifier.activated.connect(self._on_key_fifo)
+            print("[joystick] Keys FIFO opened", flush=True)
+        except Exception as e:
+            print(f"[joystick] Keys FIFO error: {e}", flush=True)
+
+    def _on_key_fifo(self, fd: int):
+        try:
+            data = os.read(fd, 32)
+            if not data:
+                return
+            for line in data.decode().strip().split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                qt_key = int(line)
+                print(f"[joystick] FIFO recv Qt key={qt_key} (0x{qt_key:x})", flush=True)
+                ev = QKeyEvent(QKeyEvent.Type.KeyPress, qt_key, Qt.KeyboardModifier.NoModifier)
+                QApplication.postEvent(self, ev)
+        except Exception as e:
+            print(f"[joystick] key fifo read error: {e}", flush=True)
 
     # ---- 布局 ----
     def resizeEvent(self, ev):
@@ -332,37 +379,44 @@ class JoystickPage(AppFrame):
     # ---- 控制器启停 ----
     def _start_controller(self):
         """启动手柄控制器线程"""
+        mark("_start_controller enter")
         # 启动键位映射 Web 服务器
         try:
+            print("[joystick] _start_controller -> starting mapping_server", flush=True)
+            mapping_server.set_mode("joystick")
             mapping_server.start_server()
+            print("[joystick] _start_controller -> mapping_server started", flush=True)
         except Exception as e:
             print(f"[joystick] mapping server start failed: {e}", flush=True)
 
         if self._ctrl_thread and self._ctrl_thread.is_alive():
+            print("[joystick] _start_controller -> already running, skip", flush=True)
             return
+        print("[joystick] _start_controller -> creating ControllerThread", flush=True)
         self._ctrl_thread = ControllerThread()
+        print("[joystick] _start_controller -> starting ControllerThread", flush=True)
         self._ctrl_thread.start()
-        print("[joystick] controller started", flush=True)
+        print("[joystick] _start_controller -> ControllerThread started", flush=True)
         # 启动状态轮询
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_status)
         self._poll_timer.start(1000)
+        print("[joystick] _start_controller -> poll timer started", flush=True)
+        mark("_start_controller done")
 
     def _stop_controller(self):
-        """停止手柄控制器"""
+        """停止手柄控制器（不在此处停止 mapping_server，统一由 closeEvent 处理）"""
+        print("[joystick] _stop_controller() enter", flush=True)
         if self._ctrl_thread:
-            print("[joystick] stopping controller...", flush=True)
+            print("[joystick] _stop_controller() -> calling ctrl_thread.stop()", flush=True)
             self._ctrl_thread.stop()
-        # 停止键位映射服务器
-        try:
-            mapping_server.stop_server()
-        except Exception:
-            pass
-        print("[joystick] controller stopped", flush=True)
+            print("[joystick] _stop_controller() -> ctrl_thread.stop() returned", flush=True)
+        print("[joystick] _stop_controller() -> done", flush=True)
 
     def _poll_status(self):
         """每秒轮询控制器状态并更新 UI"""
         if not self._ctrl_thread or not self._ctrl_thread.is_alive():
+            print("[joystick] _poll_status -> ctrl_thread not alive, skipping", flush=True)
             return
         if self._ctrl_thread.connected:
             name = self._ctrl_thread.device_name
@@ -375,12 +429,19 @@ class JoystickPage(AppFrame):
             self.status_label.setText(_T("disconnected"))
             self.status_label.setStyleSheet(T_qss.chip("danger"))
             self.sub_label.setText("")
+        # 每 5 次打印心跳确认 UI 线程活着
+        if not hasattr(self, '_poll_count'):
+            self._poll_count = 0
+        self._poll_count += 1
+        if self._poll_count % 5 == 0:
+            print(f"[joystick] _poll_status heartbeat #{self._poll_count}, connected={self._ctrl_thread.connected}", flush=True)
 
     # ---- QR 映射页 ----
     def _show_qr_page(self):
         print("[joystick] showing QR mapping page", flush=True)
         if not mapping_server.is_running():
             try:
+                mapping_server.set_mode("joystick")
                 mapping_server.start_server()
             except Exception as e:
                 print(f"[joystick] mapping server start failed: {e}", flush=True)
@@ -427,10 +488,24 @@ class JoystickPage(AppFrame):
 
         if key == Qt.Key.Key_Back:
             if self._exiting:
+                print("[joystick] C -> already exiting, skip", flush=True)
                 return
             self._exiting = True
-            print("[joystick] C -> exit", flush=True)
-            self.close()
+            mark("C key -> exit")
+            print("[joystick] C -> exit (hard fallback 0.5s)", flush=True)
+
+            # ★ 硬兜底：不依赖 Qt event loop，0.5s 后必杀进程
+            threading.Timer(0.5, lambda: os._exit(0)).start()
+
+            # 优雅路径：尝试正常清理（如果 Qt 还能运转）
+            try:
+                self._stop_controller()
+            except Exception as e:
+                print(f"[joystick] _stop_controller error: {e}", flush=True)
+            try:
+                mapping_server.stop_server()
+            except Exception:
+                pass
             QApplication.instance().quit()
         elif key == Qt.Key.Key_Left:
             # A 键 → 打开键位映射
@@ -439,13 +514,18 @@ class JoystickPage(AppFrame):
 
     # ---- 退出清理 ----
     def closeEvent(self, ev):
-        print("[joystick] closing", flush=True)
+        mark("closeEvent enter")
+        print("[joystick] closeEvent -> _stop_controller", flush=True)
         self._stop_controller()
+        print("[joystick] closeEvent -> mapping_server.stop_server", flush=True)
         try:
             mapping_server.stop_server()
         except Exception:
             pass
+        print("[joystick] closeEvent -> mapping_server done", flush=True)
+        print("[joystick] closeEvent -> super().closeEvent", flush=True)
         super().closeEvent(ev)
+        print("[joystick] closeEvent -> done", flush=True)
 
 
 # ===================== 入口 =====================

@@ -4,6 +4,23 @@ import os
 import time
 import threading
 
+# --- 启动日志（stdout → launcher QProcess::ForwardedChannels → journal） ---
+_TRACE_FILE = "/tmp/coding_startup.log"
+_T0 = time.monotonic()
+
+def _trace(msg):
+    """输出带毫秒偏移的启动日志到 stdout 和文件。"""
+    elapsed = (time.monotonic() - _T0) * 1000
+    line = f"[coding][+{elapsed:7.1f}ms] {msg}"
+    print(line, flush=True)
+    try:
+        with open(_TRACE_FILE, "a") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
+_trace("python entry")
+
 # 确保能找到 luwu-os 全局库
 LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
 if LUWU_ROOT not in sys.path:
@@ -57,6 +74,7 @@ class CodingPage(AppFrame):
     """图形编程主界面。"""
 
     def __init__(self):
+        _trace("__init__ enter")
         super().__init__()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
@@ -142,6 +160,8 @@ class CodingPage(AppFrame):
         self._service_ready = False
         self._loading_start_time = time.time()  # 用于超时兜底
 
+        _trace("timers armed (loading_400ms check_300ms)")
+
         # --- 启动 loading 动画（每 400ms 刷新一次）---
         self._loading_timer = QTimer(self)
         self._loading_timer.timeout.connect(self._animate_loading)
@@ -159,6 +179,8 @@ class CodingPage(AppFrame):
         QTimer.singleShot(200, self._start_service)
         # 同时启动版本检查（后台线程，与 Flask 启动并行）
         QTimer.singleShot(200, self.upgrade_manager.start_check)
+
+        _trace(f"__init__ done, QTimers for startup at +200ms")
 
     # ====================================================================
     # Loading 动画 & 图片加载 & 服务启动
@@ -187,8 +209,10 @@ class CodingPage(AppFrame):
             self._icon_right_small = None
 
     def _start_service(self):
+        _trace("_start_service enter")
         # 清理残留
         kill_blockly_service()
+        _trace("_start_service after kill_blockly_service")
 
         # 检查端口
         if port_in_use(BLOCKLY_PORT):
@@ -197,15 +221,18 @@ class CodingPage(AppFrame):
             return
 
         # 后台线程启动服务
+        _trace("spawning service thread")
         t = threading.Thread(target=self.service_manager.start, daemon=True)
         t.start()
 
         # 轮询等待服务端口就绪
+        _trace("start _wait_service_ready loop")
         self._wait_service_ready()
 
     def _wait_service_ready(self):
         """每 200ms 检查一次端口，就绪后立即标记。"""
         if port_in_use(BLOCKLY_PORT):
+            _trace("_wait_service_ready -> port in use, service ready!")
             self._on_service_ready()
         else:
             QTimer.singleShot(200, self._wait_service_ready)
@@ -213,32 +240,46 @@ class CodingPage(AppFrame):
     def _on_service_ready(self):
         """服务启动完成后的回调。标记就绪，不直接跳转（等版本检查结束）。"""
         self._service_ready = True
-        print("[coding] service ready, waiting for version check...", flush=True)
+        _trace(f"_on_service_ready, um.status={self.upgrade_manager.status}")
         self._try_leave_loading()
 
     def _try_leave_loading(self):
         """当服务就绪 + 版本检查完成（或超时）→ 离开 loading 进入主页或升级提示。"""
         if self.current_page != PAGE_LOADING:
             return
+        waited = time.time() - self._loading_start_time
+
+        # 服务超时兜底：30 秒没就绪也进主页（避免永久卡 loading）
         if not self._service_ready:
+            if waited < 30:
+                return
+            _trace(f"service startup timeout after {waited:.1f}s, force entering main page")
+            if self._loading_timer:
+                self._loading_timer.stop()
+                self._loading_timer = None
+            self.current_page = PAGE_MAIN
+            self._page_needs_redraw = True
+            self._render_and_display()
+            self._update_corner_labels()
             return
+
         um = self.upgrade_manager
         # 版本检查还在跑 → 继续等（最长等 15 秒，超时直接进主页）
         if um.status == um.STATUS_CHECKING:
-            if time.time() - self._loading_start_time < 15:
+            if waited < 15:
                 return
             # 超时兜底
-            print("[coding] version check timeout, entering main page", flush=True)
+            _trace(f"version check timeout after {waited:.1f}s, entering main page")
         # 可以离开了
         if self._loading_timer:
             self._loading_timer.stop()
             self._loading_timer = None
         if um.status == um.STATUS_AVAILABLE:
             self.current_page = PAGE_UPGRADE_PROMPT
-            print("[coding] update available, showing prompt", flush=True)
+            _trace("-> PAGE_UPGRADE_PROMPT (update available)")
         else:
             self.current_page = PAGE_MAIN
-            print("[coding] entering main page", flush=True)
+            _trace(f"-> PAGE_MAIN (um.status={um.status})")
         self._page_needs_redraw = True
         self._render_and_display()
         self._update_corner_labels()
@@ -251,6 +292,7 @@ class CodingPage(AppFrame):
         # === loading 阶段：轮询服务就绪 + 版本检查完成 ===
         if self.current_page == PAGE_LOADING:
             if not self._service_ready and port_in_use(BLOCKLY_PORT):
+                _trace("_check_status found port 80 ready")
                 self._service_ready = True
             self._try_leave_loading()
             return
@@ -474,8 +516,10 @@ class CodingPage(AppFrame):
         """升级进行中的按键处理。"""
         um = self.upgrade_manager
         if key == Qt.Key.Key_Back:  # C → 取消
-            if um.status in (um.STATUS_IDLE, um.STATUS_CHECKING, um.STATUS_AVAILABLE):
+            if um.status in (um.STATUS_IDLE, um.STATUS_CHECKING, um.STATUS_AVAILABLE,
+                             um.STATUS_UPGRADING, um.STATUS_RESTARTING):
                 print("[coding] C pressed → cancel upgrade", flush=True)
+                um.cancel()
                 self.current_page = PAGE_MAIN
                 self._page_needs_redraw = True
                 self._render_and_display()
@@ -532,7 +576,8 @@ class CodingPage(AppFrame):
             )
         elif self.current_page == PAGE_UPGRADE:
             um = self.upgrade_manager
-            cancel_ok = um.status in (um.STATUS_IDLE, um.STATUS_CHECKING, um.STATUS_AVAILABLE)
+            cancel_ok = um.status in (um.STATUS_IDLE, um.STATUS_CHECKING, um.STATUS_AVAILABLE,
+                                       um.STATUS_UPGRADING, um.STATUS_RESTARTING)
             self.setCornerHints(
                 tl="", tr="", br="",
                 bl=(t("c_back") if cancel_ok else "", T_Asset.icon_back if cancel_ok else ""),

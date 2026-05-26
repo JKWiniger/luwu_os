@@ -35,7 +35,7 @@ def mark(name: str):
 mark("python entry")
 
 # ===================== PySide6 =====================
-from PySide6.QtCore import Qt, QTimer, Signal, QThread
+from PySide6.QtCore import Qt, QTimer, Signal, QThread, QSocketNotifier
 from PySide6.QtGui import QKeyEvent, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QFrame,
@@ -53,11 +53,10 @@ from libs.ui import AppFrame  # noqa: E402
 from libs.ui.frame import _invisible_cursor  # noqa: E402
 from libs.i18n import Translator as _Translator  # noqa: E402
 
-# 键位映射相关
-# 确保当前目录在 sys.path 中（launcher 通过 importlib 加载时工作目录可能不同）
-_APP_DIR = os.path.dirname(os.path.abspath(__file__))
-if _APP_DIR not in sys.path:
-    sys.path.insert(0, _APP_DIR)
+# 键位映射相关 — 从 gamepad 目录导入（统一入口）
+_GAMEPAD_DIR = os.path.join(_LUWU_ROOT, "apps/gamepad")
+if _GAMEPAD_DIR not in sys.path:
+    sys.path.insert(0, _GAMEPAD_DIR)
 from qr_page import QRMappingPage  # noqa: E402
 import mapping_server  # noqa: E402
 
@@ -120,9 +119,9 @@ GAMEPAD_KEYWORDS = [
     "wireless controller", "pro controller",
     "gamepad", "controller",
     "8bitdo", "joystick",
-    "tl_",        # 天龙/腾龙系列: TL_0002E13CC2067322 等
+    "tl_",        # 天龙/腾龙系列
     "gp",         # 部分国产手柄前缀
-    "bm769",      # BM769 2.4G 手柄（主用设备）
+    "bm769", "esp32", "ble-gamepad",  # BSP-S11 / BM769 / ESP32-BLE
     "ipega", "betop", "flydigi", "razer", "dualsense", "dualshock",
 ]
 SCAN_DURATION = 10       # 单次扫描时长（秒）
@@ -132,6 +131,7 @@ MAX_SCAN_RETRY = 12      # 最大重试次数
 _LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
 DEMO_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_gamepad.png")
 _APP_BG_IMAGE = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), "assets/images/app_bg.png")
+KEYS_FIFO = "/tmp/luwu_keys.fifo"  # launcher 通过此 FIFO 转发物理按键
 
 
 # ===================== 持久化 bluetoothctl 会话 =====================
@@ -223,7 +223,7 @@ class BtSession:
             self._master_fd = None
         if self._proc:
             try:
-                self._proc.wait(timeout=3)
+                self._proc.wait(timeout=1)
             except Exception:
                 self._proc.kill()
             self._proc = None
@@ -785,9 +785,9 @@ def _ensure_xgo():
     if _xgo_instance is not None:
         return _xgo_instance, _xgo_device_type
     try:
-        import xgolib
+        from xgolib import XGO
         print("[bt_gamepad] initializing xgolib (one-time)...", flush=True)
-        _xgo_instance = xgolib.XGO()
+        _xgo_instance = XGO()
         fw = getattr(_xgo_instance, "version", "")
         if fw and fw[0] == "R":
             _xgo_device_type = "xgorider"
@@ -871,14 +871,16 @@ class ControllerThread(threading.Thread):
             return
         try:
             c._running = False
-            c._stop_movement()
-            # 强制关闭 evdev 设备，让阻塞在 read_loop() 中的线程立即退出
+            # 先关闭 evdev 设备，解除 read_loop() 阻塞
             if c._gamepad_dev:
                 try:
                     c._gamepad_dev.close()
                 except Exception:
                     pass
                 c._gamepad_dev = None
+            # _stop_movement() 内部 xgo.stop() 是串口阻塞调用，
+            # 放在最后，避免阻塞影响前面的清理
+            c._stop_movement()
         except Exception:
             pass
 
@@ -905,7 +907,8 @@ class BTGamepadPage(AppFrame):
         self._ctrl_thread: ControllerThread | None = None
 
         # ---- 标题 ----
-        self.setTitle(_T("title"))
+        # 不再显示"蓝牙遥控"标题
+        # self.setTitle(_T("title"))
 
         # ---- QR 映射页（覆盖层，初始隐藏）----
         self._qr_page = QRMappingPage(self)
@@ -974,6 +977,39 @@ class BTGamepadPage(AppFrame):
         QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
         QTimer.singleShot(200, self._start_bt)
 
+        # ---- 监听 launcher 转发的物理按键（C/A/D 等）----
+        self._keys_fd = -1
+        self._keys_notifier = None
+        self._setup_keys_fifo()
+
+    # ---- launcher FIFO 按键转发 ----
+    def _setup_keys_fifo(self):
+        try:
+            self._keys_fd = os.open(KEYS_FIFO, os.O_RDONLY | os.O_NONBLOCK)
+            self._keys_notifier = QSocketNotifier(
+                self._keys_fd, QSocketNotifier.Type.Read, self
+            )
+            self._keys_notifier.activated.connect(self._on_key_fifo)
+            print("[bt_gamepad] Keys FIFO opened", flush=True)
+        except Exception as e:
+            print(f"[bt_gamepad] Keys FIFO error: {e}", flush=True)
+
+    def _on_key_fifo(self, fd: int):
+        try:
+            data = os.read(fd, 32)
+            if not data:
+                return
+            for line in data.decode().strip().split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                qt_key = int(line)
+                print(f"[bt_gamepad] FIFO recv Qt key={qt_key} (0x{qt_key:x})", flush=True)
+                ev = QKeyEvent(QKeyEvent.Type.KeyPress, qt_key, Qt.KeyboardModifier.NoModifier)
+                QApplication.postEvent(self, ev)
+        except Exception as e:
+            print(f"[bt_gamepad] key fifo read error: {e}", flush=True)
+
     # ---- 布局 ----
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -1005,6 +1041,7 @@ class BTGamepadPage(AppFrame):
         self._bt_worker.start()
         # 同时启动键位映射 Web 服务器
         try:
+            mapping_server.set_mode("bluetooth")
             mapping_server.start_server()
         except Exception as e:
             print(f"[bt_gamepad] mapping server start failed: {e}", flush=True)
@@ -1016,6 +1053,7 @@ class BTGamepadPage(AppFrame):
         # 确保服务器在运行
         if not mapping_server.is_running():
             try:
+                mapping_server.set_mode("bluetooth")
                 mapping_server.start_server()
             except Exception as e:
                 print(f"[bt_gamepad] mapping server start failed: {e}", flush=True)
@@ -1158,6 +1196,9 @@ class BTGamepadPage(AppFrame):
         if key == Qt.Key.Key_Back:
             print("[bt_gamepad] C -> exit", flush=True)
             self.close()
+            QApplication.instance().quit()
+            # 保险：2 秒后仍未退出则强制杀进程
+            QTimer.singleShot(2000, lambda: os._exit(0))
         elif key == Qt.Key.Key_Left:
             # A 键 → 打开键位映射（物理左上角）
             print("[bt_gamepad] A -> key mapping", flush=True)
@@ -1192,7 +1233,7 @@ class BTGamepadPage(AppFrame):
         if self._bt_worker:
             self._bt_worker.stop()
             self._bt_worker.quit()
-            self._bt_worker.wait(3000)
+            self._bt_worker.wait(1000)
             self._bt_worker = None
         # 停止持久 bluetoothctl 会话
         _bt.stop()
