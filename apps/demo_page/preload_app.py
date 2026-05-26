@@ -16,9 +16,22 @@ LUWU_ROOT = os.environ.get("LUWU_ROOT", "/opt/luwu-os")
 t_start = time.monotonic()
 
 # ---- Stage 1: preload PySide6 (shared by all apps) ----
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QKeyEvent, QImage, QPixmap
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
+from PySide6.QtCore import Qt, QTimer, Signal, QThread, QObject, QPoint, QSize, QRect
+from PySide6.QtGui import QFont, QKeyEvent, QImage, QPixmap, QPainter, QColor, QBrush, QPen
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
+    QSizePolicy, QStackedWidget, QFrame,
+)
+
+# ---- Stage 1b: preload common heavy Python libs (PIL, numpy) ----
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    pass
+try:
+    import numpy as np
+except ImportError:
+    pass
 
 t_import = (time.monotonic() - t_start) * 1000
 print(f"[preload] PySide6 loaded in {t_import:.0f}ms", flush=True)

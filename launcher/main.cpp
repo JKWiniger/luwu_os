@@ -113,6 +113,21 @@ int main(int argc, char *argv[]) {
 
     KeyFilter *keyFilter = nullptr;  // early decl for lambdas below
     int preAppPage = 0;               // 启动 app 前记录当前页面索引
+    QString pendingLaunchScript;      // preload 未就绪时暂存的 app 路径
+    QTimer *pendingLaunchTimer = new QTimer(&stack);
+    pendingLaunchTimer->setSingleShot(true);
+
+    // 非阻塞模式向 preload FIFO 写入脚本路径；返回 true 表示成功
+    auto tryFirePreload = [&](const QString &script) -> bool {
+        int fd = ::open(FIFO_PATH, O_WRONLY | O_NONBLOCK);
+        if (fd < 0) return false;
+        QByteArray line = script.toUtf8() + '\n';
+        ::write(fd, line.constData(), line.size());
+        ::close(fd);
+        qint64 t_done = QDateTime::currentMSecsSinceEpoch();
+        qDebug().noquote() << QString("[luwu-launcher][%1] FIFO written").arg(t_done);
+        return true;
+    };
 
     auto startPreload = [&]() {
         unlink(FIFO_PATH);
@@ -138,6 +153,9 @@ int main(int argc, char *argv[]) {
             qint64 total = launchTimer.elapsed();
             qDebug().noquote() << QString("[luwu-launcher][%1] PySide finished code=%2 status=%3 total=%4ms")
                                       .arg(QDateTime::currentMSecsSinceEpoch()).arg(code).arg(int(st)).arg(total);
+            // 清除排队待发送的脚本，避免 preload 重启后接收到旧命令
+            pendingLaunchTimer->stop();
+            pendingLaunchScript.clear();
             keyFilter->blocked = false;
             unlink(KEYS_FIFO);
             // 恢复桌面显示：先 show + force paint，再切回进入前的页面
@@ -162,37 +180,43 @@ int main(int argc, char *argv[]) {
 
     auto launchApp = [&](const QString &script) {
         if (preloadProc->state() == QProcess::NotRunning) {
-            qDebug() << "[luwu-launcher] preload not running, starting now...";
+            qDebug() << "[luwu-launcher] preload not running, restarting...";
             startPreload();
-            return;
+            // 不再直接 return：往下走重试逻辑
         }
         // 记录当前页面，返回时恢复
         preAppPage = stack.currentIndex();
-        // Hide launcher so child app gets framebuffer + key events
         unlink(KEYS_FIFO);
         mkfifo(KEYS_FIFO, 0666);
-        stack.hide();
+        // 立即锁键盘并隐藏 launcher，与之前行为保持一致
         keyFilter->blocked = true;
-        qint64 t_req = QDateTime::currentMSecsSinceEpoch();
-        qDebug().noquote() << QString("[luwu-launcher][%1] request -> trigger (%2)")
-                                  .arg(t_req).arg(script);
-
+        stack.hide();
         stack.repaint();
         launchTimer.restart();
+        qint64 t_req = QDateTime::currentMSecsSinceEpoch();
+        qDebug().noquote() << QString("[luwu-launcher][%1] launch request: %2").arg(t_req).arg(script);
 
-        QFile fifo(FIFO_PATH);
-        if (fifo.open(QIODevice::WriteOnly)) {
-            QByteArray line = script.toUtf8() + '\n';
-            fifo.write(line);
-            fifo.close();
-            qint64 t_done = QDateTime::currentMSecsSinceEpoch();
-            qDebug().noquote() << QString("[luwu-launcher][%1] FIFO written +%2ms")
-                                      .arg(t_done).arg(t_done - t_req);
+        if (tryFirePreload(script)) {
+            // preload 已就绪，完成
         } else {
-            qWarning() << "[luwu-launcher] failed to open FIFO for writing";
-            stack.showFullScreen();
+            // preload 还在启动中，排队重试（不阀塞主线程）
+            qDebug() << "[luwu-launcher] preload not ready, queued for retry:" << script;
+            pendingLaunchScript = script;
+            if (!pendingLaunchTimer->isActive())
+                pendingLaunchTimer->start(200);
         }
     };
+
+    // pendingLaunchTimer 超时后重试向 FIFO 写入
+    QObject::connect(pendingLaunchTimer, &QTimer::timeout, [&]() {
+        if (pendingLaunchScript.isEmpty()) return;
+        if (tryFirePreload(pendingLaunchScript)) {
+            qDebug() << "[luwu-launcher] FIFO write succeeded after retry";
+            pendingLaunchScript.clear();
+        } else {
+            pendingLaunchTimer->start(200);  // 继续重试
+        }
+    });
 
     startPreload();
 
