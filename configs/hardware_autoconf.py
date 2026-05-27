@@ -89,7 +89,7 @@ def switch_config(src: str) -> bool:
 
 
 # === 调试模式: True=只打日志不真重启, False=正常重启 ===
-DRY_RUN = False
+DRY_RUN = True
 
 def reboot_after(sec: int = 2):
     if DRY_RUN:

@@ -112,27 +112,29 @@ if ! grep -q 'commit=1' /etc/fstab; then
 fi
 echo "  ✓ commit=1 (fstab) 已设置"
 
-# 8. 硬件看门狗 — 系统卡死自动重启
-echo "[10/14] 硬件看门狗 ..."
-apt install -y watchdog
-cat > /etc/watchdog.conf << 'WDOG'
-watchdog-device = /dev/watchdog
-watchdog-timeout = 15
-interval = 5
-max-load-1 = 24
-realtime = yes
-priority = 1
-WDOG
-systemctl enable watchdog
-systemctl start watchdog
-echo "  ✓ 看门狗已启用 (15秒超时)"
-
-# 9. 持久化系统日志 — 出问题可追溯
+# 8. 持久化系统日志 — 出问题可追溯
 echo "[11/14] 持久化系统日志 ..."
-mkdir -p /var/log/journal
+
+# mask 掉树莓派 vendor 的 volatile 配置
+mkdir -p /etc/systemd/journald.conf.d
+ln -sf /dev/null /etc/systemd/journald.conf.d/40-rpi-volatile-storage.conf
+
+# 配置持久化 + 50MB 上限
 sed -i 's/#Storage=auto/Storage=persistent/' /etc/systemd/journald.conf
+if ! grep -q "^SystemMaxUse=" /etc/systemd/journald.conf; then
+    echo "SystemMaxUse=50M" >> /etc/systemd/journald.conf
+fi
+
+# 创建持久化目录并设置权限
+mkdir -p /var/log/journal
+chown root:systemd-journal /var/log/journal
+chmod 2755 /var/log/journal
+
+# 重启并 flush（systemd 252+ 必须 flush 才能从 volatile 切换到 persistent）
 systemctl restart systemd-journald
-echo "  ✓ 日志持久化已配置"
+journalctl --flush
+
+echo "  ✓ 日志持久化已配置 (最大 50MB, 存于 /var/log/journal/)"
 
 # 10. 欠压+电池联合监控 — 分级响应防误关机
 echo "[12/14] 欠压+电池监控 ..."
