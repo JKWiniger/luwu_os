@@ -27,7 +27,7 @@ BOOT_CONFIG = "/boot/firmware/config.txt"
 PORT_NEW    = "/dev/ttyAMA5"   # 新CM4 机器狗串口
 PORT_OLD    = "/dev/ttyAMA0"   # 老CM4 机器狗串口
 LOG_FILE    = "/tmp/luwu_hw_autoconf.log"
-SWITCH_FLAG = "/tmp/luwu_hw_autoconf_switched"  # 防循环标记
+SWITCH_FLAG = "/opt/luwu-os/.state/hw_autoconf_switched"  # 防循环标记（须持久化，/tmp 为 tmpfs 重启即清空）
 
 
 def log(msg: str):
@@ -89,7 +89,7 @@ def switch_config(src: str) -> bool:
 
 
 # === 调试模式: True=只打日志不真重启, False=正常重启 ===
-DRY_RUN = True
+DRY_RUN = False
 
 def reboot_after(sec: int = 2):
     if DRY_RUN:
@@ -108,6 +108,7 @@ def had_recent_switch() -> bool:
 def mark_switch():
     """写入防循环标记，下次启动时如果仍然失败则不再切换"""
     try:
+        os.makedirs(os.path.dirname(SWITCH_FLAG), exist_ok=True)
         with open(SWITCH_FLAG, "w") as f:
             f.write(time.strftime("%Y-%m-%d %H:%M:%S"))
     except Exception:
