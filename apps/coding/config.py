@@ -39,14 +39,13 @@ FONT_PATH = T_Asset.font_path or _I18N_FONT_PATH or "/usr/share/fonts/truetype/d
 
 # xgo_blockly 相关路径（系统 Python）
 BLOCKLY_PYTHON = sys.executable
-BLOCKLY_SERVICES_DIR = os.path.expanduser(
-    "~/.local/lib/python3.13/site-packages/xgo_blockly/services"
-)
-BLOCKLY_PROJECTS_DIR = os.path.expanduser("~/xgoBlocklyProjects")
-LOCK_JSON_PATH = os.path.expanduser("~/.xgo-blockly/lock.json")
+BLOCKLY_SERVICES_DIR = "/usr/local/lib/python3.13/site-packages/xgo_blockly/services"
+BLOCKLY_PROJECTS_DIR = "/opt/luwu-os/xgoBlocklyProjects"
+LOCK_JSON_PATH = "/opt/luwu-os/.xgo-blockly/lock.json"
 
 try:
     os.makedirs(BLOCKLY_PROJECTS_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(LOCK_JSON_PATH), exist_ok=True)
 except Exception:
     pass
 

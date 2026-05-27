@@ -278,9 +278,14 @@ class UpgradeManager:
 
     @staticmethod
     def get_latest_version_parallel():
-        """并行查询所有 PyPI 源，返回 (version, winning_mirror_index)。"""
+        """并行查询所有 PyPI 源，返回 (version, winning_mirror_index)。
+
+        多个源并发查询，谁先返回就用谁的结果，不做版本号比较。
+        因为不同源的同一个版本号含义相同，先到先得即可。
+        """
         mirrors = UpgradeManager.PYPI_MIRRORS
         results = {}
+        winner = {'idx': None, 'version': None}  # mutable closure
         event = threading.Event()
 
         def _fetch(mirror, idx):
@@ -295,6 +300,9 @@ class UpgradeManager:
                     version = info.get('info', {}).get('version')
                     if version:
                         results[idx] = version
+                        if not event.is_set():
+                            winner['idx'] = idx
+                            winner['version'] = version
                         event.set()
                 else:
                     versions = re.findall(
@@ -313,6 +321,9 @@ class UpgradeManager:
                                     return (0,)
                             max_ver = max((_parse(v) for v in versions), key=lambda t: t)
                             results[idx] = '.'.join(str(x) for x in max_ver)
+                        if not event.is_set():
+                            winner['idx'] = idx
+                            winner['version'] = results[idx]
                         event.set()
             except Exception:
                 pass
@@ -323,14 +334,11 @@ class UpgradeManager:
             threads.append(t)
             t.start()
 
-        # 等待第一个结果或全部超时（最长 ~10s）
+        # 等第一个结果返回（最长 10s）
         event.wait(timeout=10)
 
-        # 按镜像顺序返回第一个可用结果（保证确定性）
-        for i in range(len(mirrors)):
-            if i in results:
-                return results[i], i
-
+        if winner['idx'] is not None:
+            return winner['version'], winner['idx']
         return None, None
 
     @staticmethod

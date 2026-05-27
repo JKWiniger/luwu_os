@@ -179,8 +179,6 @@ ACTION_GROUPS = {
         {"id": 130, "name": "下抓", "duration": 10},
         {"id": 12, "name": "坐下", "duration": 5},
         {"id": 13, "name": "招手", "duration": 7},
-        {"id": 14, "name": "伸懒腰", "duration": 10},
-        {"id": 15, "name": "波浪", "duration": 6},
         {"id": 19, "name": "握手", "duration": 10},
         {"id": 22, "name": "张望", "duration": 8},
         {"id": 128, "name": "上抓", "duration": 10},
@@ -198,8 +196,6 @@ ACTION_GROUPS = {
         {"id": 130, "name": "下抓", "duration": 10},
         {"id": 12, "name": "坐下", "duration": 5},
         {"id": 13, "name": "招手", "duration": 7},
-        {"id": 14, "name": "伸懒腰", "duration": 10},
-        {"id": 15, "name": "波浪", "duration": 6},
         {"id": 19, "name": "握手", "duration": 10},
         {"id": 22, "name": "张望", "duration": 8},
         {"id": 128, "name": "上抓", "duration": 10},
@@ -217,8 +213,6 @@ ACTION_GROUPS = {
         {"id": 130, "name": "下抓", "duration": 10},
         {"id": 12, "name": "坐下", "duration": 5},
         {"id": 13, "name": "招手", "duration": 7},
-        {"id": 14, "name": "伸懒腰", "duration": 10},
-        {"id": 15, "name": "波浪", "duration": 6},
         {"id": 19, "name": "握手", "duration": 10},
         {"id": 22, "name": "张望", "duration": 8},
         {"id": 128, "name": "上抓", "duration": 10},
@@ -516,7 +510,7 @@ def handle_command(data):
                 proc = None
         force_kill_all_mplayer()
     elif msg_type == "exit":
-        print("[CMD] 收到退出指令")
+        print("[CMD] 收到退出指令（仅停止表演，不退出本机）")
         group_perform = False
         action_plan = None
         with proc_lock:
@@ -524,7 +518,6 @@ def handle_command(data):
                 kill_proc_safe(proc)
                 proc = None
         force_kill_all_mplayer()
-        exitmark = True
 
 
 def handle_plan(data):
@@ -693,6 +686,7 @@ def action_executor():
         end_wait = synced_time() + wait
         while synced_time() < end_wait:
             if not group_perform or exitmark:
+                executor_running = False
                 return
             time.sleep(0.05)
 
