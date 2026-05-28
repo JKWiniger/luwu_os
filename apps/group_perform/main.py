@@ -16,7 +16,6 @@ import struct
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from subprocess import Popen, DEVNULL
 
 # ===================== 阶段计时 =====================
 T0 = time.monotonic()
@@ -39,6 +38,14 @@ from PySide6.QtWidgets import (
 )
 
 mark("PySide6 import done")
+
+# ===================== Flask + QR =====================
+import io
+import base64
+import qrcode
+from flask import Flask, request, jsonify
+
+mark("Flask/qrcode import done")
 
 # ===================== MQTT =====================
 import paho.mqtt.client as mqtt
@@ -85,6 +92,10 @@ try:
             "corner_start": "开始",
             "corner_stop": "停止",
             "corner_exit": "退出",
+            "qr_title": "扫码编辑动作",
+            "qr_tap_hint": "手机扫码打开编辑页面",
+            "qr_corner_show": "编辑动作",
+            "qr_corner_hide": "关闭",
         },
         "en": {
             "title": "",
@@ -110,6 +121,10 @@ try:
             "corner_start": "Start",
             "corner_stop": "Stop",
             "corner_exit": "Exit",
+            "qr_title": "Scan to Edit",
+            "qr_tap_hint": "Scan QR with your phone",
+            "qr_corner_show": "Edit Actions",
+            "qr_corner_hide": "Close",
         },
     })
 except Exception:
@@ -132,7 +147,15 @@ MQTT_PORT = 1883
 HEARTBEAT_INTERVAL = 5.0
 DEVICE_TIMEOUT = 15.0
 ACTION_PREP_DELAY = 3.0
-AUTO_EXIT_SEC = 600
+
+# Web 配置页面
+WEB_PORT = 8090
+_ACTIONS_DIR = os.path.join(os.environ.get("LUWU_ROOT", "/opt/luwu-os"), ".state")
+
+
+def _get_actions_path():
+    """返回当前机型的动作持久化文件路径。"""
+    return os.path.join(_ACTIONS_DIR, f"group_perform_actions_{dog_type}.json")
 
 # UDP 广播配置
 UDP_PORT = 5005
@@ -148,6 +171,14 @@ NTP_TIMEOUT = 3.0
 SYNC_WAIT = 0    # 同步中
 SYNC_OK = 1      # 已同步
 SYNC_FAIL = 2    # 同步失败
+
+DOG_FAMILY = {"M", "L", "W", "B"}  # 同族：共享动作体系
+
+
+def _same_family(a, b):
+    """判断两个 dog_type 是否属于同一动作家族（Dog 族 vs Rider 族）。"""
+    return (a in DOG_FAMILY) == (b in DOG_FAMILY)
+
 
 # ===================== 全局状态 =====================
 exitmark = False
@@ -165,7 +196,7 @@ dog = None
 dog_type = "R"
 
 # 通信模式："mqtt" 或 "udp"
-comm_mode = "mqtt"
+comm_mode = "udp"
 
 # UDP 状态
 udp_sock = None
@@ -186,8 +217,12 @@ def synced_time():
 # ===================== 动作组配置（按 dog_type 区分）=====================
 ACTION_GROUPS = {
     "R": [
-        {"id": 1, "name": "趴下", "duration": 3},
-        {"id": 2, "name": "站立", "duration": 3},
+        {"id": 1, "name": "左右摇摆", "duration": 3},
+        {"id": 2, "name": "高低起伏", "duration": 4},
+        {"id": 3, "name": "前进后退", "duration": 3},
+        {"id": 4, "name": "四方蛇形", "duration": 4},
+        {"id": 5, "name": "升降旋转", "duration": 6},
+        {"id": 6, "name": "圆周晃动", "duration": 5},
     ],
     "L": [
         {"id": 1, "name": "趴下", "duration": 3},
@@ -549,7 +584,13 @@ def handle_plan(data):
     if msg_type == "start":
         actions = data.get("actions", [])
         music_start = data.get("music_start", 0)
+        sender_dt = data.get("dog_type", "")
         if not actions:
+            return
+
+        # 跨家族隔离
+        if sender_dt and not _same_family(sender_dt, dog_type):
+            print(f"[PLAN] 忽略跨家族计划: 发送方={sender_dt}, 本机={dog_type}")
             return
 
         # 诊断本机时间偏差：发起者 wait 应≈ACTION_PREP_DELAY；接收者大幅偏离意味着时钟未对齐
@@ -614,7 +655,8 @@ def publish_start():
     payload = json.dumps({
         "type": "start",
         "actions": scheduled_actions,
-        "music_start": round(base_time, 3)
+        "music_start": round(base_time, 3),
+        "dog_type": dog_type
     })
     mqtt_client.publish(topics["plan"], payload)
     print(f"[PLAN] 已发布动作计划, 共 {len(scheduled_actions)} 个动作")
@@ -696,6 +738,15 @@ def _udp_broadcast_presence(msg_type):
     })
 
 
+def _udp_burst_send(msg, count=10, interval=0.06):
+    """UDP 可靠性补偿：连发 count 次，间隔 interval 秒，对抗 WiFi 丢包。"""
+    for i in range(count):
+        if i == 0:
+            _udp_send(msg)
+        else:
+            threading.Timer(i * interval, lambda m=msg: _udp_send(m)).start()
+
+
 def _udp_broadcast_start():
     """广播动作计划。"""
     base_time = synced_time() + ACTION_PREP_DELAY
@@ -710,18 +761,21 @@ def _udp_broadcast_start():
         })
         current_time += act["duration"] + 0.5
 
-    _udp_send({
+    plan_msg = {
         "type": "start",
         "actions": scheduled_actions,
         "music_start": round(base_time, 3),
         "ip": udp_local_ip,
-    })
-    print(f"[UDP] 已广播动作计划, 共 {len(scheduled_actions)} 个动作")
+        "dog_type": dog_type,
+    }
+    _udp_burst_send(plan_msg)
+    print(f"[UDP] 已广播动作计划(×10), 共 {len(scheduled_actions)} 个动作")
 
 
 def _udp_broadcast_stop():
-    """广播停止指令。"""
-    _udp_send({"type": "stop", "ip": udp_local_ip})
+    """广播停止指令（连发 10 次防丢包）。"""
+    _udp_burst_send({"type": "stop", "ip": udp_local_ip})
+    print("[UDP] 已广播停止指令(×10)")
 
 
 def _udp_broadcast_exit():
@@ -788,7 +842,13 @@ def _udp_handle_message(data, addr):
     elif msg_type == "start":
         actions = data.get("actions", [])
         music_start = data.get("music_start", 0)
+        sender_dt = data.get("dog_type", "")
         if not actions:
+            return
+
+        # 跨家族隔离：Dog 族（M/L/W/B）和 Rider 族（R）动作体系不同，互不执行
+        if sender_dt and not _same_family(sender_dt, dog_type):
+            print(f"[UDP-PLAN] 忽略跨家族计划: 发送方={sender_dt}, 本机={dog_type}")
             return
 
         now = synced_time()
@@ -973,54 +1033,47 @@ def action_executor():
                 return
             time.sleep(0.05)
 
-    force_kill_all_mplayer()
-    music_path = os.path.join(_LUWU_ROOT, "xgo-media/music/dog.mp3")
-    with proc_lock:
-        try:
-            proc = Popen(
-                f"mplayer -really-quiet -loop 0 {music_path}",
-                shell=True, preexec_fn=os.setsid, stdout=DEVNULL)
-        except Exception:
-            proc = None
-
     try:
-        for act in actions:
-            if not group_perform or exitmark:
-                break
-            target_time = act["start_at"]
-            wait = target_time - synced_time()
-            if wait > 0:
-                end_wait = synced_time() + wait
-                while synced_time() < end_wait:
-                    if not group_perform or exitmark:
-                        break
-                    time.sleep(0.05)
-            if not group_perform or exitmark:
-                break
-            aid = act["id"]
-            dur = act["duration"]
-            print(f"[ACTION] 执行动作 id={aid} name={act.get('name','')} duration={dur}")
-            if dog:
-                try:
-                    dog.action(aid)
-                except Exception as e:
-                    print(f"[ACTION] 动作执行失败: {e}")
-            # 动作持续时长用 synced_time() 保持与全局时基一致
-            end_action = synced_time() + dur
-            while synced_time() < end_action:
+        round_num = 0
+        while group_perform and not exitmark:
+            round_num += 1
+            print(f"[EXEC] === 第 {round_num} 轮 ===")
+            base_time = synced_time() + 0.3  # 轮间小间隙
+            current_time = base_time
+            for act in actions:
                 if not group_perform or exitmark:
                     break
-                time.sleep(0.1)
-            if dog:
-                try:
-                    dog.stop()
-                except Exception:
-                    pass
+                target_time = current_time
+                wait = target_time - synced_time()
+                if wait > 0:
+                    end_wait = synced_time() + wait
+                    while synced_time() < end_wait:
+                        if not group_perform or exitmark:
+                            break
+                        time.sleep(0.05)
+                if not group_perform or exitmark:
+                    break
+                aid = act["id"]
+                dur = act["duration"]
+                print(f"[ACTION] 执行动作 id={aid} name={act.get('name','')} duration={dur}")
+                if dog:
+                    try:
+                        dog.action(aid)
+                    except Exception as e:
+                        print(f"[ACTION] 动作执行失败: {e}")
+                # 动作持续时长
+                end_action = synced_time() + dur
+                while synced_time() < end_action:
+                    if not group_perform or exitmark:
+                        break
+                    time.sleep(0.1)
+                if dog:
+                    try:
+                        dog.stop()
+                    except Exception:
+                        pass
+                current_time += dur + 0.5
     finally:
-        with proc_lock:
-            kill_proc_safe(proc)
-            proc = None
-        force_kill_all_mplayer()
         group_perform = False
         action_plan = None
         executor_running = False
@@ -1085,7 +1138,292 @@ def switch_comm_mode():
         return True
 
 
-# ===================== PySide6 页面 ==================== 
+# ===================== 动作保存 / 加载 =====================
+
+
+def load_saved_actions():
+    """从本地文件加载已保存的动作列表。"""
+    global actions_to_perform
+    path = _get_actions_path()
+    # 迁移旧文件：如果有旧的通用文件，且机型文件不存在，则迁移
+    old_path = os.path.join(_ACTIONS_DIR, "group_perform_actions.json")
+    if os.path.exists(old_path) and not os.path.exists(path):
+        try:
+            os.rename(old_path, path)
+            print(f"[ACTION] 已迁移旧动作文件到: {path}")
+        except Exception:
+            pass
+    try:
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                saved = json.load(f)
+            if isinstance(saved, list) and len(saved) > 0:
+                # 验证动作格式：必须有 id / name / duration
+                valid = [a for a in saved
+                         if isinstance(a, dict) and "id" in a and "name" in a and "duration" in a]
+                if valid:
+                    actions_to_perform = valid
+                    print(f"[ACTION] 已加载自定义动作({dog_type}): {len(valid)} 个")
+                    return
+    except Exception as e:
+        print(f"[ACTION] 加载动作文件失败: {e}")
+    # 回退到默认动作组
+    if dog_type in ACTION_GROUPS:
+        actions_to_perform = ACTION_GROUPS[dog_type]
+        print(f"[ACTION] 使用默认动作组({dog_type})")
+
+
+def save_actions_to_file(actions):
+    """保存动作列表到本地文件。"""
+    path = _get_actions_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(actions, f, ensure_ascii=False, indent=2)
+        print(f"[ACTION] 已保存 {len(actions)} 个动作({dog_type})到文件")
+    except Exception as e:
+        print(f"[ACTION] 保存动作文件失败: {e}")
+
+
+# ===================== Flask Web 编辑器 =====================
+
+flask_app = Flask(__name__)
+
+EDITOR_HTML = r"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>动作编辑器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,sans-serif;background:#f5f5f5;color:#333;padding:12px;max-width:480px;margin:0 auto;user-select:none;-webkit-user-select:none}
+h2{text-align:center;margin-bottom:8px;font-size:18px}
+.panel{border-radius:10px;background:#fff;padding:10px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.panel h3{font-size:14px;color:#666;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:5px}
+.item{display:flex;align-items:center;padding:8px 6px;border-radius:6px;margin:3px 0;transition:background .15s}
+.seq .item{background:#fff3e0}
+.pool .item{background:#f0f7ff;cursor:pointer}
+.pool .item:active{background:#e8f0fe}
+.item .name{flex:1;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .dur{display:flex;align-items:center;gap:3px;font-size:13px;color:#888;margin:0 4px}
+.item .dur input{width:38px;text-align:center;border:1px solid #ddd;border-radius:4px;padding:2px;font-size:12px}
+.item .btn{width:26px;height:26px;border:none;border-radius:50%;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.item .btn-move{background:#78909c;color:#fff;margin:0 1px}
+.item .btn-del{background:#e53935;color:#fff;margin-left:4px}
+.item .btn-add{background:#1976d2;color:#fff;margin-left:6px}
+.move-btns{display:flex;gap:4px;flex-shrink:0}
+.actions-row{display:flex;gap:8px;margin-top:8px}
+.actions-row button{flex:1;padding:12px;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}
+.btn-save{background:#4caf50;color:#fff}
+.btn-reset{background:#9e9e9e;color:#fff}
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.8);color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;z-index:99;display:none;pointer-events:none}
+.empty{text-align:center;color:#bbb;padding:14px;font-size:14px}
+</style>
+</head>
+<body>
+<h2>🐕 群组表演动作编辑</h2>
+
+<div class="panel seq">
+<h3>已选动作</h3>
+<div id="seqList"><div class="empty">暂无动作，从下方点击添加</div></div>
+</div>
+
+<div class="panel pool">
+<h3>可选动作（点击添加）</h3>
+<div id="poolList"></div>
+</div>
+
+<div class="actions-row">
+<button class="btn-save" onclick="save()">💾 保存</button>
+<button class="btn-reset" onclick="resetDefault()">↩ 恢复默认</button>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+var actions=[];
+var pool=[];
+
+function toast(msg){
+ var t=document.getElementById('toast');
+ t.textContent=msg;t.style.display='block';
+ setTimeout(function(){t.style.display='none'},1500);
+}
+
+function stopEvent(e){e.preventDefault();e.stopPropagation();}
+
+function addAction(a){
+ actions.push({id:a.id,name:a.name,duration:a.duration});
+ renderAll();
+ toast('已添加: '+a.name);
+}
+
+function removeAction(idx){
+ var name=actions[idx].name;
+ actions.splice(idx,1);
+ renderAll();
+ toast('已移除: '+name);
+}
+
+function changeDuration(idx,val){
+ var v=parseInt(val)||1;
+ if(v<1)v=1;if(v>30)v=30;
+ actions[idx].duration=v;
+}
+
+function moveUp(idx,e){
+ if(e)stopEvent(e);
+ if(idx<=0)return;
+ var tmp=actions[idx-1];
+ actions[idx-1]=actions[idx];
+ actions[idx]=tmp;
+ renderAll();
+}
+
+function moveDown(idx,e){
+ if(e)stopEvent(e);
+ if(idx>=actions.length-1)return;
+ var tmp=actions[idx+1];
+ actions[idx+1]=actions[idx];
+ actions[idx]=tmp;
+ renderAll();
+}
+
+function save(){
+ var toSave=[];
+ document.querySelectorAll('.seq .dur input').forEach(function(inp,i){
+  var v=parseInt(inp.value)||1;
+  if(v<1)v=1;
+  actions[i].duration=v;
+  toSave.push(actions[i]);
+ });
+ fetch('/api/actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(toSave)})
+ .then(function(r){return r.json()})
+ .then(function(d){if(d.ok)toast('✅ 已保存 ('+d.count+'个动作)');else toast('❌ 保存失败');})
+ .catch(function(){toast('❌ 网络错误');});
+}
+
+function resetDefault(){
+ fetch('/api/default')
+ .then(function(r){return r.json()})
+ .then(function(d){
+  actions=d.map(function(a){return{id:a.id,name:a.name,duration:a.duration}});
+  renderAll();
+  toast('↩ 已恢复默认');
+ });
+}
+
+function renderAll(){
+ var seqDiv=document.getElementById('seqList');
+ if(actions.length===0){
+  seqDiv.innerHTML='<div class="empty">暂无动作，从下方点击添加</div>';
+ }else{
+  var h='';
+  actions.forEach(function(a,i){
+   h+='<div class="item seq">';
+   h+='<span class="name">'+a.name+'</span>';
+   h+='<span class="dur"><input type="number" value="'+a.duration+'" min="1" max="30" onchange="changeDuration('+i+',this.value)">s</span>';
+   h+='<span class="move-btns">';
+   h+='<button class="btn btn-move" onclick="moveUp('+i+',event)">▲</button>';
+   h+='<button class="btn btn-move" onclick="moveDown('+i+',event)">▼</button>';
+   h+='</span>';
+   h+='<button class="btn btn-del" onclick="removeAction('+i+')">✕</button>';
+   h+='</div>';
+  });
+  seqDiv.innerHTML=h;
+ }
+ var poolDiv=document.getElementById('poolList');
+ poolDiv.innerHTML=pool.map(function(a){
+  return '<div class="item pool" onclick="addAction({id:'+a.id+',name:\''+a.name+'\',duration:'+a.duration+'})"><span class="name">'+a.name+'</span><span class="dur">'+a.duration+'s</span><button class="btn btn-add">+</button></div>';
+ }).join('');
+}
+
+fetch('/api/actions')
+.then(function(r){return r.json()})
+.then(function(d){actions=d.map(function(a){return{id:a.id,name:a.name,duration:a.duration}})})
+.catch(function(){})
+.finally(function(){
+ fetch('/api/pool')
+ .then(function(r){return r.json()})
+ .then(function(d){pool=d})
+ .catch(function(){})
+ .finally(function(){renderAll()});
+});
+</script>
+</body>
+</html>"""
+
+
+@flask_app.route("/")
+def editor_index():
+    return EDITOR_HTML
+
+
+@flask_app.route("/api/pool")
+def api_pool():
+    """返回当前狗型号可用的动作池。"""
+    pool = ACTION_GROUPS.get(dog_type, ACTION_GROUPS.get("R", []))
+    return jsonify(pool)
+
+
+@flask_app.route("/api/actions", methods=["GET"])
+def api_get_actions():
+    return jsonify(actions_to_perform)
+
+
+@flask_app.route("/api/actions", methods=["POST"])
+def api_save_actions():
+    global actions_to_perform
+    data = request.get_json()
+    if not isinstance(data, list):
+        return jsonify({"ok": False, "error": "invalid format"}), 400
+    # 过滤非法项
+    valid = [a for a in data
+             if isinstance(a, dict) and "id" in a and "name" in a and "duration" in a]
+    if not valid:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    actions_to_perform = valid
+    save_actions_to_file(valid)
+    print(f"[WEB] 收到动作更新: {len(valid)} 个动作")
+    return jsonify({"ok": True, "count": len(valid)})
+
+
+@flask_app.route("/api/default")
+def api_default():
+    """返回当前狗型号的默认动作组。"""
+    pool = ACTION_GROUPS.get(dog_type, ACTION_GROUPS.get("R", []))
+    return jsonify(pool)
+
+
+def _start_flask():
+    """后台线程启动 Flask。"""
+    try:
+        flask_app.run(host="0.0.0.0", port=WEB_PORT, debug=False, use_reloader=False)
+    except Exception as e:
+        print(f"[WEB] Flask 启动失败: {e}")
+
+
+def start_web_server():
+    t = threading.Thread(target=_start_flask, daemon=True)
+    t.start()
+    print(f"[WEB] 编辑器已启动: http://{get_local_ip()}:{WEB_PORT}")
+
+
+# ===================== QR 码生成 =====================
+
+
+def generate_qr_pixmap(url, size=240):
+    """生成 QR 码 QPixmap。"""
+    qr = qrcode.QRCode(box_size=6, border=3)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    pix = QPixmap()
+    pix.loadFromData(buf.read())
+    return pix.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                      Qt.TransformationMode.SmoothTransformation)
 
 
 class GroupPerformPage(AppFrame):
@@ -1192,13 +1530,6 @@ class GroupPerformPage(AppFrame):
         v.addWidget(self.status_label, 0, Qt.AlignmentFlag.AlignHCenter)
         self._center = center
 
-        # ---- 角标 ----
-        self.setCornerHints(
-            bl=(_T("corner_exit"), T_Asset.icon_back),
-            tr=(_T("mode_lan"), T_Asset.icon_right),
-            br=(_T("corner_start"), T_Asset.icon_enter),
-        )
-
         # ---- 刷新定时器 ----
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._refresh_ui)
@@ -1209,8 +1540,55 @@ class GroupPerformPage(AppFrame):
         self._perf_monitor.timeout.connect(self._check_performance)
         self._perf_monitor.start(300)
 
-        # ---- 自动退出 ----
-        QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
+        # ---- QR 码覆盖层 ----
+        qr_w = min(int(self.width() * 0.55), 160) if self.width() > 0 else 140
+        qr_pix = generate_qr_pixmap(self._qr_url(), qr_w)
+        self._qr_overlay = QWidget(self)
+        self._qr_overlay.setStyleSheet(
+            "background-color: rgba(255,255,255,250);"
+            "border-radius: 10px;"
+        )
+        self._qr_overlay.hide()
+        qr_layout = QVBoxLayout(self._qr_overlay)
+        qr_layout.setContentsMargins(8, 6, 8, 4)
+        qr_layout.setSpacing(3)
+        qr_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._qr_title = QLabel(_T("qr_title"), self._qr_overlay)
+        self._qr_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._qr_title.setStyleSheet(
+            "font-size: 13px; font-weight: bold; color: #333; background: transparent;"
+        )
+        qr_layout.addWidget(self._qr_title)
+
+        self._qr_image = QLabel(self._qr_overlay)
+        self._qr_image.setPixmap(qr_pix)
+        self._qr_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        qr_layout.addWidget(self._qr_image, 1)
+
+        self._qr_url_label = QLabel(self._qr_url(), self._qr_overlay)
+        self._qr_url_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._qr_url_label.setWordWrap(True)
+        self._qr_url_label.setStyleSheet(
+            "font-size: 11px; color: #1976d2; background: transparent;"
+        )
+        qr_layout.addWidget(self._qr_url_label)
+
+        self._qr_hint = QLabel(_T("qr_tap_hint"), self._qr_overlay)
+        self._qr_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._qr_hint.setStyleSheet(
+            "font-size: 10px; color: #999; background: transparent;"
+        )
+        qr_layout.addWidget(self._qr_hint)
+        self._qr_showing = False
+
+        # ---- 角标 ----
+        self.setCornerHints(
+            tl=(_T("qr_corner_show"), T_Asset.icon_right),
+            bl=(_T("corner_exit"), T_Asset.icon_back),
+            tr=(_T("mode_wan"), T_Asset.icon_right),
+            br=(_T("corner_start"), T_Asset.icon_enter),
+        )
 
     # ---- 大状态 chip 样式（深色描边 + 白底 + 大字 bold）----
     @staticmethod
@@ -1224,6 +1602,32 @@ class GroupPerformPage(AppFrame):
             "font-size: 15px;"
             "font-weight: bold;"
         )
+
+    def _qr_url(self):
+        return f"http://{get_local_ip()}:{WEB_PORT}"
+
+    def _toggle_qr(self):
+        self._qr_showing = not self._qr_showing
+        if self._qr_showing:
+            self._qr_overlay.show()
+            self._qr_overlay.raise_()
+            # 更新 QR 页面角标
+            self.setCornerHint("tl", _T("qr_corner_show"), T_Asset.icon_right)
+            self.setCornerHint("br", _T("qr_corner_hide"), T_Asset.icon_back)
+            self._center.hide()
+        else:
+            self._qr_overlay.hide()
+            self._center.show()
+            # 恢复主页角标
+            self.setCornerHint("tl", _T("qr_corner_show"), T_Asset.icon_right)
+        self._relayout_qr()
+
+    def _relayout_qr(self):
+        w, h = self.width(), self.height()
+        if w <= 0 or h <= 0:
+            return
+        # 全屏覆盖，让 AppFrame 的角标仍然可见
+        self._qr_overlay.setGeometry(0, 0, w, h)
 
     def _build_action_list(self):
         self._action_items.clear()
@@ -1289,7 +1693,9 @@ class GroupPerformPage(AppFrame):
                 self.net_chip.hide()
 
         # 表演状态 + D 角标文案
-        if group_perform:
+        if self._qr_showing:
+            pass  # QR 角标已在 _toggle_qr 设置
+        elif group_perform:
             self.status_label.setText(_T("status_perform"))
             self.status_label.setStyleSheet(self._status_qss(T_Color.warning))
             self.setCornerHint("br", _T("corner_stop"), T_Asset.icon_enter)
@@ -1324,6 +1730,7 @@ class GroupPerformPage(AppFrame):
         self._center.setGeometry(0, top, w, h - top - bottom)
         # 房间卡片宽度随屏伸缩
         self.info_card.setFixedWidth(min(int(w * 0.78), 320))
+        self._relayout_qr()
 
     def paintEvent(self, ev):
         super().paintEvent(ev)
@@ -1346,31 +1753,42 @@ class GroupPerformPage(AppFrame):
             # C 键 → 退出
             print("[group] KEY_BACK -> exit", flush=True)
             self.close()
+        elif ev.key() == Qt.Key.Key_Left:
+            # A 键 → QR 码 / 返回
+            if self._qr_showing:
+                print("[group] KEY_LEFT -> close QR", flush=True)
+                self._toggle_qr()
+            else:
+                print("[group] KEY_LEFT -> show QR", flush=True)
+                self._toggle_qr()
         elif ev.key() == Qt.Key.Key_Right:
             # B 键 → 切换通信模式（MQTT ↔ UDP）
             print(f"[group] KEY_RIGHT -> switch mode (current: {comm_mode})", flush=True)
             threading.Thread(target=switch_comm_mode, daemon=True).start()
         elif ev.key() == Qt.Key.Key_Return:
-            # D 键 → 开始/停止
-            global group_perform
-            if group_perform:
-                print("[group] KEY_RETURN -> stop", flush=True)
-                if comm_mode == "udp":
-                    _udp_broadcast_stop()
-                else:
-                    publish_stop()
+            # D 键 → QR 页关闭 / 开始停止
+            if self._qr_showing:
+                print("[group] KEY_RETURN -> close QR", flush=True)
+                self._toggle_qr()
             else:
-                # 未同步时不允许开始，同时触发一次重试
-                if _sync_status != SYNC_OK:
-                    print("[group] KEY_RETURN -> blocked: time not synced, retry sync", flush=True)
-                    if _sync_status == SYNC_FAIL:
-                        start_time_sync()
-                    return
-                print("[group] KEY_RETURN -> start", flush=True)
-                if comm_mode == "udp":
-                    _udp_broadcast_start()
+                global group_perform
+                if group_perform:
+                    print("[group] KEY_RETURN -> stop", flush=True)
+                    if comm_mode == "udp":
+                        _udp_broadcast_stop()
+                    else:
+                        publish_stop()
                 else:
-                    publish_start()
+                    if _sync_status != SYNC_OK:
+                        print("[group] KEY_RETURN -> blocked: time not synced, retry sync", flush=True)
+                        if _sync_status == SYNC_FAIL:
+                            start_time_sync()
+                        return
+                    print("[group] KEY_RETURN -> start", flush=True)
+                    if comm_mode == "udp":
+                        _udp_broadcast_start()
+                    else:
+                        publish_start()
 
     def closeEvent(self, ev):
         global exitmark
@@ -1432,7 +1850,10 @@ def init_dog():
 
     if dog_type not in ACTION_GROUPS:
         dog_type = "R"
-    actions_to_perform = ACTION_GROUPS[dog_type]
+    # 优先加载已保存的自定义动作，没有则用默认
+    load_saved_actions()
+    if not actions_to_perform:
+        actions_to_perform = ACTION_GROUPS[dog_type]
     print(f"[INFO] 动作列表: {[a['name'] for a in actions_to_perform]}")
 
 
@@ -1458,9 +1879,13 @@ def main():
     QTimer.singleShot(100, start_time_sync)
     mark("time sync scheduled")
 
-    # 启动MQTT
-    QTimer.singleShot(200, lambda: _start_mqtt(w))
-    mark("MQTT setup scheduled")
+    # 启动UDP（默认局域网模式）
+    QTimer.singleShot(200, lambda: _start_udp(w))
+    mark("UDP setup scheduled")
+
+    # 启动 Web 动作编辑器
+    QTimer.singleShot(300, start_web_server)
+    mark("web server scheduled")
 
     w.showFullScreen()
     mark("showFullScreen returned")
@@ -1483,6 +1908,15 @@ def _start_mqtt(widget):
     else:
         print("[MQTT] 初始化失败, 稍后重试...")
         QTimer.singleShot(3000, lambda: _start_mqtt(widget))
+
+
+def _start_udp(widget):
+    """延迟启动UDP广播连接"""
+    if setup_udp():
+        print("[INFO] 群组表演 UDP 广播模式已就绪")
+    else:
+        print("[UDP] 初始化失败, 稍后重试...")
+        QTimer.singleShot(3000, lambda: _start_udp(widget))
 
 
 if __name__ == "__main__":
