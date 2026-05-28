@@ -28,22 +28,22 @@ def mark(name: str):
 mark("python entry")
 
 # ===================== 自动检测输入源 =====================
-JS0_PATH = "/dev/input/js0"
+import glob
 
 
-def _is_usb_joystick(js_dev: str = "js0") -> bool:
-    """判断 joystick 设备是否来自 USB（2.4G 接收器）。
+def _is_usb_joystick_by_sysfs(js_n: int) -> bool:
+    """判断 /dev/input/js{N} 设备是否来自 USB（2.4G 接收器）。
 
     蓝牙 HID 设备的 sysfs uniq 字段包含蓝牙 MAC 地址（XX:XX:XX:XX:XX:XX），
     而 USB 设备的 uniq 字段为空。以此区分 2.4G USB 接收器和蓝牙手柄。
     """
     try:
-        uniq_path = f"/sys/class/input/{js_dev}/device/uniq"
+        uniq_path = f"/sys/class/input/js{js_n}/device/uniq"
         with open(uniq_path) as f:
             uniq = f.read().strip()
         # 非空且含冒号 → 蓝牙设备，不是 USB
         if uniq and ":" in uniq:
-            print(f"[gamepad] {js_dev} is bluetooth (uniq={uniq}), skip", flush=True)
+            print(f"[gamepad] js{js_n} is bluetooth (uniq={uniq}), skip", flush=True)
             return False
         return True
     except OSError:
@@ -51,14 +51,27 @@ def _is_usb_joystick(js_dev: str = "js0") -> bool:
 
 
 def detect_mode() -> str:
-    """检测当前可用的输入模式"""
-    if os.path.exists(JS0_PATH) and _is_usb_joystick():
-        return "joystick"
+    """检测当前可用的输入模式。
+
+    扫描所有 /dev/input/js* 设备，只要存在任意一个是 USB joystick
+    （2.4G 接收器），就优先走 joystick 模式。避免蓝牙设备抢占 js0
+    导致 USB 接收器被忽略。
+    """
+    js_devices = sorted(glob.glob("/dev/input/js*"))
+    for js_path in js_devices:
+        try:
+            js_n = int(js_path.replace("/dev/input/js", ""))
+        except ValueError:
+            continue
+        if _is_usb_joystick_by_sysfs(js_n):
+            print(f"[gamepad] found USB joystick at {js_path}", flush=True)
+            return "joystick"
+    print("[gamepad] no USB joystick found, fallback to bluetooth", flush=True)
     return "bluetooth"
 
 
 def is_joystick_available() -> bool:
-    return os.path.exists(JS0_PATH) and _is_usb_joystick()
+    return detect_mode() == "joystick"
 
 
 _CURRENT_MODE = detect_mode()
