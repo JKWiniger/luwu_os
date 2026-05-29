@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="snaps/luwuos.png" width="120" alt="Luwu-OS Logo" />
+  <img src="snaps/luwuos.png" width="360" alt="Luwu-OS Logo" />
 </p>
 
 <h1 align="center">Luwu-OS</h1>
@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/c%2B%2B-17-blue.svg" alt="C++" />
   <img src="https://img.shields.io/badge/qt-5.15-green.svg" alt="Qt" />
   <img src="https://img.shields.io/badge/platform-Raspberry%20Pi%20CM4%2FCM5-red.svg" alt="Platform" />
-  <img src="https://img.shields.io/badge/license-MIT-lightgrey.svg" alt="License" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
 </p>
 
 <p align="center">
@@ -42,6 +42,7 @@
 - [应用列表](#-应用列表)
 - [开发指南](#-开发指南)
 - [参与贡献](#-参与贡献)
+- [开源协议](#-开源协议)
 
 ---
 
@@ -364,6 +365,44 @@ ONNX 模型位于 `model/` 目录，通过 `onnxruntime` 加载运行：
 ## 🤝 参与贡献
 
 欢迎提交 Issue 和 Pull Request！
+
+---
+
+## 📜 开源协议
+
+本项目基于 **Apache License 2.0** 开源。
+
+Copyright © 2024–2026 [LuwuDynamics](https://github.com/LuwuDynamics)
+
+```
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
+这意味着你可以自由地：
+
+- **使用** — 将本软件用于任何目的
+- **修改** — 修改源代码并创建衍生作品
+- **分发** — 分发原始或修改后的软件副本
+- **商用** — 在商业产品中使用本软件
+
+但需遵守以下条件：
+
+- 所有分发中必须包含 Apache 2.0 许可证副本
+- 必须说明对原始代码所做的重大修改
+- 必须保留所有版权、专利、商标和署名声明
+- 项目名称 "Luwu-OS" 及相关商标不在授权范围内
+
+完整许可证文本请参阅 [LICENSE](LICENSE)。
 
 ---
 

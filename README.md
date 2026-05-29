@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="snaps/luwuos.png" width="120" alt="Luwu-OS Logo" />
+  <img src="snaps/luwuos.png" width="360" alt="Luwu-OS Logo" />
 </p>
 
 <h1 align="center">Luwu-OS</h1>
@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/c%2B%2B-17-blue.svg" alt="C++" />
   <img src="https://img.shields.io/badge/qt-5.15-green.svg" alt="Qt" />
   <img src="https://img.shields.io/badge/platform-Raspberry%20Pi%20CM4%2FCM5-red.svg" alt="Platform" />
-  <img src="https://img.shields.io/badge/license-MIT-lightgrey.svg" alt="License" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
 </p>
 
 <p align="center">
@@ -42,6 +42,7 @@
 - [Applications](#-applications)
 - [Development](#-development)
 - [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
@@ -369,6 +370,44 @@ ONNX models are located in `model/` and loaded via `onnxruntime`. Models include
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit issues and pull requests.
+
+---
+
+## 📜 License
+
+This project is licensed under the **Apache License, Version 2.0**.
+
+Copyright © 2024–2026 [LuwuDynamics](https://github.com/LuwuDynamics)
+
+```
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
+This means you are free to:
+
+- **Use** — the software for any purpose
+- **Modify** — the source code and create derivative works
+- **Distribute** — copies of the original or modified software
+- **Commercialize** — use the software in commercial products
+
+Under the following conditions:
+
+- You must include a copy of the Apache 2.0 License in all distributions
+- You must state significant changes made to the original code
+- You must retain all copyright, patent, trademark, and attribution notices
+- The project name "Luwu-OS" and associated trademarks are not licensed
+
+For the full license text, see [LICENSE](LICENSE).
 
 ---
 
