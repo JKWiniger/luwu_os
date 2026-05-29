@@ -16,3 +16,4 @@ __pycache__/
 *.pro.user
 CMakeUserPresets.json
 .state
+.idea
