@@ -81,16 +81,86 @@ HYSTERESIS_DB = 1.0
 DB_FLOOR = -60.0
 DB_CEIL = 0.0
 
+# ============================================================================
+# 接入 luwu-os 全局 i18n
+# ============================================================================
+try:
+    from libs.i18n import get_lang as _i18n_get_lang
+except Exception:
+    _i18n_get_lang = None
+
+LANGUAGE_INI = os.path.join(LUWU_ROOT, "configs/language.ini")
+
+
+def _detect_language():
+    if _i18n_get_lang:
+        try:
+            return _i18n_get_lang()
+        except Exception:
+            pass
+    try:
+        with open(LANGUAGE_INI, "r") as f:
+            lang = f.read().strip()
+            return lang if lang in ("cn", "en") else "cn"
+    except Exception:
+        return "cn"
+
+
+LA = _detect_language()
+
+_TEXTS = {
+    "cn": {
+        "title":        "声源定位",
+        "ready":        "就绪",
+        "hint_track":   "A:追踪",
+        "hint_sens":    "B:灵敏度",
+        "hint_back":    "返回",
+        "hint_turn":    "D:转身",
+        "sens_label":   "灵敏度",
+        "ch_left":      "L 左",
+        "ch_right":     "R 右",
+        "arrow_left":   "← 左",
+        "arrow_right":  "→ 右",
+        "sens_low":     "低",
+        "sens_medium":  "中",
+        "sens_high":    "高",
+    },
+    "en": {
+        "title":        "Sound Locate",
+        "ready":        "Ready",
+        "hint_track":   "A:Track",
+        "hint_sens":    "B:Sensitivity",
+        "hint_back":    "Back",
+        "hint_turn":    "D:Turn",
+        "sens_label":   "Sens",
+        "ch_left":      "L",
+        "ch_right":     "R",
+        "arrow_left":   "← L",
+        "arrow_right":  "→ R",
+        "sens_low":     "Low",
+        "sens_medium":  "Med",
+        "sens_high":    "High",
+    },
+}
+
+
+def t(key, *args):
+    """Get translated text for current language."""
+    text = _TEXTS.get(LA, _TEXTS["cn"]).get(key, key)
+    if args:
+        text = text.format(*args)
+    return text
+
 
 class Sensitivity(Enum):
     """灵敏度级别。"""
-    LOW = ("低", 6.0)
-    MEDIUM = ("中", 3.0)
-    HIGH = ("高", 1.5)
+    LOW = ("sens_low", 6.0)
+    MEDIUM = ("sens_medium", 3.0)
+    HIGH = ("sens_high", 1.5)
 
     @property
     def label(self) -> str:
-        return self.value[0]
+        return t(self.value[0])
 
     @property
     def threshold_db(self) -> float:
@@ -377,12 +447,12 @@ class SoundLocatePage(AppFrame):
 
     def __init__(self):
         super().__init__()
-        self.setTitle("声源定位")
+        self.setTitle(t("title"))
         self.setCornerHints(
-            tl=("A:追踪", Asset.icon_left),
-            tr=("B:灵敏度", Asset.icon_right),
-            bl=("返回", Asset.icon_back),
-            br=("D:转身", Asset.icon_enter),
+            tl=(t("hint_track"), Asset.icon_left),
+            tr=(t("hint_sens"), Asset.icon_right),
+            bl=(t("hint_back"), Asset.icon_back),
+            br=(t("hint_turn"), Asset.icon_enter),
         )
 
         # ---- 状态 ----
@@ -400,7 +470,7 @@ class SoundLocatePage(AppFrame):
         self._robot = RobotDriver()
 
         # ---- 状态标签 ----
-        self._status_label = QLabel("就绪", self)
+        self._status_label = QLabel(t("ready"), self)
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_label.setStyleSheet(
             "color: #1a2b5e; font-size: 11px; background: transparent;"
@@ -454,7 +524,7 @@ class SoundLocatePage(AppFrame):
         else:
             arrow = "–"
         self._status_label.setText(
-            f"{track} | 灵敏度:{sens} | {arrow} | diff={self._diff:+.1f}dB"
+            f"{track} | {t('sens_label')}:{sens} | {arrow} | diff={self._diff:+.1f}dB"
         )
 
     # ================================================================ Paint
@@ -522,9 +592,9 @@ class SoundLocatePage(AppFrame):
         font_label = QFont("sans-serif", 10, QFont.Weight.Bold)
         painter.setFont(font_label)
         painter.drawText(left_x, bar_area_bottom + 14, bar_w, 18,
-                         Qt.AlignmentFlag.AlignCenter, "L 左")
+                         Qt.AlignmentFlag.AlignCenter, t("ch_left"))
         painter.drawText(right_x, bar_area_bottom + 14, bar_w, 18,
-                         Qt.AlignmentFlag.AlignCenter, "R 右")
+                         Qt.AlignmentFlag.AlignCenter, t("ch_right"))
 
         # ---- dB 数值 ----
         font_small = QFont("sans-serif", 9)
@@ -540,10 +610,10 @@ class SoundLocatePage(AppFrame):
         painter.setFont(font_dir)
         if self._direction == Direction.LEFT:
             painter.setPen(QColor(230, 110, 20))
-            arrow_text = "← 左"
+            arrow_text = t("arrow_left")
         elif self._direction == Direction.RIGHT:
             painter.setPen(QColor(230, 110, 20))
-            arrow_text = "→ 右"
+            arrow_text = t("arrow_right")
         else:
             painter.setPen(QColor(150, 150, 150))
             arrow_text = "···"
