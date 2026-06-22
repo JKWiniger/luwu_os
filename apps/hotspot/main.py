@@ -54,6 +54,60 @@ _LAUNCHER_ASSETS = os.path.dirname(T_Asset.bg_image)
 DEMO_HOTSPOT_ICON = os.path.join(_LAUNCHER_ASSETS, "demo_hotspot.png")
 _APP_BG_IMAGE = os.path.join(LUWU_ROOT, "assets/images/app_bg.png")
 
+# ===================== 接入 luwu-os 全局 i18n =====================
+try:
+    from libs.i18n import get_lang as _i18n_get_lang
+except Exception:
+    _i18n_get_lang = None
+
+LANGUAGE_INI = os.path.join(LUWU_ROOT, "configs/language.ini")
+
+
+def _detect_language():
+    if _i18n_get_lang:
+        try:
+            return _i18n_get_lang()
+        except Exception:
+            pass
+    try:
+        with open(LANGUAGE_INI, "r") as f:
+            lang = f.read().strip()
+            return lang if lang in ("cn", "en") else "cn"
+    except Exception:
+        return "cn"
+
+
+LA = _detect_language()
+
+_TEXTS = {
+    "cn": {
+        "title":          "热点模式",
+        "starting":       "正在启动...",
+        "creating":       "正在创建热点...",
+        "ready":          "热点已就绪",
+        "failed":         "热点启动失败",
+        "exit":           "退出",
+        "close_hotspot":  "关闭热点",
+    },
+    "en": {
+        "title":          "Hotspot Mode",
+        "starting":       "Starting...",
+        "creating":       "Creating hotspot...",
+        "ready":          "Hotspot ready",
+        "failed":         "Hotspot failed to start",
+        "exit":           "Exit",
+        "close_hotspot":  "Close Hotspot",
+    },
+}
+
+
+def t(key, *args):
+    """Get translated text for current language."""
+    text = _TEXTS.get(LA, _TEXTS["cn"]).get(key, key)
+    if args:
+        text = text.format(*args)
+    return text
+
 
 # ===================== 工具函数 =====================
 def run_cmd(cmd: str, timeout: int = 30):
@@ -127,7 +181,7 @@ class HotspotPage(AppFrame):
         self._keep_hotspot_on_close = False
 
         # ---- 标题（AppFrame 提供） ----
-        self.setTitle("热点模式")
+        self.setTitle(t("title"))
 
         # ---- 中间主体：图标 + 装饰线 + SSID + IP + 状态 chip ----
         # 图标
@@ -160,7 +214,7 @@ class HotspotPage(AppFrame):
         self.ip_label.setStyleSheet(T_qss.text("body", color=T_Color.accent))
 
         # 状态 chip
-        self.status_label = QLabel("正在启动...", self)
+        self.status_label = QLabel(t("starting"), self)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_label.setStyleSheet(T_qss.chip("muted"))
 
@@ -183,8 +237,8 @@ class HotspotPage(AppFrame):
 
         # ---- 角标 ----
         self.setCornerHints(
-            bl=("退出", T_Asset.icon_back),
-            br=("关闭热点", T_Asset.icon_enter),
+            bl=(t("exit"), T_Asset.icon_back),
+            br=(t("close_hotspot"), T_Asset.icon_enter),
         )
 
         QTimer.singleShot(AUTO_EXIT_SEC * 1000, self.close)
@@ -227,13 +281,13 @@ class HotspotPage(AppFrame):
             print(f"[hotspot] reuse active hotspot: {self.ssid}", flush=True)
             self.hotspot_active = True
             self.ip_address = get_ip() or "192.168.7.1"
-            self._refresh_info("热点已就绪")
+            self._refresh_info(t("ready"))
             return
 
         self._create_or_up_hotspot()
 
     def _create_or_up_hotspot(self):
-        self.status_label.setText("正在创建热点...")
+        self.status_label.setText(t("creating"))
         QApplication.processEvents()
 
         run_cmd(f"sudo ifconfig {WLAN_IFACE} up")
@@ -278,13 +332,13 @@ class HotspotPage(AppFrame):
         if hotspot_is_active():
             self.hotspot_active = True
             self.ip_address = get_ip() or "192.168.7.1"
-            self._refresh_info("热点已就绪")
+            self._refresh_info(t("ready"))
         else:
             self.hotspot_active = False
             self.ip_address = ""
             self.ssid_label.setText(f"SSID: {self.ssid}")
             self.ip_label.setText("")
-            self.status_label.setText("热点启动失败")
+            self.status_label.setText(t("failed"))
 
     def _refresh_info(self, status_text: str):
         self.ssid_label.setText(f"SSID: {self.ssid}")
