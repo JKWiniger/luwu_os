@@ -6,10 +6,25 @@ set -e
 
 echo "=== Luwu OS 系统配置部署 ==="
 
+# 0. 确保 luwu 用户存在（树莓派官方 Imager 默认用户名是 pi，
+#    这里按官方参考镜像的用户组配置创建，硬件访问权限需要这些组）
+echo "[0/14] 检查 luwu 用户 ..."
+if ! id -u luwu &>/dev/null; then
+    useradd -m -s /bin/bash -G root,tty,dialout,sudo,audio,video,plugdev,input,spi,i2c,gpio luwu
+    echo "  luwu 用户已创建，请设置密码："
+    passwd luwu
+    echo "  ✓ luwu 用户已创建"
+else
+    echo "  ✓ luwu 用户已存在，跳过创建"
+fi
+
 # 0a. 拷贝项目到 /opt/luwu-os（路径与用户名无关）
 echo "[0a/14] 部署项目到 /opt/luwu-os ..."
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+# 后续步骤里大量使用相对路径文件名 (boot-config.txt, *.service 等)，
+# 必须先切到 configs/，否则无论从哪里调用本脚本都会找不到文件。
+cd "$SCRIPT_DIR"
 mkdir -p /opt/luwu-os
 rm -rf /opt/luwu-os.old 2>/dev/null
 [ -d /opt/luwu-os ] && mv /opt/luwu-os /opt/luwu-os.old
@@ -22,7 +37,8 @@ chown -R luwu:luwu /opt/luwu-os/xgo-media
 echo "  ✓ 项目已部署到 /opt/luwu-os"
 
 # 0. 系统依赖
-echo "[1/14] 安装系统依赖 ..."
+echo "[1/14] 更新软件源并安装系统依赖 ..."
+apt update
 apt install -y \
     python3-pip  python3-numpy python3-picamera2 python3-evdev \
     python3-flask python3-flask-socketio python3-opencv \
