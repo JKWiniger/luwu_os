@@ -303,6 +303,10 @@ class SettingsListPage(AppFrame):
         # Label
         label_key = item["label_key"]
         text = self.la.get("DEMOEN", {}).get(label_key, label_key)
+        if item["id"] == "language":
+            # Always bilingual: this is the only way out of the wrong
+            # language, so it must be findable before it's been switched.
+            text = "语言 / Language"
         text_label = QLabel(text)
         text_label.setStyleSheet(T_qss.text("body"))
         text_label.setObjectName(f"text_{index}")
@@ -437,7 +441,10 @@ class SettingsListPage(AppFrame):
             text_label = self.item_widgets[i].findChild(QLabel, f"text_{i}")
             if text_label:
                 label_key = item["label_key"]
-                text_label.setText(self.la.get("DEMOEN", {}).get(label_key, label_key))
+                text = self.la.get("DEMOEN", {}).get(label_key, label_key)
+                if item["id"] == "language":
+                    text = "语言 / Language"
+                text_label.setText(text)
         self.update_selection()
 
 
