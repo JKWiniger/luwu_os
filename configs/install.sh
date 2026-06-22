@@ -26,7 +26,8 @@ echo "[1/14] 安装系统依赖 ..."
 apt install -y \
     python3-pip  python3-numpy python3-picamera2 python3-evdev \
     python3-flask python3-flask-socketio python3-opencv \
-    mplayer alsa-utils ffmpeg libzbar0t64 portaudio19-dev
+    mplayer alsa-utils ffmpeg libzbar0t64 portaudio19-dev \
+    python3-pyside6.qtcore python3-pyside6.qtgui python3-pyside6.qtwidgets
 echo "  ✓ 系统依赖已安装"
 
 # 0b. pip 依赖（apt 中没有的包 / 本地开发包）
@@ -139,11 +140,7 @@ echo "  ✓ 日志持久化已配置 (最大 50MB, 存于 /var/log/journal/)"
 # 10. 欠压+电池联合监控 — 分级响应防误关机
 echo "[12/14] 欠压+电池监控 ..."
 chmod +x /opt/luwu-os/configs/luwu-undervolt-monitor.py
-cp luwu-undervolt.service /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable luwu-undervolt.service
-systemctl start luwu-undervolt.service
-echo "  ✓ 欠压+电池监控已启用 (电池>10%忽略, 5~10%延迟关, <5%立即关)"
+echo "  ✓ 欠压+电池监控由 launcher 内置 QTimer+QProcess 处理，无需 systemd 服务"
 
 # 11. 完成
 echo "[14/14] 部署完成。必须重启以加载新的设备树和防护配置: sudo reboot"
