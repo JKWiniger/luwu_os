@@ -49,7 +49,21 @@ echo "  ✓ 系统依赖已安装"
 # 0b. pip 依赖（apt 中没有的包 / 本地开发包）
 echo "[0b/12] 安装 pip 依赖 ..."
 if [ -f "$PROJECT_DIR/requirements.txt" ]; then
-    pip3 install -q --break-system-packages --ignore-installed typing-extensions -r "$PROJECT_DIR/requirements.txt" || echo "  ! pip 依赖安装警告（非致命）"
+    # 生成约束文件，防止 pip 覆盖 apt 管理的系统包
+    # (shiboken6/PySide6 由 apt 安装，版本固定，pip 不应升级)
+    cat > /tmp/luwu-pip-constraints.txt << 'EOF'
+shiboken6==6.8.2.1
+EOF
+    pip3 install -qq \
+        --break-system-packages \
+        --root-user-action=ignore \
+        --ignore-installed typing-extensions \
+        --constraint /tmp/luwu-pip-constraints.txt \
+        --index-url https://pypi.org/simple/ \
+        --extra-index-url https://www.piwheels.org/simple/ \
+        -r "$PROJECT_DIR/requirements.txt" \
+        || echo "  ! pip 依赖安装警告（非致命）"
+    rm -f /tmp/luwu-pip-constraints.txt
     echo "  ✓ pip 依赖已安装"
 else
     echo "  ! requirements.txt 未找到，跳过"
