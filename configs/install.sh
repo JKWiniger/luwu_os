@@ -49,7 +49,7 @@ echo "  ✓ 系统依赖已安装"
 # 0b. pip 依赖（apt 中没有的包 / 本地开发包）
 echo "[0b/12] 安装 pip 依赖 ..."
 if [ -f "$PROJECT_DIR/requirements.txt" ]; then
-    pip3 install --break-system-packages -r "$PROJECT_DIR/requirements.txt" || echo "  ! pip 依赖安装警告（非致命）"
+    pip3 install -q --break-system-packages --ignore-installed typing-extensions -r "$PROJECT_DIR/requirements.txt" || echo "  ! pip 依赖安装警告（非致命）"
     echo "  ✓ pip 依赖已安装"
 else
     echo "  ! requirements.txt 未找到，跳过"
@@ -83,7 +83,7 @@ echo "[5/14] 部署 ALSA 音频配置 ..."
 cp asound.conf /etc/asound.conf
 # 恢复混音器状态（啸叫修复 + 默认音量 71%）
 if [ -f asound.state ]; then
-    alsactl restore -f asound.state
+    alsactl restore -f asound.state 2>/dev/null || true
     cp asound.state /var/lib/alsa/asound.state
     echo "  ✓ 混音器状态已恢复"
 else
